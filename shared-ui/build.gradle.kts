@@ -3,14 +3,15 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
+    id("mihon.library")
     kotlin("multiplatform")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("mihon.code.lint")
 }
 
 val composeMultiplatformVersion = compose.versions.multiplatform.get()
 
 kotlin {
+    androidTarget()
     jvm("desktop") {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -45,6 +46,12 @@ kotlin {
             implementation("org.jetbrains.compose.ui:ui:$composeMultiplatformVersion")
             implementation("org.jetbrains.compose.components:components-resources:$composeMultiplatformVersion")
         }
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.sqldelight.android.driver)
+                implementation(libs.sqlite.framework)
+            }
+        }
         val desktopMain by getting {
             dependencies {
                 implementation("de.femtopedia.dex2jar:dex-translator:2.4.36")
@@ -67,4 +74,8 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
+}
+
+android {
+    namespace = "app.chimahon.shared"
 }

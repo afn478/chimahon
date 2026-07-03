@@ -138,8 +138,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -8728,22 +8726,18 @@ private fun ReaderScaffold(
                     else -> false
                 }
             }
-            .onPointerEvent(PointerEventType.Scroll) { event ->
-                if (
-                    mode.paged &&
+            .readerScrollWheelNavigation(
+                enabled = mode.paged &&
                     !inputLocked &&
                     readerSettings.swipeNavigationEnabled &&
                     !settingsVisible &&
                     !chaptersVisible &&
-                    !statsVisible &&
-                    event.changes.any { abs(it.scrollDelta.y) > abs(it.scrollDelta.x) }
-                ) {
-                    val delta = event.changes.sumOf { it.scrollDelta.y.toDouble() }.toFloat()
-                    wheelAccumulator += delta
-                    if (abs(wheelAccumulator) >= 48f) {
-                        if (wheelAccumulator > 0f) onNextPage() else onPreviousPage()
-                        wheelAccumulator = 0f
-                    }
+                    !statsVisible,
+            ) { delta ->
+                wheelAccumulator += delta
+                if (abs(wheelAccumulator) >= 48f) {
+                    if (wheelAccumulator > 0f) onNextPage() else onPreviousPage()
+                    wheelAccumulator = 0f
                 }
             },
     ) {

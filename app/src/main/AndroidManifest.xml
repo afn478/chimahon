@@ -125,6 +125,11 @@
         </activity>
 
         <activity
+            android:name=".ui.shared.ChimahonSharedActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Tachiyomi" />
+
+        <activity
             android:name=".crash.CrashActivity"
             android:exported="false"
             android:process=":error_handler" />

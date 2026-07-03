@@ -18,6 +18,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Configuration
 import androidx.work.WorkManager
+import app.chimahon.shared.ChimahonAndroidHost
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
@@ -115,6 +116,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     @SuppressLint("LaunchActivityFromNotification")
     override fun onCreate() {
         super<Application>.onCreate()
+        ChimahonAndroidHost.initialize(this)
         patchInjekt()
         TelemetryConfig.init(
             applicationContext,

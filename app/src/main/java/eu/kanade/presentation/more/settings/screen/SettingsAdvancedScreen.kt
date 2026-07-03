@@ -61,6 +61,7 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import eu.kanade.tachiyomi.network.PREF_DOH_SHECAN
 import eu.kanade.tachiyomi.source.AndroidSourceManager
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
+import eu.kanade.tachiyomi.ui.shared.ChimahonSharedActivity
 import eu.kanade.tachiyomi.util.CrashLogUtil
 import eu.kanade.tachiyomi.util.storage.DiskUtil
 import eu.kanade.tachiyomi.util.system.GLUtil
@@ -851,6 +852,11 @@ object SettingsAdvancedScreen : SearchableSettings {
                         },
                     )
                 },
+                Preference.PreferenceItem.TextPreference(
+                    title = "Open shared UI preview",
+                    subtitle = "Launch the Compose Multiplatform Android host.",
+                    onClick = { context.startActivity(Intent(context, ChimahonSharedActivity::class.java)) },
+                ),
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(SYMR.strings.open_debug_menu),
                     subtitle = remember {

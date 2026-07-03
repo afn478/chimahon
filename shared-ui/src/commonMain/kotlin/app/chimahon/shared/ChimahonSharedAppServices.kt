@@ -29,6 +29,8 @@ import tachiyomi.core.extensions.LoadedScriptExtension
 import tachiyomi.core.extensions.ScriptExtensionInvoker
 import tachiyomi.core.extensions.ScriptExtensionLoader
 import tachiyomi.core.extensions.ScriptExtensionStore
+import tachiyomi.core.platform.background.BackgroundTaskScheduler
+import tachiyomi.core.platform.background.BackgroundWorkerRegistry
 import tachiyomi.core.platform.javascript.JavaScriptRuntimeFactory
 import tachiyomi.core.platform.settings.FilePlatformSettingsStore
 import tachiyomi.core.platform.storage.PlatformStorageDirectories
@@ -67,6 +69,11 @@ class ChimahonSharedAppServices private constructor(
     private val settingsRepository = ChimahonSettingsRepository(settingsStore)
     private val serviceSettingsRepository = ChimahonServiceSettingsRepository(settingsStore)
     private val downloadQueueRepository = ChimahonDownloadQueueRepository(settingsStore)
+    private val downloadBackgroundCoordinator = ChimahonDownloadBackgroundCoordinator(
+        schedulerFactory = platformServices::createBackgroundTaskScheduler,
+        loadQueue = downloadQueueRepository::load,
+        processNextDownload = ::processNextDownload,
+    )
     private val json = Json {
         ignoreUnknownKeys = true
     }
@@ -207,7 +214,7 @@ class ChimahonSharedAppServices private constructor(
                 downloadsDir = platformServices.storageDirectories.defaultDownloadsDir(APP_NAME).toString(),
                 databaseState = "Connected",
                 extensionState = extensionState.label,
-                backgroundState = platformServices.backgroundState,
+                backgroundState = downloadBackgroundCoordinator.stateLabel(platformServices.backgroundState),
             ),
         )
     }
@@ -1484,6 +1491,7 @@ class ChimahonSharedAppServices private constructor(
             "One or more chapters are not present in the shared database."
         }
         return downloadQueueRepository.enqueue(entries)
+            .also(downloadBackgroundCoordinator::scheduleIfNeeded)
     }
 
     suspend fun removeDownload(chapterId: Long): ChimahonDownloadQueueData {
@@ -1516,6 +1524,7 @@ class ChimahonSharedAppServices private constructor(
 
     suspend fun setDownloadQueuePaused(paused: Boolean): ChimahonDownloadQueueData {
         return downloadQueueRepository.setPaused(paused)
+            .also(downloadBackgroundCoordinator::scheduleIfNeeded)
     }
 
     suspend fun pauseDownloadQueue(): ChimahonDownloadQueueData {
@@ -1532,6 +1541,7 @@ class ChimahonSharedAppServices private constructor(
 
     suspend fun resumeDownload(chapterId: Long): ChimahonDownloadQueueData {
         return downloadQueueRepository.resume(chapterId)
+            .also(downloadBackgroundCoordinator::scheduleIfNeeded)
     }
 
     suspend fun claimNextDownload(): ChimahonDownloadQueueEntry? {
@@ -1540,6 +1550,7 @@ class ChimahonSharedAppServices private constructor(
 
     suspend fun retryDownload(chapterId: Long): ChimahonDownloadQueueData {
         return downloadQueueRepository.retry(chapterId)
+            .also(downloadBackgroundCoordinator::scheduleIfNeeded)
     }
 
     suspend fun updateDownloadProgress(
@@ -1938,6 +1949,7 @@ internal expect class ChimahonPlatformServices() {
     val javaScriptRuntimeFactory: JavaScriptRuntimeFactory
     val apkExtensionManager: ChimahonPlatformApkExtensionManager
 
+    fun createBackgroundTaskScheduler(workerRegistry: BackgroundWorkerRegistry): BackgroundTaskScheduler
     fun currentTimeMillis(): Long
     fun resolveExternalMangaUrl(source: CatalogueSource, manga: SManga): String?
     fun openExternalUrl(url: String): Boolean

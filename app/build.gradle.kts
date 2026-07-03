@@ -205,6 +205,7 @@ kotlin {
 
 dependencies {
     implementation(projects.chimahon)
+    implementation(projects.sharedUi)
 
     if (hasLocalOcr) {
         implementation(project(":chimahon-local-ocr"))
