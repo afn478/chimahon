@@ -1660,6 +1660,14 @@ class ChimahonSharedAppServices private constructor(
         }
     }
 
+    suspend fun processDownloadQueue(): ChimahonDownloadQueueData {
+        var queue = loadDownloadQueue()
+        while (queue.hasRunnableDownloads()) {
+            queue = processNextDownload()
+        }
+        return queue
+    }
+
     suspend fun saveReaderProgress(
         request: ChimahonReaderRequest,
         pageIndex: Int,

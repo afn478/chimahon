@@ -46,6 +46,11 @@ kotlin {
                 runtimeOnly(libs.junit.platform.launcher)
             }
         }
+        val linuxTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
         val windowsTest by getting {
             dependencies {
                 implementation(kotlin("test"))

@@ -14,7 +14,7 @@ class IosJavaScriptCoreRuntime : JavaScriptRuntime {
         val value = context.evaluateScript(script)
         val exception = context.exception
         if (exception != null && !exception.isUndefined()) {
-            error(exception.toString())
+            throw JavaScriptRuntimeException(RUNTIME_NAME, exception.toString())
         }
         return value.toKotlinValue() as T
     }
@@ -27,5 +27,9 @@ class IosJavaScriptCoreRuntime : JavaScriptRuntime {
             isString() -> toString()
             else -> toObject()
         }
+    }
+
+    private companion object {
+        const val RUNTIME_NAME = "iOS JavaScriptCore"
     }
 }

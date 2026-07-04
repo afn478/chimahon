@@ -20,7 +20,6 @@ import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSDate
 import platform.Foundation.dateByAddingTimeInterval
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Bridges registered Chimahon workers to iOS BGTaskScheduler.
@@ -41,6 +40,7 @@ class IosBackgroundTaskScheduler(
     private val tasks = permittedTasks.associateBy(BackgroundTask::uniqueName)
     private val states = MutableStateFlow<Map<String, BackgroundTaskInfo>>(emptyMap())
     private val runningJobs = MutableStateFlow<Map<String, Job>>(emptyMap())
+    private val retryAttempts = MutableStateFlow<Map<String, Int>>(emptyMap())
 
     init {
         require(tasks.size == permittedTasks.size) {
@@ -78,12 +78,14 @@ class IosBackgroundTaskScheduler(
         if (current?.state in ACTIVE_STATES) {
             cancel(task.uniqueName)
         }
+        resetRetry(task.uniqueName)
         submit(task, task.initialDelay)
     }
 
     override fun cancel(uniqueName: String) {
         scheduler.cancelTaskRequestWithIdentifier(identifierFor(uniqueName))
         runningJobs.value[uniqueName]?.cancel()
+        resetRetry(uniqueName)
         updateState(uniqueName, BackgroundTaskState.Cancelled)
     }
 
@@ -177,6 +179,7 @@ class IosBackgroundTaskScheduler(
                 when (workerRegistry.requireIosWorker(task.workerKey).run(task.inputData)) {
                     BackgroundTaskResult.Success -> {
                         updateState(task.uniqueName, BackgroundTaskState.Succeeded)
+                        resetRetry(task.uniqueName)
                         complete(true)
                         val cadence = task.cadence
                         if (cadence is BackgroundTaskCadence.Periodic) {
@@ -186,18 +189,21 @@ class IosBackgroundTaskScheduler(
                     BackgroundTaskResult.Retry -> {
                         updateState(task.uniqueName, BackgroundTaskState.Enqueued)
                         complete(false)
-                        submit(task, task.retryDelay())
+                        submitRetry(task)
                     }
                     BackgroundTaskResult.Failure -> {
                         updateState(task.uniqueName, BackgroundTaskState.Failed)
+                        resetRetry(task.uniqueName)
                         complete(false)
                     }
                 }
             } catch (_: CancellationException) {
                 updateState(task.uniqueName, BackgroundTaskState.Cancelled)
+                resetRetry(task.uniqueName)
                 complete(false)
             } catch (_: Throwable) {
                 updateState(task.uniqueName, BackgroundTaskState.Failed)
+                resetRetry(task.uniqueName)
                 complete(false)
             } finally {
                 runningJobs.update { it - task.uniqueName }
@@ -225,6 +231,16 @@ class IosBackgroundTaskScheduler(
         }
     }
 
+    private fun submitRetry(task: BackgroundTask) {
+        val attempt = retryAttempts.value[task.uniqueName] ?: 0
+        retryAttempts.update { it + (task.uniqueName to (attempt + 1)) }
+        submit(task, task.retryDelay(attempt))
+    }
+
+    private fun resetRetry(uniqueName: String) {
+        retryAttempts.update { it - uniqueName }
+    }
+
     private fun updateState(uniqueName: String, state: BackgroundTaskState) {
         states.update { scheduled ->
             val current = scheduled[uniqueName] ?: return@update scheduled
@@ -232,17 +248,8 @@ class IosBackgroundTaskScheduler(
         }
     }
 
-    private fun BackgroundTask.retryDelay(): Duration {
-        val criteria = backoffCriteria ?: return DEFAULT_RETRY_DELAY
-        return when (criteria.policy) {
-            BackgroundTaskBackoffPolicy.Linear -> criteria.delay
-            BackgroundTaskBackoffPolicy.Exponential -> criteria.delay
-        }
-    }
-
     private companion object {
         val ACTIVE_STATES = setOf(BackgroundTaskState.Enqueued, BackgroundTaskState.Running)
-        val DEFAULT_RETRY_DELAY = 30_000.milliseconds
     }
 }
 

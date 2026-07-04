@@ -48,6 +48,7 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
+                implementation(androidx.workmanager)
                 implementation(libs.sqldelight.android.driver)
                 implementation(libs.sqlite.framework)
             }

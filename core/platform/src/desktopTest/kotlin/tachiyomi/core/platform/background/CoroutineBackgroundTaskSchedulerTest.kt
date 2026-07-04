@@ -102,6 +102,40 @@ class CoroutineBackgroundTaskSchedulerTest {
     }
 
     @Test
+    fun `exponential retry doubles configured delay for each retry`() = runTest {
+        var attempts = 0
+        val scheduler = scheduler {
+            attempts++
+            if (attempts <= 3) BackgroundTaskResult.Retry else BackgroundTaskResult.Success
+        }
+
+        scheduler.schedule(
+            task(
+                backoffCriteria = BackgroundTaskBackoffCriteria(
+                    policy = BackgroundTaskBackoffPolicy.Exponential,
+                    delay = 1.seconds,
+                ),
+            ),
+        )
+        runCurrent()
+
+        assertEquals(1, attempts)
+
+        advanceTimeBy(1.seconds)
+        runCurrent()
+        assertEquals(2, attempts)
+
+        advanceTimeBy(2.seconds)
+        runCurrent()
+        assertEquals(3, attempts)
+
+        advanceTimeBy(4.seconds)
+        runCurrent()
+        assertEquals(4, attempts)
+        assertEquals(BackgroundTaskState.Succeeded, scheduler.taskInfo(TASK_NAME)?.state)
+    }
+
+    @Test
     fun `task waits until platform constraints are available`() = runTest {
         val constraintsAvailable = CompletableDeferred<Unit>()
         var executions = 0

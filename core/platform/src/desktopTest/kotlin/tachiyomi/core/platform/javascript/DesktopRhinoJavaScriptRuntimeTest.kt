@@ -2,6 +2,8 @@ package tachiyomi.core.platform.javascript
 
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class DesktopRhinoJavaScriptRuntimeTest {
@@ -16,5 +18,17 @@ class DesktopRhinoJavaScriptRuntimeTest {
     @Test
     fun evaluateUsesSafeStandardObjects() = runBlocking {
         assertEquals("undefined", runtime.evaluate<String>("typeof Packages"))
+    }
+
+    @Test
+    fun evaluateWrapsJavaScriptFailures() {
+        val error = assertThrows(JavaScriptRuntimeException::class.java) {
+            runBlocking {
+                runtime.evaluate<String>("throw new Error('boom')")
+            }
+        }
+
+        assertTrue(error.message.orEmpty().contains("Desktop Rhino JavaScript evaluation failed"))
+        assertTrue(error.message.orEmpty().contains("boom"))
     }
 }

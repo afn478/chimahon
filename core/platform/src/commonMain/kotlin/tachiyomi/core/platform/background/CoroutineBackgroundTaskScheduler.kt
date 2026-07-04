@@ -11,9 +11,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.math.pow
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -201,17 +199,6 @@ class CoroutineBackgroundTaskScheduler(
         }
     }
 
-    private fun BackgroundTask.retryDelay(attempt: Int): Duration {
-        val criteria = backoffCriteria ?: return DEFAULT_RETRY_DELAY
-        return when (criteria.policy) {
-            BackgroundTaskBackoffPolicy.Linear -> criteria.delay * (attempt + 1)
-            BackgroundTaskBackoffPolicy.Exponential -> {
-                val multiplier = 2.0.pow(attempt.coerceAtMost(MAX_EXPONENTIAL_ATTEMPT))
-                (criteria.delay.inWholeMilliseconds * multiplier).toLong().milliseconds
-            }
-        }
-    }
-
     private data class ScheduledWork(
         val info: BackgroundTaskInfo,
         val job: Job,
@@ -219,8 +206,6 @@ class CoroutineBackgroundTaskScheduler(
 
     private companion object {
         val ACTIVE_STATES = setOf(BackgroundTaskState.Enqueued, BackgroundTaskState.Running)
-        val DEFAULT_RETRY_DELAY = 30_000.milliseconds
-        const val MAX_EXPONENTIAL_ATTEMPT = 30
 
         @OptIn(ExperimentalUuidApi::class)
         fun newTaskId(): String = Uuid.random().toString()

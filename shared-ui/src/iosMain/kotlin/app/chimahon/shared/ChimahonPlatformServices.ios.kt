@@ -25,7 +25,10 @@ import tachiyomi.data.NativeDatabaseHandler
 
 internal actual class ChimahonPlatformServices actual constructor() {
     actual val platformName: String = "iOS"
-    actual val backgroundState: String = "Foreground scheduler; iOS background work follows system limits"
+    private var backgroundStateLabel =
+        "Foreground scheduler; register BGTask identifiers for system wakeups"
+    actual val backgroundState: String
+        get() = backgroundStateLabel
     actual val storageDirectories: PlatformStorageDirectories = IosPlatformStorageDirectories(APP_NAME)
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -50,6 +53,13 @@ internal actual class ChimahonPlatformServices actual constructor() {
     actual fun createBackgroundTaskScheduler(
         workerRegistry: BackgroundWorkerRegistry,
     ): BackgroundTaskScheduler {
+        ChimahonIosBackgroundTasks.schedulerOrRegister()?.let { scheduler ->
+            backgroundStateLabel = "BGTaskScheduler bridge ready"
+            return scheduler
+        }
+
+        backgroundStateLabel =
+            "Foreground scheduler; add ${ChimahonIosBackgroundTasks.downloadQueueIdentifier} to Info.plist"
         return CoroutineBackgroundTaskScheduler(
             workerRegistry = workerRegistry,
             scope = backgroundScope,

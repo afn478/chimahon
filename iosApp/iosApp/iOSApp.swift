@@ -4,6 +4,10 @@ import UIKit
 
 @main
 struct ChimahonIOSApp: App {
+    init() {
+        _ = ChimahonIosBackgroundTasks.shared.register()
+    }
+
     var body: some Scene {
         WindowGroup {
             ComposeView()

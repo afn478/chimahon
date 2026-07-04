@@ -6,14 +6,11 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.SourceRegistry
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import tachiyomi.core.database.AndroidDatabaseDriverFactory
+import tachiyomi.core.platform.background.AndroidBackgroundWorkerRegistry
+import tachiyomi.core.platform.background.AndroidWorkManagerBackgroundTaskScheduler
 import tachiyomi.core.platform.background.BackgroundTaskScheduler
 import tachiyomi.core.platform.background.BackgroundWorkerRegistry
-import tachiyomi.core.platform.background.CoroutineBackgroundTaskScheduler
 import tachiyomi.core.platform.javascript.AndroidJavaScriptRuntimeFactory
 import tachiyomi.core.platform.javascript.JavaScriptRuntimeFactory
 import tachiyomi.core.platform.storage.AndroidPlatformStorageDirectories
@@ -24,10 +21,9 @@ import tachiyomi.data.DatabaseHandler
 
 internal actual class ChimahonPlatformServices actual constructor() {
     private val context = ChimahonAndroidHost.requireContext()
-    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     actual val platformName: String = "Android"
-    actual val backgroundState: String = "Shared foreground scheduler; legacy Android runtime owns WorkManager jobs"
+    actual val backgroundState: String = "WorkManager scheduler ready"
     actual val storageDirectories: PlatformStorageDirectories = AndroidPlatformStorageDirectories(context)
 
     init {
@@ -45,12 +41,19 @@ internal actual class ChimahonPlatformServices actual constructor() {
     actual val databaseHandler: DatabaseHandler = AndroidDatabaseHandler(database, databaseDriver)
     actual val javaScriptRuntimeFactory: JavaScriptRuntimeFactory = AndroidJavaScriptRuntimeFactory
 
+    @Suppress("UNUSED_PARAMETER")
     actual fun createBackgroundTaskScheduler(
         workerRegistry: BackgroundWorkerRegistry,
     ): BackgroundTaskScheduler {
-        return CoroutineBackgroundTaskScheduler(
-            workerRegistry = workerRegistry,
-            scope = backgroundScope,
+        return AndroidWorkManagerBackgroundTaskScheduler(
+            context = context,
+            workerRegistry = AndroidBackgroundWorkerRegistry { workerKey ->
+                when (workerKey) {
+                    ChimahonDownloadBackgroundCoordinator.DOWNLOAD_QUEUE_WORKER_KEY ->
+                        ChimahonDownloadQueueWorker::class.java
+                    else -> null
+                }
+            },
         )
     }
 
@@ -68,7 +71,6 @@ internal actual class ChimahonPlatformServices actual constructor() {
     }
 
     actual fun close() {
-        backgroundScope.cancel()
         databaseDriver.close()
     }
 }

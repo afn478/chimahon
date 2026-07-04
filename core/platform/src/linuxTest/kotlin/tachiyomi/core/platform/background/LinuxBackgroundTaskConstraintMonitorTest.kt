@@ -5,12 +5,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class WindowsBackgroundTaskConstraintMonitorTest {
+class LinuxBackgroundTaskConstraintMonitorTest {
 
     @Test
     fun unconstrainedTaskDoesNotProbeOperatingSystem() {
         var commands = 0
-        val monitor = WindowsBackgroundTaskConstraintMonitor {
+        val monitor = LinuxBackgroundTaskConstraintMonitor {
             commands++
             false
         }
@@ -22,7 +22,7 @@ class WindowsBackgroundTaskConstraintMonitorTest {
     @Test
     fun unavailableNetworkBlocksConstrainedTask() {
         val commands = mutableListOf<String>()
-        val monitor = WindowsBackgroundTaskConstraintMonitor { command ->
+        val monitor = LinuxBackgroundTaskConstraintMonitor { command ->
             commands += command
             false
         }
@@ -33,13 +33,13 @@ class WindowsBackgroundTaskConstraintMonitorTest {
 
         assertFalse(result)
         assertEquals(1, commands.size)
-        assertTrue(commands.single().contains("Get-NetConnectionProfile"))
+        assertTrue(commands.single().contains("ip route get"))
     }
 
     @Test
     fun everyRequestedConstraintMustPass() {
         val commands = mutableListOf<String>()
-        val monitor = WindowsBackgroundTaskConstraintMonitor { command ->
+        val monitor = LinuxBackgroundTaskConstraintMonitor { command ->
             commands += command
             true
         }
@@ -55,7 +55,7 @@ class WindowsBackgroundTaskConstraintMonitorTest {
 
         assertTrue(result)
         assertEquals(5, commands.size)
-        assertTrue(commands.all { it.startsWith("powershell.exe -NoProfile -NonInteractive -Command") })
-        assertTrue(commands.any { it.contains("NetworkCostType") })
+        assertTrue(commands.any { it.contains("nmcli") })
+        assertTrue(commands.any { it.contains("/sys/class/power_supply") })
     }
 }

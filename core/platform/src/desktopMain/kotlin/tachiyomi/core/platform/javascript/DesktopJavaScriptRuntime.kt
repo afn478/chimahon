@@ -1,6 +1,8 @@
 package tachiyomi.core.platform.javascript
 
+import kotlinx.coroutines.CancellationException
 import org.mozilla.javascript.Context
+import org.mozilla.javascript.RhinoException
 import org.mozilla.javascript.ScriptableObject
 import org.mozilla.javascript.Undefined
 
@@ -20,12 +22,17 @@ class DesktopRhinoJavaScriptRuntime : JavaScriptRuntime {
                 is ScriptableObject -> Context.jsToJava(result, Any::class.java)
                 else -> result
             } as T
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: RhinoException) {
+            throw JavaScriptRuntimeException(RUNTIME_NAME, error.details(), error)
         } finally {
             Context.exit()
         }
     }
 
     private companion object {
+        const val RUNTIME_NAME = "Desktop Rhino"
         const val SOURCE_NAME = "chimahon-desktop"
     }
 }

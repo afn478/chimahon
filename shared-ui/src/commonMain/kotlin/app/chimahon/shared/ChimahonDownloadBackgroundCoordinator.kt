@@ -57,28 +57,28 @@ internal class ChimahonDownloadBackgroundCoordinator(
         }
     }
 
-    private fun downloadQueueTask(): BackgroundTask {
-        return BackgroundTask(
-            uniqueName = DOWNLOAD_QUEUE_TASK_NAME,
-            workerKey = DOWNLOAD_QUEUE_WORKER_KEY,
-            cadence = BackgroundTaskCadence.OneTime,
-            constraints = BackgroundTaskConstraints(network = BackgroundNetworkConstraint.Connected),
-            policy = ExistingBackgroundTaskPolicy.Keep,
-            backoffCriteria = BackgroundTaskBackoffCriteria(
-                policy = BackgroundTaskBackoffPolicy.Exponential,
-                delay = 30.seconds,
-            ),
-            tags = setOf(DOWNLOAD_QUEUE_TASK_TAG),
-        )
-    }
-
     internal companion object {
         const val DOWNLOAD_QUEUE_TASK_NAME = "chimahon.download.queue"
         const val DOWNLOAD_QUEUE_WORKER_KEY = "chimahon.download.queue.worker"
         const val DOWNLOAD_QUEUE_TASK_TAG = "chimahon.download"
+
+        fun downloadQueueTask(): BackgroundTask {
+            return BackgroundTask(
+                uniqueName = DOWNLOAD_QUEUE_TASK_NAME,
+                workerKey = DOWNLOAD_QUEUE_WORKER_KEY,
+                cadence = BackgroundTaskCadence.OneTime,
+                constraints = BackgroundTaskConstraints(network = BackgroundNetworkConstraint.Connected),
+                policy = ExistingBackgroundTaskPolicy.Keep,
+                backoffCriteria = BackgroundTaskBackoffCriteria(
+                    policy = BackgroundTaskBackoffPolicy.Exponential,
+                    delay = 30.seconds,
+                ),
+                tags = setOf(DOWNLOAD_QUEUE_TASK_TAG),
+            )
+        }
     }
 }
 
-private fun ChimahonDownloadQueueData.hasRunnableDownloads(): Boolean {
+internal fun ChimahonDownloadQueueData.hasRunnableDownloads(): Boolean {
     return !paused && entries.any { it.status == ChimahonDownloadState.Queued }
 }

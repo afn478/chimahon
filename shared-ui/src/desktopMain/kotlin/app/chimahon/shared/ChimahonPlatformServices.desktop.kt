@@ -12,6 +12,7 @@ import tachiyomi.core.database.DesktopDatabaseDriverFactory
 import tachiyomi.core.platform.background.BackgroundTaskScheduler
 import tachiyomi.core.platform.background.BackgroundWorkerRegistry
 import tachiyomi.core.platform.background.CoroutineBackgroundTaskScheduler
+import tachiyomi.core.platform.background.DesktopBackgroundTaskConstraintMonitor
 import tachiyomi.core.platform.javascript.DesktopJavaScriptRuntimeFactory
 import tachiyomi.core.platform.javascript.JavaScriptRuntimeFactory
 import tachiyomi.core.platform.storage.DesktopPlatformStorageDirectories
@@ -45,6 +46,7 @@ internal actual class ChimahonPlatformServices actual constructor() {
         return CoroutineBackgroundTaskScheduler(
             workerRegistry = workerRegistry,
             scope = backgroundScope,
+            constraintMonitor = DesktopBackgroundTaskConstraintMonitor(),
         )
     }
 

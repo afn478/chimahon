@@ -2,7 +2,9 @@ package tachiyomi.core.platform.background
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlin.math.pow
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 interface BackgroundTaskScheduler {
     fun schedule(task: BackgroundTask)
@@ -205,3 +207,18 @@ fun interface BackgroundTaskConstraintMonitor {
 
 class MissingBackgroundWorkerException(workerKey: String) :
     IllegalArgumentException("No background worker registered for key: $workerKey")
+
+internal fun BackgroundTask.retryDelay(attempt: Int): Duration {
+    val criteria = backoffCriteria ?: return DEFAULT_BACKGROUND_TASK_RETRY_DELAY
+    return when (criteria.policy) {
+        BackgroundTaskBackoffPolicy.Linear -> criteria.delay * (attempt + 1)
+        BackgroundTaskBackoffPolicy.Exponential -> {
+            val boundedAttempt = attempt.coerceIn(0, MAX_BACKGROUND_TASK_EXPONENTIAL_ATTEMPT)
+            val multiplier = 2.0.pow(boundedAttempt)
+            (criteria.delay.inWholeMilliseconds * multiplier).toLong().milliseconds
+        }
+    }
+}
+
+private val DEFAULT_BACKGROUND_TASK_RETRY_DELAY = 30_000.milliseconds
+private const val MAX_BACKGROUND_TASK_EXPONENTIAL_ATTEMPT = 30
