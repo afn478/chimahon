@@ -8,6 +8,166 @@ import kotlin.test.assertTrue
 
 class NovelReaderInputPolicyTest {
     @Test
+    fun hardwareKeyDownConsumesReaderNavigationKeys() {
+        listOf(
+            NovelReaderInputPolicy.HardwareKey.DPAD_LEFT,
+            NovelReaderInputPolicy.HardwareKey.DPAD_RIGHT,
+            NovelReaderInputPolicy.HardwareKey.DPAD_UP,
+            NovelReaderInputPolicy.HardwareKey.DPAD_DOWN,
+            NovelReaderInputPolicy.HardwareKey.PAGE_UP,
+            NovelReaderInputPolicy.HardwareKey.PAGE_DOWN,
+            NovelReaderInputPolicy.HardwareKey.MENU,
+        ).forEach { key ->
+            assertEquals(
+                NovelReaderInputPolicy.HardwareKeyAction.Consume,
+                NovelReaderInputPolicy.hardwareKeyDownAction(
+                    key = key,
+                    popupActive = false,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun hardwareKeyDownIgnoresNonNavigationKeysAndPopupState() {
+        listOf(
+            NovelReaderInputPolicy.HardwareKey.VOLUME_UP,
+            NovelReaderInputPolicy.HardwareKey.VOLUME_DOWN,
+            NovelReaderInputPolicy.HardwareKey.NEXT,
+            NovelReaderInputPolicy.HardwareKey.PREVIOUS,
+            NovelReaderInputPolicy.HardwareKey.OTHER,
+        ).forEach { key ->
+            assertEquals(
+                NovelReaderInputPolicy.HardwareKeyAction.Ignore,
+                NovelReaderInputPolicy.hardwareKeyDownAction(
+                    key = key,
+                    popupActive = false,
+                ),
+            )
+        }
+
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Ignore,
+            NovelReaderInputPolicy.hardwareKeyDownAction(
+                key = NovelReaderInputPolicy.HardwareKey.DPAD_DOWN,
+                popupActive = true,
+            ),
+        )
+    }
+
+    @Test
+    fun hardwareKeyUpMapsPagingChapterAndHudActions() {
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.HandleVolumeKey(forward = false),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.VOLUME_UP,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.HandleVolumeKey(forward = true),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.VOLUME_DOWN,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Paginate(forward = false),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.DPAD_UP,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Paginate(forward = true),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.PAGE_DOWN,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Paginate(forward = false),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.DPAD_LEFT,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Paginate(forward = true),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.DPAD_RIGHT,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.ChangeChapter(forward = false),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.DPAD_LEFT,
+                popupActive = false,
+                ctrlPressed = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.ChangeChapter(forward = true),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.DPAD_RIGHT,
+                popupActive = false,
+                ctrlPressed = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.ChangeChapter(forward = true),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.NEXT,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.ChangeChapter(forward = false),
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.PREVIOUS,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.ToggleHud,
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.MENU,
+                popupActive = false,
+                ctrlPressed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun hardwareKeyUpIgnoresPopupStateAndUnknownKeys() {
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Ignore,
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.MENU,
+                popupActive = true,
+                ctrlPressed = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderInputPolicy.HardwareKeyAction.Ignore,
+            NovelReaderInputPolicy.hardwareKeyUpAction(
+                key = NovelReaderInputPolicy.HardwareKey.OTHER,
+                popupActive = false,
+                ctrlPressed = true,
+            ),
+        )
+    }
+
+    @Test
     fun swipeForwardUsesVerticalWritingHorizontalRtlDirection() {
         assertEquals(
             true,

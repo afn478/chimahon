@@ -10,15 +10,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import com.canopus.chimareader.data.BookMetadata
 import com.canopus.chimareader.data.BookStorage
-import com.canopus.chimareader.data.NovelReaderSettings
-import androidx.core.graphics.ColorUtils
 import java.io.File
+import tachiyomi.domain.reader.service.NovelReaderInputPolicy
 
 open class NovelReaderActivity : ComponentActivity() {
 
@@ -55,68 +54,51 @@ open class NovelReaderActivity : ComponentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        if (isPopupActive) return super.onKeyDown(keyCode, event)
-
-        when (keyCode) {
-            android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
-            android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
-            android.view.KeyEvent.KEYCODE_PAGE_UP, android.view.KeyEvent.KEYCODE_PAGE_DOWN,
-            android.view.KeyEvent.KEYCODE_MENU -> return true
+        val action = NovelReaderInputPolicy.hardwareKeyDownAction(
+            key = keyCode.readerHardwareKey(),
+            popupActive = isPopupActive,
+        )
+        if (performHardwareKeyAction(action)) {
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        if (isPopupActive) return super.onKeyUp(keyCode, event)
-
-        val ctrlPressed = (event?.metaState?.and(android.view.KeyEvent.META_CTRL_ON) ?: 0) > 0
-
-        when (keyCode) {
-            android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
-                if (handleVolumeKey(false)) return true
-            }
-            android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                if (handleVolumeKey(true)) return true
-            }
-            android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_PAGE_UP -> {
-                readerViewModel?.bridge?.paginate(false)
-                return true
-            }
-            android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN -> {
-                readerViewModel?.bridge?.paginate(true)
-                return true
-            }
-            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (ctrlPressed) {
-                    readerViewModel?.previousChapter()
-                } else {
-                    readerViewModel?.bridge?.paginate(false)
-                }
-                return true
-            }
-            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (ctrlPressed) {
-                    readerViewModel?.nextChapter()
-                } else {
-                    readerViewModel?.bridge?.paginate(true)
-                }
-                return true
-            }
-            android.view.KeyEvent.KEYCODE_N -> {
-                readerViewModel?.nextChapter()
-                return true
-            }
-            android.view.KeyEvent.KEYCODE_P -> {
-                readerViewModel?.previousChapter()
-                return true
-            }
-            android.view.KeyEvent.KEYCODE_MENU -> {
-                showHud = !showHud
-                setSystemBarsVisibility(showHud)
-                return true
-            }
+        val action = NovelReaderInputPolicy.hardwareKeyUpAction(
+            key = keyCode.readerHardwareKey(),
+            popupActive = isPopupActive,
+            ctrlPressed = event.isCtrlModifierPressed(),
+        )
+        if (performHardwareKeyAction(action)) {
+            return true
         }
         return super.onKeyUp(keyCode, event)
+    }
+
+    private fun performHardwareKeyAction(action: NovelReaderInputPolicy.HardwareKeyAction): Boolean {
+        return when (action) {
+            NovelReaderInputPolicy.HardwareKeyAction.Ignore -> false
+            NovelReaderInputPolicy.HardwareKeyAction.Consume -> true
+            is NovelReaderInputPolicy.HardwareKeyAction.HandleVolumeKey -> handleVolumeKey(action.forward)
+            is NovelReaderInputPolicy.HardwareKeyAction.Paginate -> {
+                readerViewModel?.bridge?.paginate(action.forward)
+                true
+            }
+            is NovelReaderInputPolicy.HardwareKeyAction.ChangeChapter -> {
+                if (action.forward) {
+                    readerViewModel?.nextChapter()
+                } else {
+                    readerViewModel?.previousChapter()
+                }
+                true
+            }
+            NovelReaderInputPolicy.HardwareKeyAction.ToggleHud -> {
+                showHud = !showHud
+                setSystemBarsVisibility(showHud)
+                true
+            }
+        }
     }
 
     /** Override in subclass to receive text selection events from the reader. */
@@ -224,4 +206,25 @@ open class NovelReaderActivity : ComponentActivity() {
         windowInsetsController.isAppearanceLightStatusBars = isLight
         windowInsetsController.isAppearanceLightNavigationBars = isLight
     }
+}
+
+private fun Int.readerHardwareKey(): NovelReaderInputPolicy.HardwareKey {
+    return when (this) {
+        android.view.KeyEvent.KEYCODE_VOLUME_UP -> NovelReaderInputPolicy.HardwareKey.VOLUME_UP
+        android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> NovelReaderInputPolicy.HardwareKey.VOLUME_DOWN
+        android.view.KeyEvent.KEYCODE_DPAD_UP -> NovelReaderInputPolicy.HardwareKey.DPAD_UP
+        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> NovelReaderInputPolicy.HardwareKey.DPAD_DOWN
+        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> NovelReaderInputPolicy.HardwareKey.DPAD_LEFT
+        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> NovelReaderInputPolicy.HardwareKey.DPAD_RIGHT
+        android.view.KeyEvent.KEYCODE_PAGE_UP -> NovelReaderInputPolicy.HardwareKey.PAGE_UP
+        android.view.KeyEvent.KEYCODE_PAGE_DOWN -> NovelReaderInputPolicy.HardwareKey.PAGE_DOWN
+        android.view.KeyEvent.KEYCODE_N -> NovelReaderInputPolicy.HardwareKey.NEXT
+        android.view.KeyEvent.KEYCODE_P -> NovelReaderInputPolicy.HardwareKey.PREVIOUS
+        android.view.KeyEvent.KEYCODE_MENU -> NovelReaderInputPolicy.HardwareKey.MENU
+        else -> NovelReaderInputPolicy.HardwareKey.OTHER
+    }
+}
+
+private fun android.view.KeyEvent.isCtrlModifierPressed(): Boolean {
+    return metaState and android.view.KeyEvent.META_CTRL_ON != 0
 }

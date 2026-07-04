@@ -6,6 +6,30 @@ object NovelReaderInputPolicy {
     const val MIN_FLING_VELOCITY = 400f
     const val MAX_TAP_MOVEMENT = 20f
 
+    enum class HardwareKey {
+        VOLUME_UP,
+        VOLUME_DOWN,
+        DPAD_UP,
+        DPAD_DOWN,
+        DPAD_LEFT,
+        DPAD_RIGHT,
+        PAGE_UP,
+        PAGE_DOWN,
+        NEXT,
+        PREVIOUS,
+        MENU,
+        OTHER,
+    }
+
+    sealed interface HardwareKeyAction {
+        data object Ignore : HardwareKeyAction
+        data object Consume : HardwareKeyAction
+        data class HandleVolumeKey(val forward: Boolean) : HardwareKeyAction
+        data class Paginate(val forward: Boolean) : HardwareKeyAction
+        data class ChangeChapter(val forward: Boolean) : HardwareKeyAction
+        data object ToggleHud : HardwareKeyAction
+    }
+
     enum class TapAction {
         NONE,
         TOGGLE_OVERLAY,
@@ -61,6 +85,63 @@ object NovelReaderInputPolicy {
             x < leftZoneEnd -> if (verticalWriting) TapAction.FORWARD else TapAction.BACKWARD
             x > rightZoneStart -> if (verticalWriting) TapAction.BACKWARD else TapAction.FORWARD
             else -> TapAction.NONE
+        }
+    }
+
+    fun hardwareKeyDownAction(
+        key: HardwareKey,
+        popupActive: Boolean,
+    ): HardwareKeyAction {
+        if (popupActive) return HardwareKeyAction.Ignore
+
+        return when (key) {
+            HardwareKey.DPAD_LEFT,
+            HardwareKey.DPAD_RIGHT,
+            HardwareKey.DPAD_UP,
+            HardwareKey.DPAD_DOWN,
+            HardwareKey.PAGE_UP,
+            HardwareKey.PAGE_DOWN,
+            HardwareKey.MENU,
+            -> HardwareKeyAction.Consume
+            HardwareKey.VOLUME_UP,
+            HardwareKey.VOLUME_DOWN,
+            HardwareKey.NEXT,
+            HardwareKey.PREVIOUS,
+            HardwareKey.OTHER,
+            -> HardwareKeyAction.Ignore
+        }
+    }
+
+    fun hardwareKeyUpAction(
+        key: HardwareKey,
+        popupActive: Boolean,
+        ctrlPressed: Boolean,
+    ): HardwareKeyAction {
+        if (popupActive) return HardwareKeyAction.Ignore
+
+        return when (key) {
+            HardwareKey.VOLUME_UP -> HardwareKeyAction.HandleVolumeKey(forward = false)
+            HardwareKey.VOLUME_DOWN -> HardwareKeyAction.HandleVolumeKey(forward = true)
+            HardwareKey.DPAD_UP,
+            HardwareKey.PAGE_UP,
+            -> HardwareKeyAction.Paginate(forward = false)
+            HardwareKey.DPAD_DOWN,
+            HardwareKey.PAGE_DOWN,
+            -> HardwareKeyAction.Paginate(forward = true)
+            HardwareKey.DPAD_LEFT -> if (ctrlPressed) {
+                HardwareKeyAction.ChangeChapter(forward = false)
+            } else {
+                HardwareKeyAction.Paginate(forward = false)
+            }
+            HardwareKey.DPAD_RIGHT -> if (ctrlPressed) {
+                HardwareKeyAction.ChangeChapter(forward = true)
+            } else {
+                HardwareKeyAction.Paginate(forward = true)
+            }
+            HardwareKey.NEXT -> HardwareKeyAction.ChangeChapter(forward = true)
+            HardwareKey.PREVIOUS -> HardwareKeyAction.ChangeChapter(forward = false)
+            HardwareKey.MENU -> HardwareKeyAction.ToggleHud
+            HardwareKey.OTHER -> HardwareKeyAction.Ignore
         }
     }
 
