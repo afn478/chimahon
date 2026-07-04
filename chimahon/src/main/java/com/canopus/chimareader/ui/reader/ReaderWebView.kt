@@ -615,8 +615,8 @@ private class ReaderAndroidWebView(
 
     fun paginate(forward: Boolean) {
         navigate(
+            forward = forward,
             direction = NovelReaderWebNavigationPolicy.pageDirection(forward),
-            fallback = chapterFallback(forward),
         )
     }
 
@@ -638,8 +638,8 @@ private class ReaderAndroidWebView(
             }
             is NovelReaderWebNavigationPolicy.SwipeAction.Paginate -> {
                 navigate(
+                    forward = action.forward,
                     direction = action.direction,
-                    fallback = chapterFallback(action.forward),
                 )
             }
         }
@@ -655,26 +655,36 @@ private class ReaderAndroidWebView(
      */
     private fun navigateContinuous(forward: Boolean): Boolean {
         evaluateJavascript(NovelReaderWebScriptPolicy.continuousBoundaryScript(forward)) { result ->
-            when (NovelReaderWebResultPolicy.continuousBoundaryAction(result)) {
-                NovelReaderWebResultPolicy.ContinuousBoundaryAction.UseChapterFallback -> {
-                    val changed = if (forward) onNextChapter() else onPreviousChapter()
+            when (
+                val action = NovelReaderWebNavigationPolicy.continuousBoundaryResultAction(
+                    result = result,
+                    forward = forward,
+                )
+            ) {
+                is NovelReaderWebNavigationPolicy.ContinuousBoundaryResultAction.UseChapterFallback -> {
+                    val changed = chapterFallback(action.forward).invoke()
                     NovelReaderWebHostPolicy.chapterChangedViewState(changed)?.let(::applyHostViewState)
                 }
-                NovelReaderWebResultPolicy.ContinuousBoundaryAction.LetWebViewScroll -> Unit
+                NovelReaderWebNavigationPolicy.ContinuousBoundaryResultAction.LetHostScroll -> Unit
             }
         }
         return true
     }
 
     private fun navigate(
+        forward: Boolean,
         direction: NovelReaderWebScriptPolicy.PageDirection,
-        fallback: () -> Boolean,
     ): Boolean {
         evaluateJavascript(NovelReaderWebScriptPolicy.paginateScript(direction)) { result ->
-            when (NovelReaderWebResultPolicy.pagedNavigationAction(result)) {
-                NovelReaderWebResultPolicy.PagedNavigationAction.ReportProgress -> {
+            when (
+                val action = NovelReaderWebNavigationPolicy.pagedNavigationResultAction(
+                    result = result,
+                    forward = forward,
+                )
+            ) {
+                is NovelReaderWebNavigationPolicy.PagedNavigationResultAction.ReportProgress -> {
                     evaluateJavascript(
-                        NovelReaderWebScriptPolicy.calculateProgressScript(),
+                        action.progressScript,
                     ) { progressResult ->
                         NovelReaderWebResultPolicy.progressResult(progressResult)?.let {
                             pendingProgress = it
@@ -682,8 +692,8 @@ private class ReaderAndroidWebView(
                         }
                     }
                 }
-                NovelReaderWebResultPolicy.PagedNavigationAction.UseChapterFallback -> {
-                    val chapterChanged = fallback()
+                is NovelReaderWebNavigationPolicy.PagedNavigationResultAction.UseChapterFallback -> {
+                    val chapterChanged = chapterFallback(action.forward).invoke()
                     NovelReaderWebHostPolicy.chapterChangedViewState(chapterChanged)?.let(::applyHostViewState)
                 }
             }

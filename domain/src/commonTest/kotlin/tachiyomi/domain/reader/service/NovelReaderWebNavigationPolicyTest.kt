@@ -73,4 +73,56 @@ class NovelReaderWebNavigationPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun continuousBoundaryResultActionFallsBackOnlyAtBoundaryLimit() {
+        assertEquals(
+            NovelReaderWebNavigationPolicy.ContinuousBoundaryResultAction.UseChapterFallback(forward = true),
+            NovelReaderWebNavigationPolicy.continuousBoundaryResultAction(
+                result = "\"limit\"",
+                forward = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebNavigationPolicy.ContinuousBoundaryResultAction.UseChapterFallback(forward = false),
+            NovelReaderWebNavigationPolicy.continuousBoundaryResultAction(
+                result = "\"limit\"",
+                forward = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebNavigationPolicy.ContinuousBoundaryResultAction.LetHostScroll,
+            NovelReaderWebNavigationPolicy.continuousBoundaryResultAction(
+                result = "\"scrolling\"",
+                forward = true,
+            ),
+        )
+    }
+
+    @Test
+    fun pagedNavigationResultActionReportsProgressOrFallsBackByResult() {
+        assertEquals(
+            NovelReaderWebNavigationPolicy.PagedNavigationResultAction.ReportProgress(
+                NovelReaderWebScriptPolicy.calculateProgressScript(),
+            ),
+            NovelReaderWebNavigationPolicy.pagedNavigationResultAction(
+                result = "\"scrolled\"",
+                forward = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebNavigationPolicy.PagedNavigationResultAction.UseChapterFallback(forward = true),
+            NovelReaderWebNavigationPolicy.pagedNavigationResultAction(
+                result = "\"limit\"",
+                forward = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebNavigationPolicy.PagedNavigationResultAction.UseChapterFallback(forward = false),
+            NovelReaderWebNavigationPolicy.pagedNavigationResultAction(
+                result = null,
+                forward = false,
+            ),
+        )
+    }
 }

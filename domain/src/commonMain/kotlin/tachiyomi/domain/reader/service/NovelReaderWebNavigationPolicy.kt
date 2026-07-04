@@ -10,6 +10,16 @@ object NovelReaderWebNavigationPolicy {
         ) : SwipeAction
     }
 
+    sealed interface ContinuousBoundaryResultAction {
+        data class UseChapterFallback(val forward: Boolean) : ContinuousBoundaryResultAction
+        data object LetHostScroll : ContinuousBoundaryResultAction
+    }
+
+    sealed interface PagedNavigationResultAction {
+        data class ReportProgress(val progressScript: String) : PagedNavigationResultAction
+        data class UseChapterFallback(val forward: Boolean) : PagedNavigationResultAction
+    }
+
     fun pageDirection(forward: Boolean): NovelReaderWebScriptPolicy.PageDirection {
         return if (forward) {
             NovelReaderWebScriptPolicy.PageDirection.FORWARD
@@ -30,6 +40,36 @@ object NovelReaderWebNavigationPolicy {
                 forward = forward,
                 direction = pageDirection(forward),
             )
+        }
+    }
+
+    fun continuousBoundaryResultAction(
+        result: String?,
+        forward: Boolean,
+    ): ContinuousBoundaryResultAction {
+        return when (NovelReaderWebResultPolicy.continuousBoundaryAction(result)) {
+            NovelReaderWebResultPolicy.ContinuousBoundaryAction.UseChapterFallback -> {
+                ContinuousBoundaryResultAction.UseChapterFallback(forward)
+            }
+            NovelReaderWebResultPolicy.ContinuousBoundaryAction.LetWebViewScroll -> {
+                ContinuousBoundaryResultAction.LetHostScroll
+            }
+        }
+    }
+
+    fun pagedNavigationResultAction(
+        result: String?,
+        forward: Boolean,
+    ): PagedNavigationResultAction {
+        return when (NovelReaderWebResultPolicy.pagedNavigationAction(result)) {
+            NovelReaderWebResultPolicy.PagedNavigationAction.ReportProgress -> {
+                PagedNavigationResultAction.ReportProgress(
+                    NovelReaderWebScriptPolicy.calculateProgressScript(),
+                )
+            }
+            NovelReaderWebResultPolicy.PagedNavigationAction.UseChapterFallback -> {
+                PagedNavigationResultAction.UseChapterFallback(forward)
+            }
         }
     }
 }
