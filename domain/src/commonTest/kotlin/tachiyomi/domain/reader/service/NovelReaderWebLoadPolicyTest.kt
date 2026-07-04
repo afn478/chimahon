@@ -2,6 +2,7 @@ package tachiyomi.domain.reader.service
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class NovelReaderWebLoadPolicyTest {
     @Test
@@ -31,6 +32,38 @@ class NovelReaderWebLoadPolicyTest {
                 localPath = "C:/Books/Chapter.xhtml",
             ),
             NovelReaderWebLoadPolicy.urlLoadTarget("C:\\Books\\Chapter.xhtml"),
+        )
+    }
+
+    @Test
+    fun urlLoadActionLoadsDirectUrlsWithoutCheckingLocalFiles() {
+        var checkedLocalFile = false
+
+        assertEquals(
+            NovelReaderWebLoadPolicy.UrlLoadAction.Load("https://example.com/chapter.xhtml"),
+            NovelReaderWebLoadPolicy.urlLoadAction("https://example.com/chapter.xhtml") {
+                checkedLocalFile = true
+                false
+            },
+        )
+        assertFalse(checkedLocalFile)
+    }
+
+    @Test
+    fun urlLoadActionLoadsOnlyExistingLocalFiles() {
+        assertEquals(
+            NovelReaderWebLoadPolicy.UrlLoadAction.Load("file:///tmp/My%20Book/chapter.xhtml"),
+            NovelReaderWebLoadPolicy.urlLoadAction("file:///tmp/My%20Book/chapter.xhtml") { localPath ->
+                localPath == "/tmp/My Book/chapter.xhtml"
+            },
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.UrlLoadAction.ReportFailure(
+                "File not found: file:///tmp/My%20Book/missing.xhtml",
+            ),
+            NovelReaderWebLoadPolicy.urlLoadAction("file:///tmp/My%20Book/missing.xhtml") {
+                false
+            },
         )
     }
 

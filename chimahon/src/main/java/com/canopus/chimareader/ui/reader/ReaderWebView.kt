@@ -510,17 +510,15 @@ private class ReaderAndroidWebView(
         applyHostViewState(NovelReaderWebHostPolicy.chapterLoadingViewState())
 
         try {
-            when (val target = NovelReaderWebLoadPolicy.urlLoadTarget(url)) {
-                is NovelReaderWebLoadPolicy.UrlLoadTarget.DirectUrl -> loadUrl(target.url)
-                is NovelReaderWebLoadPolicy.UrlLoadTarget.LocalFile -> {
-                    val file = File(target.localPath)
-                    if (file.exists()) {
-                        loadUrl(target.url)
-                    } else {
-                        val message = NovelReaderWebLoadPolicy.localFileMissingMessage(target.url)
-                        Log.e("ReaderWebView", message)
-                        onLoadFailed(message)
-                    }
+            when (
+                val action = NovelReaderWebLoadPolicy.urlLoadAction(url) { localPath ->
+                    File(localPath).exists()
+                }
+            ) {
+                is NovelReaderWebLoadPolicy.UrlLoadAction.Load -> loadUrl(action.url)
+                is NovelReaderWebLoadPolicy.UrlLoadAction.ReportFailure -> {
+                    Log.e("ReaderWebView", action.message)
+                    onLoadFailed(action.message)
                 }
             }
         } catch (e: Exception) {

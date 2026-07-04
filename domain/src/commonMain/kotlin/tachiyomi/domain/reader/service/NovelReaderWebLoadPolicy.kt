@@ -16,6 +16,11 @@ object NovelReaderWebLoadPolicy {
         data class LocalFile(val url: String, val localPath: String) : UrlLoadTarget
     }
 
+    sealed interface UrlLoadAction {
+        data class Load(val url: String) : UrlLoadAction
+        data class ReportFailure(val message: String) : UrlLoadAction
+    }
+
     sealed interface ChapterLoadAction {
         data class Defer(val delayMillis: Long = CHAPTER_LOAD_DEFER_DELAY_MS) : ChapterLoadAction
         data object SkipDuplicate : ChapterLoadAction
@@ -40,6 +45,22 @@ object NovelReaderWebLoadPolicy {
             )
         } else {
             UrlLoadTarget.DirectUrl(url)
+        }
+    }
+
+    fun urlLoadAction(
+        url: String,
+        localFileExists: (localPath: String) -> Boolean,
+    ): UrlLoadAction {
+        return when (val target = urlLoadTarget(url)) {
+            is UrlLoadTarget.DirectUrl -> UrlLoadAction.Load(target.url)
+            is UrlLoadTarget.LocalFile -> {
+                if (localFileExists(target.localPath)) {
+                    UrlLoadAction.Load(target.url)
+                } else {
+                    UrlLoadAction.ReportFailure(localFileMissingMessage(target.url))
+                }
+            }
         }
     }
 
