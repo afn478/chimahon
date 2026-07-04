@@ -17,8 +17,8 @@ import androidx.core.view.WindowCompat
 import com.canopus.chimareader.data.BookMetadata
 import com.canopus.chimareader.data.BookStorage
 import java.io.File
-import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 import tachiyomi.domain.reader.service.NovelReaderInputPolicy
+import tachiyomi.domain.reader.service.NovelReaderScreenPolicy
 
 open class NovelReaderActivity : ComponentActivity() {
 
@@ -47,6 +47,7 @@ open class NovelReaderActivity : ComponentActivity() {
     protected var readerViewModel by androidx.compose.runtime.mutableStateOf<ReaderViewModel?>(null)
     protected var bookMetadata: BookMetadata? = null
     protected var showHud by androidx.compose.runtime.mutableStateOf(false)
+    private var readerBackgroundColor: Int = 0xFF000000.toInt()
 
     protected open fun handleVolumeKey(forward: Boolean): Boolean {
         val vm = readerViewModel ?: return false
@@ -95,8 +96,8 @@ open class NovelReaderActivity : ComponentActivity() {
                 true
             }
             NovelReaderInputPolicy.HardwareKeyAction.ToggleHud -> {
-                showHud = !showHud
-                setSystemBarsVisibility(showHud)
+                showHud = NovelReaderScreenPolicy.hudVisibleAfterToggle(showHud)
+                applySystemBarsState()
                 true
             }
         }
@@ -137,19 +138,25 @@ open class NovelReaderActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val path = intent.getStringExtra(EXTRA_BOOK_DIR)
-        if (path.isNullOrEmpty()) {
-            finish()
-            return
+        val root = path?.let(::File)
+        val storedMetadata = root
+            ?.takeIf { it.exists() && it.isDirectory }
+            ?.let(BookStorage::loadMetadata)
+        val metadata = when (
+            val action = NovelReaderScreenPolicy.hostLaunchAction(
+                bookDirPath = path,
+                rootExists = root?.exists() == true,
+                rootIsDirectory = root?.isDirectory == true,
+                rootName = root?.name.orEmpty(),
+                storedMetadata = storedMetadata,
+            )
+        ) {
+            NovelReaderScreenPolicy.HostLaunchAction.Finish -> {
+                finish()
+                return
+            }
+            is NovelReaderScreenPolicy.HostLaunchAction.OpenBook -> action.metadata
         }
-
-        val root = File(path)
-
-        if (!root.exists() || !root.isDirectory) {
-            finish()
-            return
-        }
-
-        val metadata = BookStorage.loadMetadata(root) ?: BookMetadata(folder = root.name)
         bookMetadata = metadata
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -162,9 +169,12 @@ open class NovelReaderActivity : ComponentActivity() {
                     onBack = { finish() },
                     onShowHudChanged = { visible ->
                         showHud = visible
-                        setSystemBarsVisibility(visible)
+                        applySystemBarsState()
                     },
-                    onThemeChanged = { bgColor -> updateSystemBarsTheme(bgColor) },
+                    onThemeChanged = { bgColor ->
+                        readerBackgroundColor = bgColor
+                        applySystemBarsState()
+                    },
                     onLookupRequested = { word, sentence, x, y, w, h -> onLookupRequested(word, sentence, x, y, w, h) },
                     onSentenceReady = { sentence -> onSentenceReady(sentence) },
                     onDismissPopupRequested = { onDismissPopupRequested() },
@@ -181,31 +191,30 @@ open class NovelReaderActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        setSystemBarsVisibility(showHud)
+        applySystemBarsState()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            setSystemBarsVisibility(showHud)
+            applySystemBarsState()
         }
     }
 
-    private fun setSystemBarsVisibility(visible: Boolean) {
+    private fun applySystemBarsState() {
+        val state = NovelReaderScreenPolicy.systemBarsState(
+            showHud = showHud,
+            backgroundColor = readerBackgroundColor,
+        )
         val windowInsetsController = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
-        if (visible) {
+        if (state.visible) {
             windowInsetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         } else {
             windowInsetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
+        windowInsetsController.isAppearanceLightStatusBars = state.useDarkIcons
+        windowInsetsController.isAppearanceLightNavigationBars = state.useDarkIcons
         windowInsetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-    }
-
-    private fun updateSystemBarsTheme(backgroundColor: Int) {
-        val windowInsetsController = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
-        val useDarkIcons = NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(backgroundColor)
-        windowInsetsController.isAppearanceLightStatusBars = useDarkIcons
-        windowInsetsController.isAppearanceLightNavigationBars = useDarkIcons
     }
 }
 

@@ -258,10 +258,18 @@ fun ReaderScreen(
         DisposableEffect(lifecycleOwner, readyVm) {
             if (readyVm == null) return@DisposableEffect onDispose {}
             val observer = LifecycleEventObserver { _, event ->
-                when (event) {
-                    Lifecycle.Event.ON_PAUSE -> readyVm.onAppBackgrounded()
-                    Lifecycle.Event.ON_RESUME -> readyVm.onAppForegrounded()
-                    else -> {}
+                when (
+                    NovelReaderScreenPolicy.hostLifecycleAction(
+                        event.readerHostLifecycleEvent(),
+                    )
+                ) {
+                    NovelReaderScreenPolicy.HostLifecycleAction.Ignore -> Unit
+                    NovelReaderScreenPolicy.HostLifecycleAction.MarkReaderBackgrounded -> {
+                        readyVm.onAppBackgrounded()
+                    }
+                    NovelReaderScreenPolicy.HostLifecycleAction.MarkReaderForegrounded -> {
+                        readyVm.onAppForegrounded()
+                    }
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
@@ -512,4 +520,12 @@ private fun ReaderThemedArea(
     )
 
     MaterialTheme(colorScheme = colorScheme, content = content)
+}
+
+private fun Lifecycle.Event.readerHostLifecycleEvent(): NovelReaderScreenPolicy.HostLifecycleEvent {
+    return when (this) {
+        Lifecycle.Event.ON_PAUSE -> NovelReaderScreenPolicy.HostLifecycleEvent.PAUSE
+        Lifecycle.Event.ON_RESUME -> NovelReaderScreenPolicy.HostLifecycleEvent.RESUME
+        else -> NovelReaderScreenPolicy.HostLifecycleEvent.OTHER
+    }
 }

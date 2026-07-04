@@ -1,5 +1,7 @@
 package tachiyomi.domain.reader.service
 
+import tachiyomi.domain.library.model.NovelBookMetadata
+
 object NovelReaderScreenPolicy {
     const val BOOK_OPEN_ERROR_MESSAGE = "Could not open book"
     const val MISSING_ROOT_URL_MESSAGE = "Missing root URL"
@@ -19,6 +21,28 @@ object NovelReaderScreenPolicy {
         val loading: Boolean,
     )
 
+    sealed interface HostLaunchAction {
+        data object Finish : HostLaunchAction
+        data class OpenBook(val metadata: NovelBookMetadata) : HostLaunchAction
+    }
+
+    enum class HostLifecycleEvent {
+        PAUSE,
+        RESUME,
+        OTHER,
+    }
+
+    sealed interface HostLifecycleAction {
+        data object Ignore : HostLifecycleAction
+        data object MarkReaderBackgrounded : HostLifecycleAction
+        data object MarkReaderForegrounded : HostLifecycleAction
+    }
+
+    data class SystemBarsState(
+        val visible: Boolean,
+        val useDarkIcons: Boolean,
+    )
+
     fun loadingMessageState(): MessageState {
         return MessageState(
             text = LOADING_MESSAGE,
@@ -31,6 +55,30 @@ object NovelReaderScreenPolicy {
             text = message ?: BOOK_OPEN_ERROR_MESSAGE,
             loading = false,
         )
+    }
+
+    fun hostLaunchAction(
+        bookDirPath: String?,
+        rootExists: Boolean,
+        rootIsDirectory: Boolean,
+        rootName: String,
+        storedMetadata: NovelBookMetadata?,
+    ): HostLaunchAction {
+        return if (bookDirPath.isNullOrEmpty() || !rootExists || !rootIsDirectory) {
+            HostLaunchAction.Finish
+        } else {
+            HostLaunchAction.OpenBook(
+                metadata = storedMetadata ?: NovelBookMetadata(folder = rootName),
+            )
+        }
+    }
+
+    fun hostLifecycleAction(event: HostLifecycleEvent): HostLifecycleAction {
+        return when (event) {
+            HostLifecycleEvent.PAUSE -> HostLifecycleAction.MarkReaderBackgrounded
+            HostLifecycleEvent.RESUME -> HostLifecycleAction.MarkReaderForegrounded
+            HostLifecycleEvent.OTHER -> HostLifecycleAction.Ignore
+        }
     }
 
     fun topBarState(documentTitle: String?): TopBarState {
@@ -54,6 +102,20 @@ object NovelReaderScreenPolicy {
 
     fun hudVisibleAfterReaderTap(showHud: Boolean): Boolean {
         return !showHud
+    }
+
+    fun hudVisibleAfterToggle(showHud: Boolean): Boolean {
+        return !showHud
+    }
+
+    fun systemBarsState(
+        showHud: Boolean,
+        backgroundColor: Int,
+    ): SystemBarsState {
+        return SystemBarsState(
+            visible = showHud,
+            useDarkIcons = NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(backgroundColor),
+        )
     }
 
     fun shouldShowTrackingIndicator(
