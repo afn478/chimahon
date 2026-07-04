@@ -1,9 +1,12 @@
 package tachiyomi.domain.reader.service
 
+import kotlin.math.pow
 import tachiyomi.domain.reader.model.NovelReaderTheme
 import tachiyomi.domain.reader.model.ReaderThemeColors
 
 object NovelReaderAppearancePolicy {
+    private const val LIGHT_SYSTEM_BAR_LUMINANCE_THRESHOLD = 0.5
+
     fun resolveThemeColors(
         theme: NovelReaderTheme,
         systemDark: Boolean,
@@ -28,6 +31,26 @@ object NovelReaderAppearancePolicy {
                     else -> lightColors
                 }
             }
+        }
+    }
+
+    fun shouldUseDarkSystemBarIcons(backgroundColor: Int): Boolean {
+        return relativeLuminance(backgroundColor) > LIGHT_SYSTEM_BAR_LUMINANCE_THRESHOLD
+    }
+
+    fun relativeLuminance(argbColor: Int): Double {
+        val red = srgbToLinear((argbColor ushr 16) and 0xFF)
+        val green = srgbToLinear((argbColor ushr 8) and 0xFF)
+        val blue = srgbToLinear(argbColor and 0xFF)
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    }
+
+    private fun srgbToLinear(channel: Int): Double {
+        val component = channel / 255.0
+        return if (component <= 0.04045) {
+            component / 12.92
+        } else {
+            ((component + 0.055) / 1.055).pow(2.4)
         }
     }
 

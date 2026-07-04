@@ -2,6 +2,8 @@ package tachiyomi.domain.reader.service
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import tachiyomi.domain.reader.model.NovelReaderTheme
 import tachiyomi.domain.reader.model.ReaderThemeColors
 
@@ -62,6 +64,26 @@ class NovelReaderAppearancePolicyTest {
             colors(backgroundColor = 0xFF1C140C.toInt(), textColor = 0xFFF2E2C9.toInt()),
             resolve(theme = NovelReaderTheme.SYSTEM, systemDark = true, systemLightSepia = true),
         )
+    }
+
+    @Test
+    fun relativeLuminanceUsesRgbChannelsAndIgnoresAlpha() {
+        assertEquals(0.0, NovelReaderAppearancePolicy.relativeLuminance(0xFF000000.toInt()))
+        assertEquals(1.0, NovelReaderAppearancePolicy.relativeLuminance(0xFFFFFFFF.toInt()))
+        assertEquals(
+            NovelReaderAppearancePolicy.relativeLuminance(0x00FFFFFF),
+            NovelReaderAppearancePolicy.relativeLuminance(0xFFFFFFFF.toInt()),
+        )
+    }
+
+    @Test
+    fun systemBarIconStyleUsesReaderBackgroundLuminance() {
+        assertTrue(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFFFFFFFF.toInt()))
+        assertTrue(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFFF2E2C9.toInt()))
+        assertTrue(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFFBCBCBC.toInt()))
+        assertFalse(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFFBBBBBB.toInt()))
+        assertFalse(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFF121212.toInt()))
+        assertFalse(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFF000000.toInt()))
     }
 
     private fun resolve(

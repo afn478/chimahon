@@ -17,6 +17,7 @@ import androidx.core.view.WindowCompat
 import com.canopus.chimareader.data.BookMetadata
 import com.canopus.chimareader.data.BookStorage
 import java.io.File
+import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 import tachiyomi.domain.reader.service.NovelReaderInputPolicy
 
 open class NovelReaderActivity : ComponentActivity() {
@@ -202,9 +203,9 @@ open class NovelReaderActivity : ComponentActivity() {
 
     private fun updateSystemBarsTheme(backgroundColor: Int) {
         val windowInsetsController = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
-        val isLight = androidx.core.graphics.ColorUtils.calculateLuminance(backgroundColor) > 0.5
-        windowInsetsController.isAppearanceLightStatusBars = isLight
-        windowInsetsController.isAppearanceLightNavigationBars = isLight
+        val useDarkIcons = NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(backgroundColor)
+        windowInsetsController.isAppearanceLightStatusBars = useDarkIcons
+        windowInsetsController.isAppearanceLightNavigationBars = useDarkIcons
     }
 }
 
