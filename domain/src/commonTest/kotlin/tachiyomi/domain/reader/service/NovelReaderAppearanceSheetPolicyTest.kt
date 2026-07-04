@@ -49,6 +49,131 @@ class NovelReaderAppearanceSheetPolicyTest {
     }
 
     @Test
+    fun systemLightSepiaVisibilityOnlyAppliesToSystemTheme() {
+        assertTrue(NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(NovelReaderTheme.SYSTEM))
+        assertFalse(NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(NovelReaderTheme.LIGHT))
+        assertFalse(NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(NovelReaderTheme.SEPIA))
+    }
+
+    @Test
+    fun readerModeOptionsReflectContinuousModeSelection() {
+        assertEquals(
+            listOf(
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL,
+                    value = false,
+                    selected = true,
+                ),
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL,
+                    value = true,
+                    selected = false,
+                ),
+            ),
+            NovelReaderAppearanceSheetPolicy.readerModeOptions(continuousMode = false),
+        )
+        assertEquals(
+            listOf(
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL,
+                    value = false,
+                    selected = false,
+                ),
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL,
+                    value = true,
+                    selected = true,
+                ),
+            ),
+            NovelReaderAppearanceSheetPolicy.readerModeOptions(continuousMode = true),
+        )
+    }
+
+    @Test
+    fun writingModeOptionsReflectVerticalWritingSelection() {
+        assertEquals(
+            listOf(
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL,
+                    value = true,
+                    selected = true,
+                ),
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL,
+                    value = false,
+                    selected = false,
+                ),
+            ),
+            NovelReaderAppearanceSheetPolicy.writingModeOptions(verticalWriting = true),
+        )
+        assertEquals(
+            listOf(
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL,
+                    value = true,
+                    selected = false,
+                ),
+                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                    label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL,
+                    value = false,
+                    selected = true,
+                ),
+            ),
+            NovelReaderAppearanceSheetPolicy.writingModeOptions(verticalWriting = false),
+        )
+    }
+
+    @Test
+    fun advancedToggleStateTracksExpandedAndNextStates() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.AdvancedToggleState(
+                expanded = true,
+                nextExpanded = false,
+                icon = NovelReaderAppearanceSheetPolicy.AdvancedToggleIcon.COLLAPSE,
+                contentDescription = NovelReaderAppearanceSheetPolicy.COLLAPSE_CONTENT_DESCRIPTION,
+            ),
+            NovelReaderAppearanceSheetPolicy.advancedToggleState(layoutAdvanced = true),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.AdvancedToggleState(
+                expanded = false,
+                nextExpanded = true,
+                icon = NovelReaderAppearanceSheetPolicy.AdvancedToggleIcon.EXPAND,
+                contentDescription = NovelReaderAppearanceSheetPolicy.EXPAND_CONTENT_DESCRIPTION,
+            ),
+            NovelReaderAppearanceSheetPolicy.advancedToggleState(layoutAdvanced = false),
+        )
+    }
+
+    @Test
+    fun sliderSpecsRemainStable() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderSpec(min = 12.0, max = 72.0, steps = 119),
+            NovelReaderAppearanceSheetPolicy.fontSizeSliderSpec,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderSpec(min = 1.0, max = 2.5, steps = 29),
+            NovelReaderAppearanceSheetPolicy.lineHeightSliderSpec,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderSpec(min = 0.0, max = 50.0, steps = 99),
+            NovelReaderAppearanceSheetPolicy.paddingSliderSpec,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderSpec(min = 0.0, max = 40.0, steps = 39),
+            NovelReaderAppearanceSheetPolicy.tapZoneSliderSpec,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderSpec(min = 0.0, max = 0.5, steps = 9),
+            NovelReaderAppearanceSheetPolicy.characterSpacingSliderSpec,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderSpec(min = 0.0, max = 2.0, steps = 39),
+            NovelReaderAppearanceSheetPolicy.paragraphSpacingSliderSpec,
+        )
+    }
+
+    @Test
     fun customThemeChoicesIncludeUnsavedSelectedCustomTheme() {
         val choices = NovelReaderAppearanceSheetPolicy.customThemeChoices(
             theme = NovelReaderTheme.CUSTOM,

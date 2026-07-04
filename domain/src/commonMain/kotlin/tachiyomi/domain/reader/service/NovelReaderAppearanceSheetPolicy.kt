@@ -104,6 +104,30 @@ object NovelReaderAppearanceSheetPolicy {
         data class RefreshFonts(val importedFonts: List<String>) : FontImportResultAction
     }
 
+    data class BooleanSegmentOption(
+        val label: String,
+        val value: Boolean,
+        val selected: Boolean,
+    )
+
+    enum class AdvancedToggleIcon {
+        EXPAND,
+        COLLAPSE,
+    }
+
+    data class AdvancedToggleState(
+        val expanded: Boolean,
+        val nextExpanded: Boolean,
+        val icon: AdvancedToggleIcon,
+        val contentDescription: String,
+    )
+
+    data class SliderSpec(
+        val min: Double,
+        val max: Double,
+        val steps: Int,
+    )
+
     val fixedThemeOptions = listOf(
         ThemeOption(
             theme = NovelReaderTheme.SYSTEM,
@@ -137,6 +161,65 @@ object NovelReaderAppearanceSheetPolicy {
             textColor = 0xFFE0E0E0.toInt(),
         ),
     )
+
+    val fontSizeSliderSpec = SliderSpec(min = 12.0, max = 72.0, steps = 119)
+    val lineHeightSliderSpec = SliderSpec(min = 1.0, max = 2.5, steps = 29)
+    val paddingSliderSpec = SliderSpec(min = 0.0, max = 50.0, steps = 99)
+    val tapZoneSliderSpec = SliderSpec(min = 0.0, max = 40.0, steps = 39)
+    val characterSpacingSliderSpec = SliderSpec(min = 0.0, max = 0.5, steps = 9)
+    val paragraphSpacingSliderSpec = SliderSpec(min = 0.0, max = 2.0, steps = 39)
+
+    fun shouldShowSystemLightSepia(theme: NovelReaderTheme): Boolean {
+        return theme == NovelReaderTheme.SYSTEM
+    }
+
+    fun readerModeOptions(continuousMode: Boolean): List<BooleanSegmentOption> {
+        return listOf(
+            BooleanSegmentOption(
+                label = PAGINATED_MODE_LABEL,
+                value = false,
+                selected = !continuousMode,
+            ),
+            BooleanSegmentOption(
+                label = CONTINUOUS_MODE_LABEL,
+                value = true,
+                selected = continuousMode,
+            ),
+        )
+    }
+
+    fun writingModeOptions(verticalWriting: Boolean): List<BooleanSegmentOption> {
+        return listOf(
+            BooleanSegmentOption(
+                label = VERTICAL_WRITING_LABEL,
+                value = true,
+                selected = verticalWriting,
+            ),
+            BooleanSegmentOption(
+                label = HORIZONTAL_WRITING_LABEL,
+                value = false,
+                selected = !verticalWriting,
+            ),
+        )
+    }
+
+    fun advancedToggleState(layoutAdvanced: Boolean): AdvancedToggleState {
+        return if (layoutAdvanced) {
+            AdvancedToggleState(
+                expanded = true,
+                nextExpanded = false,
+                icon = AdvancedToggleIcon.COLLAPSE,
+                contentDescription = COLLAPSE_CONTENT_DESCRIPTION,
+            )
+        } else {
+            AdvancedToggleState(
+                expanded = false,
+                nextExpanded = true,
+                icon = AdvancedToggleIcon.EXPAND,
+                contentDescription = EXPAND_CONTENT_DESCRIPTION,
+            )
+        }
+    }
 
     fun fontChoices(
         defaultFonts: List<String>,

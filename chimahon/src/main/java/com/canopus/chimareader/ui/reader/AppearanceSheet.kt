@@ -68,7 +68,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.canopus.chimareader.data.CustomReaderTheme
 import com.canopus.chimareader.data.FontManager
-import com.canopus.chimareader.data.Theme
 import kotlinx.coroutines.launch
 import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy
@@ -222,7 +221,7 @@ fun AppearanceSheet(
                     )
                 }
 
-                if (viewModel.theme == Theme.SYSTEM) {
+                if (NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(viewModel.theme)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -247,20 +246,21 @@ fun AppearanceSheet(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
+                val readerModeOptions = NovelReaderAppearanceSheetPolicy.readerModeOptions(
+                    continuousMode = viewModel.continuousMode,
+                )
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = !viewModel.continuousMode,
-                        onClick = { viewModel.updateContinuousMode(false) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    ) {
-                        Text(NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL)
-                    }
-                    SegmentedButton(
-                        selected = viewModel.continuousMode,
-                        onClick = { viewModel.updateContinuousMode(true) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    ) {
-                        Text(NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL)
+                    readerModeOptions.forEachIndexed { index, option ->
+                        SegmentedButton(
+                            selected = option.selected,
+                            onClick = { viewModel.updateContinuousMode(option.value) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = readerModeOptions.size,
+                            ),
+                        ) {
+                            Text(option.label)
+                        }
                     }
                 }
             }
@@ -358,6 +358,7 @@ fun AppearanceSheet(
 
                 // Font Size
                 Column {
+                    val sliderSpec = NovelReaderAppearanceSheetPolicy.fontSizeSliderSpec
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -376,13 +377,14 @@ fun AppearanceSheet(
                         onValueChange = {
                             viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
                         },
-                        valueRange = 12f..72f,
-                        steps = 119,
+                        valueRange = sliderSpec.toFloatRange(),
+                        steps = sliderSpec.steps,
                     )
                 }
 
                 // Line Height
                 Column {
+                    val sliderSpec = NovelReaderAppearanceSheetPolicy.lineHeightSliderSpec
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -401,8 +403,8 @@ fun AppearanceSheet(
                         onValueChange = {
                             viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
                         },
-                        valueRange = 1.0f..2.5f,
-                        steps = 29,
+                        valueRange = sliderSpec.toFloatRange(),
+                        steps = sliderSpec.steps,
                     )
                 }
 
@@ -448,6 +450,7 @@ fun AppearanceSheet(
                 )
 
                 Column {
+                    val sliderSpec = NovelReaderAppearanceSheetPolicy.paddingSliderSpec
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -466,12 +469,13 @@ fun AppearanceSheet(
                         onValueChange = {
                             viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
                         },
-                        valueRange = 0f..50f,
-                        steps = 99,
+                        valueRange = sliderSpec.toFloatRange(),
+                        steps = sliderSpec.steps,
                     )
                 }
 
                 Column {
+                    val sliderSpec = NovelReaderAppearanceSheetPolicy.paddingSliderSpec
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -490,8 +494,8 @@ fun AppearanceSheet(
                         onValueChange = {
                             viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
                         },
-                        valueRange = 0f..50f,
-                        steps = 99,
+                        valueRange = sliderSpec.toFloatRange(),
+                        steps = sliderSpec.steps,
                     )
                 }
             }
@@ -510,26 +514,28 @@ fun AppearanceSheet(
                         NovelReaderAppearanceSheetPolicy.WRITING_MODE_LABEL,
                         style = MaterialTheme.typography.labelMedium,
                     )
+                    val writingModeOptions = NovelReaderAppearanceSheetPolicy.writingModeOptions(
+                        verticalWriting = viewModel.verticalWriting,
+                    )
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = viewModel.verticalWriting,
-                            onClick = { viewModel.updateVerticalWriting(true) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        ) {
-                            Text(NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL)
-                        }
-                        SegmentedButton(
-                            selected = !viewModel.verticalWriting,
-                            onClick = { viewModel.updateVerticalWriting(false) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                        ) {
-                            Text(NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL)
+                        writingModeOptions.forEachIndexed { index, option ->
+                            SegmentedButton(
+                                selected = option.selected,
+                                onClick = { viewModel.updateVerticalWriting(option.value) },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = writingModeOptions.size,
+                                ),
+                            ) {
+                                Text(option.label)
+                            }
                         }
                     }
                 }
 
                 // Tap Zone Size
                 Column {
+                    val sliderSpec = NovelReaderAppearanceSheetPolicy.tapZoneSliderSpec
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -548,16 +554,19 @@ fun AppearanceSheet(
                         onValueChange = {
                             viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it.toDouble()))
                         },
-                        valueRange = 0f..40f,
-                        steps = 39,
+                        valueRange = sliderSpec.toFloatRange(),
+                        steps = sliderSpec.steps,
                     )
                 }
 
                 // Advanced Header
+                val advancedToggleState = NovelReaderAppearanceSheetPolicy.advancedToggleState(
+                    layoutAdvanced = viewModel.layoutAdvanced,
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { viewModel.updateLayoutAdvanced(!viewModel.layoutAdvanced) }
+                        .clickable { viewModel.updateLayoutAdvanced(advancedToggleState.nextExpanded) }
                         .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
@@ -567,18 +576,21 @@ fun AppearanceSheet(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Icon(
-                        imageVector = if (viewModel.layoutAdvanced) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (viewModel.layoutAdvanced) {
-                            NovelReaderAppearanceSheetPolicy.COLLAPSE_CONTENT_DESCRIPTION
-                        } else {
-                            NovelReaderAppearanceSheetPolicy.EXPAND_CONTENT_DESCRIPTION
+                        imageVector = when (advancedToggleState.icon) {
+                            NovelReaderAppearanceSheetPolicy.AdvancedToggleIcon.COLLAPSE -> {
+                                Icons.Default.KeyboardArrowUp
+                            }
+                            NovelReaderAppearanceSheetPolicy.AdvancedToggleIcon.EXPAND -> {
+                                Icons.Default.KeyboardArrowDown
+                            }
                         },
+                        contentDescription = advancedToggleState.contentDescription,
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
 
                 // Advanced settings - only visible when enabled
-                if (viewModel.layoutAdvanced) {
+                if (advancedToggleState.expanded) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -621,6 +633,7 @@ fun AppearanceSheet(
 
                         // Character Spacing
                         Column {
+                            val sliderSpec = NovelReaderAppearanceSheetPolicy.characterSpacingSliderSpec
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -639,13 +652,14 @@ fun AppearanceSheet(
                                 onValueChange = {
                                     viewModel.updateCharacterSpacing(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
                                 },
-                                valueRange = 0f..0.5f,
-                                steps = 9,
+                                valueRange = sliderSpec.toFloatRange(),
+                                steps = sliderSpec.steps,
                             )
                         }
 
                         // Paragraph Spacing
                         Column {
+                            val sliderSpec = NovelReaderAppearanceSheetPolicy.paragraphSpacingSliderSpec
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -664,8 +678,8 @@ fun AppearanceSheet(
                                 onValueChange = {
                                     viewModel.updateParagraphSpacing(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
                                 },
-                                valueRange = 0f..2f,
-                                steps = 39,
+                                valueRange = sliderSpec.toFloatRange(),
+                                steps = sliderSpec.steps,
                             )
                         }
                     }
@@ -763,6 +777,10 @@ fun AppearanceSheet(
             },
         )
     }
+}
+
+private fun NovelReaderAppearanceSheetPolicy.SliderSpec.toFloatRange(): ClosedFloatingPointRange<Float> {
+    return min.toFloat()..max.toFloat()
 }
 
 @Composable
