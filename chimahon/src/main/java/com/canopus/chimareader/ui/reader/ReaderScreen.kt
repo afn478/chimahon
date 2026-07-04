@@ -23,13 +23,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.canopus.chimareader.data.BookMetadata
 import com.canopus.chimareader.data.NovelReaderSettings
-import com.canopus.chimareader.data.Statistics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.reader.model.ReaderSettings
 import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 import tachiyomi.domain.reader.service.NovelReaderHudPolicy
+import tachiyomi.domain.reader.service.NovelReaderScreenPolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsDefaults
 import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 
@@ -97,21 +97,21 @@ fun ReaderScreen(
         value = try {
             withContext(Dispatchers.IO) {
                 val loader = ReaderLoaderViewModel(context, book)
-                val document = loader.document ?: error("Could not open book")
-                val rootUrl = loader.rootUrl ?: error("Missing root URL")
+                val document = loader.document ?: error(NovelReaderScreenPolicy.BOOK_OPEN_ERROR_MESSAGE)
+                val rootUrl = loader.rootUrl ?: error(NovelReaderScreenPolicy.MISSING_ROOT_URL_MESSAGE)
                 ReaderLoadState.Ready(
                     ReaderViewModel(
                         document = document,
                         rootUrl = rootUrl,
                         settings = settings,
-                        scope = scope
-                    )
+                        scope = scope,
+                    ),
                 )
             }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            ReaderLoadState.Error(error.message ?: "Could not open book")
+            ReaderLoadState.Error(NovelReaderScreenPolicy.errorMessageState(error.message).text)
         }
     }
 
@@ -160,7 +160,10 @@ fun ReaderScreen(
 
         ReaderThemedArea(currentSettings) {
             when (val state = loadState) {
-                ReaderLoadState.Loading -> ReaderMessage("Opening...", loading = true)
+                ReaderLoadState.Loading -> {
+                    val message = NovelReaderScreenPolicy.loadingMessageState()
+                    ReaderMessage(message.text, loading = message.loading)
+                }
                 is ReaderLoadState.Error -> ReaderMessage(state.message)
                 is ReaderLoadState.Ready -> {
                     val viewModel = state.viewModel
@@ -174,7 +177,11 @@ fun ReaderScreen(
                     }
 
                     // Initialize SasayakiPlayer if not already
-                    if (viewModel.sasayakiPlayer == null) {
+                    if (
+                        NovelReaderScreenPolicy.shouldInitializeSasayakiPlayer(
+                            hasPlayer = viewModel.sasayakiPlayer != null,
+                        )
+                    ) {
                         val rootDir = viewModel.rootUrl
                         viewModel.sasayakiPlayer = SasayakiPlayer(
                             context = context,
@@ -183,7 +190,7 @@ fun ReaderScreen(
                             loadChapter = { chapterIndex ->
                                 viewModel.jumpToChapter(chapterIndex)
                             },
-                            getCurrentIndex = { viewModel.index }
+                            getCurrentIndex = { viewModel.index },
                         )
                     }
 
@@ -194,7 +201,7 @@ fun ReaderScreen(
                     }
 
                     LaunchedEffect(isPopupActive) {
-                        if (!isPopupActive) {
+                        if (NovelReaderScreenPolicy.shouldClearSelectionWhenPopupChanges(isPopupActive)) {
                             viewModel.bridge.send(NovelReaderWebCommandPolicy.clearSelectionCommand())
                         }
                     }
@@ -219,9 +226,15 @@ fun ReaderScreen(
                         },
                         onProgressChanged = { viewModel.saveBookmark(it) },
                         onLoadFailed = { },
-                        onTap = { if (focusMode) focusMode = false },
-                        onTapTop = { onShowHudChanged(!showHud) },
-                        onTapBottom = { onShowHudChanged(!showHud) },
+                        onTap = {
+                            focusMode = NovelReaderScreenPolicy.focusModeAfterReaderTap(focusMode)
+                        },
+                        onTapTop = {
+                            onShowHudChanged(NovelReaderScreenPolicy.hudVisibleAfterReaderTap(showHud))
+                        },
+                        onTapBottom = {
+                            onShowHudChanged(NovelReaderScreenPolicy.hudVisibleAfterReaderTap(showHud))
+                        },
                         swipeThreshold = chapterSwipeDistance,
                         tapZonePx = tapZonePx,
                         isPopupActive = isPopupActive,
@@ -257,13 +270,18 @@ fun ReaderScreen(
 
         if (readyVm != null) {
             // Persistent timer indicator (visible when HUD hidden and tracking active)
-            if (!showHud && readyVm.statisticsTracker.state.isTracking) {
+            if (
+                NovelReaderScreenPolicy.shouldShowTrackingIndicator(
+                    showHud = showHud,
+                    tracking = readyVm.statisticsTracker.state.isTracking,
+                )
+            ) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 8.dp, end = 8.dp)
                         .size(8.dp)
-                        .background(Color(0xFF4CAF50), CircleShape)
+                        .background(Color(NovelReaderScreenPolicy.TRACKING_INDICATOR_COLOR), CircleShape),
                 )
             }
 
@@ -274,14 +292,16 @@ fun ReaderScreen(
                 exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                 modifier = Modifier.align(Alignment.TopCenter)
             ) {
+                val topBarState = NovelReaderScreenPolicy.topBarState(readyVm.document.title())
                 ReaderTopBar(
-                    title = readyVm.document.title().orEmpty(),
+                    title = topBarState.title,
+                    backContentDescription = topBarState.backContentDescription,
                     onBack = onBack,
                     onToggleHud = { onShowHudChanged(false) },
                     backgroundColor = currentSettings.backgroundColor,
                     contentColor = currentSettings.textColor,
                     modifier = Modifier
-                        .statusBarsPadding()
+                        .statusBarsPadding(),
                 )
             }
 
@@ -308,7 +328,7 @@ fun ReaderScreen(
                     onOpenChapters = { activeSheet = ActiveSheet.Chapters },
                     onOpenAppearance = { activeSheet = ActiveSheet.Appearance },
                     onOpenStatistics = { activeSheet = ActiveSheet.Statistics },
-                    onOpenSasayaki = { activeSheet = ActiveSheet.Sasayaki }
+                    onOpenSasayaki = { activeSheet = ActiveSheet.Sasayaki },
                 )
             }
         }
@@ -319,7 +339,9 @@ fun ReaderScreen(
                 val viewModel = state.viewModel
                 // Pause tracking while any sheet is open, resume when dismissed
                 LaunchedEffect(activeSheet) {
-                    viewModel.setTrackingLocked(activeSheet != null)
+                    viewModel.setTrackingLocked(
+                        NovelReaderScreenPolicy.shouldLockTrackingForSheet(activeSheetOpen = activeSheet != null),
+                    )
                 }
                 activeSheet?.let { sheet ->
                     ReaderThemedArea(viewModel.getReaderSettings(context)) {
@@ -341,6 +363,7 @@ fun ReaderScreen(
 @Composable
 private fun ReaderTopBar(
     title: String,
+    backContentDescription: String,
     onBack: () -> Unit,
     onToggleHud: () -> Unit,
     backgroundColor: Int,
@@ -365,13 +388,13 @@ private fun ReaderTopBar(
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = backContentDescription,
                     tint = Color(contentColor)
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color(backgroundColor).copy(alpha = 0.9f)
+            containerColor = Color(backgroundColor).copy(alpha = NovelReaderScreenPolicy.HUD_CONTAINER_ALPHA),
         )
     )
 }
@@ -396,7 +419,7 @@ private fun ReaderBottomBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(backgroundColor).copy(alpha = 0.9f))
+            .background(Color(backgroundColor).copy(alpha = NovelReaderScreenPolicy.HUD_CONTAINER_ALPHA))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -408,7 +431,7 @@ private fun ReaderBottomBar(
         Text(
             text = progressText,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(contentColor).copy(alpha = 0.7f)
+            color = Color(contentColor).copy(alpha = NovelReaderScreenPolicy.HUD_SECONDARY_CONTENT_ALPHA),
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
