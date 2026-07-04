@@ -553,23 +553,29 @@ private class ReaderAndroidWebView(
     }
 
     fun applySettings(settings: ReaderSettings) {
-        when (NovelReaderWebSettingsPolicy.liveSettingsAction(continuousMode, settings)) {
-            NovelReaderWebSettingsPolicy.LiveSettingsAction.ReloadCurrentChapter -> {
-                continuousMode = settings.continuousMode
-                currentUrl?.let { url ->
-                    evaluateJavascript(NovelReaderWebScriptPolicy.calculateProgressScript()) { p ->
-                        pendingProgress = NovelReaderWebResultPolicy.progressResult(p) ?: 0.0
-                        loadChapter(url)
-                    }
+        when (
+            val action = NovelReaderWebSettingsPolicy.applySettingsAction(
+                currentContinuousMode = continuousMode,
+                nextSettings = settings,
+                currentUrl = currentUrl,
+            )
+        ) {
+            is NovelReaderWebSettingsPolicy.ApplySettingsAction.CaptureProgressThenReload -> {
+                continuousMode = action.continuousMode
+                evaluateJavascript(action.progressScript) { progressResult ->
+                    pendingProgress = NovelReaderWebSettingsPolicy.reloadProgress(progressResult)
+                    loadChapter(action.url)
                 }
-                return
             }
-            NovelReaderWebSettingsPolicy.LiveSettingsAction.ApplyDomUpdates -> Unit
+            is NovelReaderWebSettingsPolicy.ApplySettingsAction.SetContinuousMode -> {
+                continuousMode = action.continuousMode
+            }
+            is NovelReaderWebSettingsPolicy.ApplySettingsAction.ApplyDomUpdates -> {
+                readerSettings = action.settings
+                setBackgroundColor(action.backgroundColor)
+                evaluateJavascript(action.script, null)
+            }
         }
-
-        readerSettings = settings
-        setBackgroundColor(settings.backgroundColor)
-        evaluateJavascript(NovelReaderWebInjectionPolicy.liveSettingsScript(settings), null)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
