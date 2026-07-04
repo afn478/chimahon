@@ -37,6 +37,7 @@ import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsPolicy
 import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 
 // ─── Bridge ───────────────────────────────────────────────────────────────────
 
@@ -53,10 +54,20 @@ class WebViewBridge {
         pendingCommands += command
     }
 
-    fun updateState(url: String, progress: Double, title: String? = null) {
+    private fun updateState(url: String, progress: Double, title: String? = null) {
         chapterUrl = url
         chapterTitle = title
         this.progress = progress
+    }
+
+    fun loadChapter(url: String, progress: Double, title: String? = null) {
+        val result = NovelReaderWebCommandPolicy.chapterLoadCommand(
+            chapterUrl = url,
+            progress = progress,
+            chapterTitle = title,
+        )
+        updateState(result.chapterUrl, result.progress, result.chapterTitle)
+        send(result.command)
     }
 
     fun updateProgress(progress: Double) {
@@ -64,15 +75,15 @@ class WebViewBridge {
     }
 
     fun highlightSasayakiCue(id: String, reveal: Boolean) {
-        send(NovelReaderWebCommand.HighlightSasayakiCue(id, reveal))
+        send(NovelReaderWebCommandPolicy.highlightSasayakiCueCommand(id, reveal))
     }
 
     fun clearSasayakiCue() {
-        send(NovelReaderWebCommand.ClearSasayakiCue)
+        send(NovelReaderWebCommandPolicy.clearSasayakiCueCommand())
     }
 
     fun paginate(forward: Boolean) {
-        send(NovelReaderWebCommand.Paginate(forward))
+        send(NovelReaderWebCommandPolicy.paginateCommand(forward))
     }
 }
 
@@ -247,8 +258,7 @@ class ReaderViewModel(
         getCurrentChapter()?.let { file ->
             val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
-            bridge.updateState(fileUrl, currentProgress, chapterTitle)
-            bridge.send(NovelReaderWebCommand.LoadChapter(fileUrl, currentProgress))
+            bridge.loadChapter(fileUrl, currentProgress, chapterTitle)
         }
 
         // Start collecting updates from settings flow in the background
@@ -422,9 +432,7 @@ class ReaderViewModel(
 
     fun jumpToChapter(spineIndex: Int, fragment: String? = null) {
         loadChapter(spineIndex, 0.0)
-        if (!fragment.isNullOrEmpty()) {
-            bridge.send(NovelReaderWebCommand.JumpToFragment(fragment))
-        }
+        NovelReaderWebCommandPolicy.jumpToFragmentCommand(fragment)?.let(bridge::send)
     }
 
     /**
@@ -465,8 +473,7 @@ class ReaderViewModel(
         getCurrentChapter()?.let { file ->
             val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
-            bridge.updateState(fileUrl, progress, chapterTitle)
-            bridge.send(NovelReaderWebCommand.LoadChapter(fileUrl, progress))
+            bridge.loadChapter(fileUrl, progress, chapterTitle)
         }
     }
 

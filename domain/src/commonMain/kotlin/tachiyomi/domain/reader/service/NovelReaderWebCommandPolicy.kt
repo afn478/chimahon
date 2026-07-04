@@ -13,6 +13,29 @@ object NovelReaderWebCommandPolicy {
         val command: NovelReaderWebCommand?,
     )
 
+    data class ChapterLoadCommand(
+        val chapterUrl: String,
+        val progress: Double,
+        val chapterTitle: String?,
+        val command: NovelReaderWebCommand.LoadChapter,
+    )
+
+    fun chapterLoadCommand(
+        chapterUrl: String,
+        progress: Double,
+        chapterTitle: String?,
+    ): ChapterLoadCommand {
+        return ChapterLoadCommand(
+            chapterUrl = chapterUrl,
+            progress = progress,
+            chapterTitle = chapterTitle,
+            command = NovelReaderWebCommand.LoadChapter(
+                url = chapterUrl,
+                progress = progress,
+            ),
+        )
+    }
+
     fun initialLoadCommand(
         chapterUrl: String?,
         progress: Double,
@@ -35,6 +58,46 @@ object NovelReaderWebCommandPolicy {
 
     fun settingsCommand(settings: ReaderSettings): NovelReaderWebCommand {
         return NovelReaderWebCommand.ApplySettings(settings)
+    }
+
+    fun jumpToFragmentCommand(fragment: String?): NovelReaderWebCommand? {
+        return fragment
+            ?.takeIf(String::isNotEmpty)
+            ?.let(NovelReaderWebCommand::JumpToFragment)
+    }
+
+    fun clearSelectionCommand(): NovelReaderWebCommand {
+        return NovelReaderWebCommand.ClearSelection
+    }
+
+    fun selectionRectsCommand(
+        charCount: Int,
+        startOffset: Int = 0,
+    ): NovelReaderWebCommand {
+        return NovelReaderWebCommand.GetSelectionRects(
+            charCount = charCount,
+            startOffset = startOffset,
+        )
+    }
+
+    fun highlightSasayakiCueCommand(
+        cueId: String,
+        reveal: Boolean,
+        onProgress: ((Double) -> Unit)? = null,
+    ): NovelReaderWebCommand {
+        return NovelReaderWebCommand.HighlightSasayakiCue(
+            cueId = cueId,
+            reveal = reveal,
+            onProgress = onProgress,
+        )
+    }
+
+    fun clearSasayakiCueCommand(): NovelReaderWebCommand {
+        return NovelReaderWebCommand.ClearSasayakiCue
+    }
+
+    fun paginateCommand(forward: Boolean): NovelReaderWebCommand {
+        return NovelReaderWebCommand.Paginate(forward)
     }
 
     fun continuousModeChangedCommand(

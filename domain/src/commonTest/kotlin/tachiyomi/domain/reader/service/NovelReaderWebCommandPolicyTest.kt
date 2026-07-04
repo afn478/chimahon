@@ -89,6 +89,60 @@ class NovelReaderWebCommandPolicyTest {
     }
 
     @Test
+    fun chapterLoadCommandBuildsBridgeStateAndLoadCommand() {
+        assertEquals(
+            NovelReaderWebCommandPolicy.ChapterLoadCommand(
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.42,
+                chapterTitle = "Chapter 1",
+                command = NovelReaderWebCommand.LoadChapter(
+                    url = "file:///chapter.xhtml",
+                    progress = 0.42,
+                ),
+            ),
+            NovelReaderWebCommandPolicy.chapterLoadCommand(
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.42,
+                chapterTitle = "Chapter 1",
+            ),
+        )
+    }
+
+    @Test
+    fun jumpToFragmentCommandBuildsOnlyForPresentFragment() {
+        assertEquals(
+            NovelReaderWebCommand.JumpToFragment("section-2"),
+            NovelReaderWebCommandPolicy.jumpToFragmentCommand("section-2"),
+        )
+        assertEquals(null, NovelReaderWebCommandPolicy.jumpToFragmentCommand(null))
+        assertEquals(null, NovelReaderWebCommandPolicy.jumpToFragmentCommand(""))
+    }
+
+    @Test
+    fun bridgeCommandHelpersBuildSelectionCueAndPaginationCommands() {
+        assertEquals(
+            NovelReaderWebCommand.ClearSelection,
+            NovelReaderWebCommandPolicy.clearSelectionCommand(),
+        )
+        assertEquals(
+            NovelReaderWebCommand.GetSelectionRects(charCount = 12, startOffset = 3),
+            NovelReaderWebCommandPolicy.selectionRectsCommand(charCount = 12, startOffset = 3),
+        )
+        assertEquals(
+            NovelReaderWebCommand.HighlightSasayakiCue(cueId = "cue-1", reveal = true),
+            NovelReaderWebCommandPolicy.highlightSasayakiCueCommand(cueId = "cue-1", reveal = true),
+        )
+        assertEquals(
+            NovelReaderWebCommand.ClearSasayakiCue,
+            NovelReaderWebCommandPolicy.clearSasayakiCueCommand(),
+        )
+        assertEquals(
+            NovelReaderWebCommand.Paginate(forward = false),
+            NovelReaderWebCommandPolicy.paginateCommand(forward = false),
+        )
+    }
+
+    @Test
     fun continuousModeChangedCommandConsumesInitialValueWithoutCommand() {
         assertEquals(
             NovelReaderWebCommandPolicy.CommandTriggerResult(

@@ -43,7 +43,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import tachiyomi.domain.reader.model.NovelReaderWebCommand
+import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -83,10 +83,10 @@ class ChimaReaderActivity : NovelReaderActivity() {
         if (!path.isNullOrEmpty()) {
             val root = java.io.File(path)
             if (root.exists() && root.isDirectory) {
-                    val metadata = BookStorage.loadMetadata(root)
+                val metadata = BookStorage.loadMetadata(root)
                 if (metadata != null) {
                     val profile = prefs.profileResolver.resolve(
-                        novelId = metadata.id ?: "",
+                        novelId = metadata.id,
                         sourceLang = metadata.lang ?: "",
                     )
                     cachedActiveProfile = profile
@@ -321,7 +321,9 @@ class ChimaReaderActivity : NovelReaderActivity() {
                 val charCount = firstMatched.codePointCount(0, firstMatched.length)
                 withContext(Dispatchers.Main) {
                     pendingShowByRects = true
-                    readerViewModel?.bridge?.send(NovelReaderWebCommand.GetSelectionRects(charCount, matchOffset))
+                    readerViewModel?.bridge?.send(
+                        NovelReaderWebCommandPolicy.selectionRectsCommand(charCount, matchOffset),
+                    )
                 }
             } else {
                 withContext(Dispatchers.Main) {
