@@ -1,12 +1,19 @@
 package tachiyomi.domain.reader.service
 
 object NovelReaderWebHostPolicy {
+    const val RESTORE_COMPLETED_FADE_DURATION_MS = 160L
+
     enum class CachePolicy {
         NO_CACHE,
     }
 
     enum class OverScrollPolicy {
         NEVER,
+    }
+
+    enum class HostViewVisibility {
+        VISIBLE,
+        INVISIBLE,
     }
 
     data class HostSettings(
@@ -27,6 +34,18 @@ object NovelReaderWebHostPolicy {
         val overScrollPolicy: OverScrollPolicy,
     )
 
+    data class HostViewState(
+        val visibility: HostViewVisibility,
+        val alpha: Float? = null,
+    )
+
+    data class HostViewTransition(
+        val visibility: HostViewVisibility,
+        val startAlpha: Float,
+        val targetAlpha: Float,
+        val durationMillis: Long,
+    )
+
     fun defaultHostSettings(): HostSettings {
         return HostSettings(
             allowFileAccess = true,
@@ -44,6 +63,32 @@ object NovelReaderWebHostPolicy {
             verticalScrollBarEnabled = false,
             horizontalScrollBarEnabled = false,
             overScrollPolicy = OverScrollPolicy.NEVER,
+        )
+    }
+
+    fun pageStartedViewState(): HostViewState {
+        return HostViewState(
+            visibility = HostViewVisibility.VISIBLE,
+            alpha = 0f,
+        )
+    }
+
+    fun chapterLoadingViewState(): HostViewState {
+        return HostViewState(
+            visibility = HostViewVisibility.INVISIBLE,
+        )
+    }
+
+    fun chapterChangedViewState(chapterChanged: Boolean): HostViewState? {
+        return if (chapterChanged) chapterLoadingViewState() else null
+    }
+
+    fun restoreCompletedTransition(): HostViewTransition {
+        return HostViewTransition(
+            visibility = HostViewVisibility.VISIBLE,
+            startAlpha = 0f,
+            targetAlpha = 1f,
+            durationMillis = RESTORE_COMPLETED_FADE_DURATION_MS,
         )
     }
 }

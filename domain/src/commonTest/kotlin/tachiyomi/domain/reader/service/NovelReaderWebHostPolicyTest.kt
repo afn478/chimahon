@@ -27,4 +27,47 @@ class NovelReaderWebHostPolicyTest {
             NovelReaderWebHostPolicy.defaultHostSettings(),
         )
     }
+
+    @Test
+    fun pageStartedViewStateShowsTransparentReaderHost() {
+        assertEquals(
+            NovelReaderWebHostPolicy.HostViewState(
+                visibility = NovelReaderWebHostPolicy.HostViewVisibility.VISIBLE,
+                alpha = 0f,
+            ),
+            NovelReaderWebHostPolicy.pageStartedViewState(),
+        )
+    }
+
+    @Test
+    fun chapterLoadingViewStateHidesReaderHostWithoutChangingAlpha() {
+        assertEquals(
+            NovelReaderWebHostPolicy.HostViewState(
+                visibility = NovelReaderWebHostPolicy.HostViewVisibility.INVISIBLE,
+                alpha = null,
+            ),
+            NovelReaderWebHostPolicy.chapterLoadingViewState(),
+        )
+        assertEquals(
+            NovelReaderWebHostPolicy.chapterLoadingViewState(),
+            NovelReaderWebHostPolicy.chapterChangedViewState(chapterChanged = true),
+        )
+        assertEquals(
+            null,
+            NovelReaderWebHostPolicy.chapterChangedViewState(chapterChanged = false),
+        )
+    }
+
+    @Test
+    fun restoreCompletedTransitionFadesReaderHostIn() {
+        assertEquals(
+            NovelReaderWebHostPolicy.HostViewTransition(
+                visibility = NovelReaderWebHostPolicy.HostViewVisibility.VISIBLE,
+                startAlpha = 0f,
+                targetAlpha = 1f,
+                durationMillis = NovelReaderWebHostPolicy.RESTORE_COMPLETED_FADE_DURATION_MS,
+            ),
+            NovelReaderWebHostPolicy.restoreCompletedTransition(),
+        )
+    }
 }

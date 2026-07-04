@@ -1,7 +1,5 @@
 package com.canopus.chimareader.ui.reader
 
-import android.R.attr.overScrollMode
-import android.R.attr.visibility
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
@@ -181,8 +179,7 @@ fun ReaderWebView(
 
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         Log.d("ReaderWebView", "onPageStarted: url=$url")
-                        alpha = 0f
-                        visibility = View.VISIBLE
+                        applyHostViewState(NovelReaderWebHostPolicy.pageStartedViewState())
                         lastLoadedChapterKey = null
                     }
 
@@ -400,10 +397,7 @@ private class ReaderAndroidWebView(
     private val jsBridge = ReaderJavascriptBridge(
         onRestoreCompleted = {
             post {
-                alpha = 0f
-                visibility = View.VISIBLE
-                animate().cancel()
-                animate().alpha(1f).setDuration(160).start()
+                applyHostViewTransition(NovelReaderWebHostPolicy.restoreCompletedTransition())
             }
         },
         onTextSelectedCallback = { word, sentence, x, y, w, h ->
@@ -502,7 +496,7 @@ private class ReaderAndroidWebView(
             }
         }
 
-        visibility = View.INVISIBLE
+        applyHostViewState(NovelReaderWebHostPolicy.chapterLoadingViewState())
 
         try {
             when (val target = NovelReaderWebLoadPolicy.urlLoadTarget(url)) {
@@ -623,7 +617,7 @@ private class ReaderAndroidWebView(
         ) {
             is NovelReaderWebNavigationPolicy.SwipeAction.UseChapterFallback -> {
                 val changed = chapterFallback(action.forward).invoke()
-                if (changed) visibility = View.INVISIBLE
+                NovelReaderWebHostPolicy.chapterChangedViewState(changed)?.let(::applyHostViewState)
                 true
             }
             is NovelReaderWebNavigationPolicy.SwipeAction.CheckContinuousBoundary -> {
@@ -651,7 +645,7 @@ private class ReaderAndroidWebView(
             when (NovelReaderWebResultPolicy.continuousBoundaryAction(result)) {
                 NovelReaderWebResultPolicy.ContinuousBoundaryAction.UseChapterFallback -> {
                     val changed = if (forward) onNextChapter() else onPreviousChapter()
-                    if (changed) visibility = View.INVISIBLE
+                    NovelReaderWebHostPolicy.chapterChangedViewState(changed)?.let(::applyHostViewState)
                 }
                 NovelReaderWebResultPolicy.ContinuousBoundaryAction.LetWebViewScroll -> Unit
             }
@@ -677,9 +671,7 @@ private class ReaderAndroidWebView(
                 }
                 NovelReaderWebResultPolicy.PagedNavigationAction.UseChapterFallback -> {
                     val chapterChanged = fallback()
-                    if (chapterChanged) {
-                        visibility = View.INVISIBLE
-                    }
+                    NovelReaderWebHostPolicy.chapterChangedViewState(chapterChanged)?.let(::applyHostViewState)
                 }
             }
         }
@@ -745,5 +737,24 @@ private fun NovelReaderWebHostPolicy.HostSettings.mixedContentMode(): Int {
 private fun NovelReaderWebHostPolicy.HostSettings.overScrollMode(): Int {
     return when (overScrollPolicy) {
         NovelReaderWebHostPolicy.OverScrollPolicy.NEVER -> WebView.OVER_SCROLL_NEVER
+    }
+}
+
+private fun View.applyHostViewState(state: NovelReaderWebHostPolicy.HostViewState) {
+    visibility = state.visibility.androidVisibility()
+    state.alpha?.let { alpha = it }
+}
+
+private fun View.applyHostViewTransition(transition: NovelReaderWebHostPolicy.HostViewTransition) {
+    visibility = transition.visibility.androidVisibility()
+    alpha = transition.startAlpha
+    animate().cancel()
+    animate().alpha(transition.targetAlpha).setDuration(transition.durationMillis).start()
+}
+
+private fun NovelReaderWebHostPolicy.HostViewVisibility.androidVisibility(): Int {
+    return when (this) {
+        NovelReaderWebHostPolicy.HostViewVisibility.VISIBLE -> View.VISIBLE
+        NovelReaderWebHostPolicy.HostViewVisibility.INVISIBLE -> View.INVISIBLE
     }
 }
