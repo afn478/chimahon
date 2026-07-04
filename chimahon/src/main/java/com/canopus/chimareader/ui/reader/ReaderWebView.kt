@@ -64,6 +64,7 @@ fun ReaderWebView(
     onDismissPopupRequested: () -> Unit = {},
     onInternalLinkClicked: (url: String) -> Unit = {},
     onSelectionRectsReceived: ((String) -> Unit)? = null,
+    nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     val pendingCommands = remember(bridge) { bridge.pendingCommands }
 
@@ -122,6 +123,7 @@ fun ReaderWebView(
                 onSentenceReadyCallback = onSentenceReady,
                 onDismissPopupRequested = onDismissPopupRequested,
                 onInternalLinkClicked = onInternalLinkClicked,
+                nowMillis = nowMillis,
             ).apply {
                 setSelectionRectsCallback(onSelectionRectsReceived)
                 settings.allowFileAccess = hostSettings.allowFileAccess
@@ -321,6 +323,7 @@ private class ReaderAndroidWebView(
     private val onSentenceReadyCallback: (sentence: String) -> Unit = {},
     private val onDismissPopupRequested: () -> Unit = {},
     internal val onInternalLinkClicked: (url: String) -> Unit = {},
+    private val nowMillis: () -> Long,
 ) : WebView(context) {
 
     private var touchStartX = 0f
@@ -356,7 +359,7 @@ private class ReaderAndroidWebView(
             val action = NovelReaderProgressPolicy.scrollProgressReportAction(
                 continuousMode = continuousMode,
                 imageOnly = isImageOnly,
-                nowMillis = System.currentTimeMillis(),
+                nowMillis = nowMillis(),
                 lastReportMillis = lastProgressReportTime,
             )
         ) {

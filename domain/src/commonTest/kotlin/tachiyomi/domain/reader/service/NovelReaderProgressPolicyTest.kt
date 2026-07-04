@@ -219,4 +219,28 @@ class NovelReaderProgressPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun scrollProgressReportActionClampsNegativeIntervalToZero() {
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.ScheduleDelayed(0L),
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = false,
+                nowMillis = 1_000L,
+                lastReportMillis = 1_000L,
+                reportIntervalMillis = -1L,
+            ),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.ReportNow(1_001L),
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = false,
+                nowMillis = 1_001L,
+                lastReportMillis = 1_000L,
+                reportIntervalMillis = -1L,
+            ),
+        )
+    }
 }
