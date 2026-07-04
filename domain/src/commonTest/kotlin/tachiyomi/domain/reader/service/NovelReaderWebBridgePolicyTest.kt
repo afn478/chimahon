@@ -1,9 +1,92 @@
 package tachiyomi.domain.reader.service
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class NovelReaderWebBridgePolicyTest {
+    @Test
+    fun backgroundTapActionDismissesPopupBeforeReaderTapZones() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.BackgroundTapAction.DismissPopup,
+            NovelReaderWebBridgePolicy.backgroundTapAction(
+                clientX = 2.0,
+                clientY = 120.0,
+                popupActive = true,
+                viewportWidth = 400,
+                viewportHeight = 800,
+                scale = 1.0,
+                tapZonePx = 96,
+                tapZonePercent = 20,
+                verticalWriting = true,
+            ),
+        )
+    }
+
+    @Test
+    fun backgroundTapActionScalesCssPointBeforeMappingReaderZones() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.BackgroundTapAction.Navigate(forward = true),
+            NovelReaderWebBridgePolicy.backgroundTapAction(
+                clientX = 15.0,
+                clientY = 100.0,
+                popupActive = false,
+                viewportWidth = 400,
+                viewportHeight = 800,
+                scale = 2.0,
+                tapZonePx = 96,
+                tapZonePercent = 20,
+                verticalWriting = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebBridgePolicy.BackgroundTapAction.ToggleOverlay,
+            NovelReaderWebBridgePolicy.backgroundTapAction(
+                clientX = 200.0,
+                clientY = 40.0,
+                popupActive = false,
+                viewportWidth = 400,
+                viewportHeight = 800,
+                scale = 2.0,
+                tapZonePx = 96,
+                tapZonePercent = 20,
+                verticalWriting = true,
+            ),
+        )
+    }
+
+    @Test
+    fun backgroundTapActionIgnoresCenterAndInvalidViewportTaps() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.BackgroundTapAction.Ignore,
+            NovelReaderWebBridgePolicy.backgroundTapAction(
+                clientX = 200.0,
+                clientY = 200.0,
+                popupActive = false,
+                viewportWidth = 400,
+                viewportHeight = 800,
+                scale = 1.0,
+                tapZonePx = 96,
+                tapZonePercent = 20,
+                verticalWriting = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebBridgePolicy.BackgroundTapAction.Ignore,
+            NovelReaderWebBridgePolicy.backgroundTapAction(
+                clientX = 2.0,
+                clientY = 120.0,
+                popupActive = false,
+                viewportWidth = 0,
+                viewportHeight = 800,
+                scale = 1.0,
+                tapZonePx = 96,
+                tapZonePercent = 20,
+                verticalWriting = true,
+            ),
+        )
+    }
+
     @Test
     fun nativeCallbackBridgeScriptInstallsReaderBridgeCallbacks() {
         val script = NovelReaderWebBridgePolicy.nativeCallbackBridgeScript(

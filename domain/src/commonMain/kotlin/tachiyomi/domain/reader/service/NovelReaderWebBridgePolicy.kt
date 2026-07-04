@@ -4,6 +4,50 @@ object NovelReaderWebBridgePolicy {
     const val DEFAULT_NATIVE_BRIDGE_NAME = "HoshiAndroid"
     const val DEFAULT_READER_BRIDGE_NAME = "hoshiNative"
 
+    sealed interface BackgroundTapAction {
+        data object DismissPopup : BackgroundTapAction
+        data object ToggleOverlay : BackgroundTapAction
+        data class Navigate(val forward: Boolean) : BackgroundTapAction
+        data object Ignore : BackgroundTapAction
+    }
+
+    fun backgroundTapAction(
+        clientX: Double,
+        clientY: Double,
+        popupActive: Boolean,
+        viewportWidth: Int,
+        viewportHeight: Int,
+        scale: Double,
+        tapZonePx: Int,
+        tapZonePercent: Int,
+        verticalWriting: Boolean,
+    ): BackgroundTapAction {
+        if (popupActive) return BackgroundTapAction.DismissPopup
+
+        val tapPoint = NovelReaderWebGeometryPolicy.cssPointToViewportPoint(
+            x = clientX,
+            y = clientY,
+            scale = scale,
+        )
+
+        return when (
+            NovelReaderInputPolicy.backgroundTapAction(
+                x = tapPoint.x.toFloat(),
+                y = tapPoint.y.toFloat(),
+                width = viewportWidth,
+                height = viewportHeight,
+                tapZonePx = tapZonePx,
+                tapZonePercent = tapZonePercent,
+                verticalWriting = verticalWriting,
+            )
+        ) {
+            NovelReaderInputPolicy.TapAction.TOGGLE_OVERLAY -> BackgroundTapAction.ToggleOverlay
+            NovelReaderInputPolicy.TapAction.FORWARD -> BackgroundTapAction.Navigate(forward = true)
+            NovelReaderInputPolicy.TapAction.BACKWARD -> BackgroundTapAction.Navigate(forward = false)
+            NovelReaderInputPolicy.TapAction.NONE -> BackgroundTapAction.Ignore
+        }
+    }
+
     fun nativeCallbackBridgeScript(
         nativeBridgeName: String = DEFAULT_NATIVE_BRIDGE_NAME,
         readerBridgeName: String = DEFAULT_READER_BRIDGE_NAME,

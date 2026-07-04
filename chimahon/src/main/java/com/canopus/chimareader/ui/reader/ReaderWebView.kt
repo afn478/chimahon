@@ -437,31 +437,24 @@ private class ReaderAndroidWebView(
         },
         onBackgroundTap = { x, y ->
             post {
-                if (isPopupActive) {
-                    onDismissPopupRequested()
-                } else {
-                    val density = context.resources.displayMetrics.density
-                    val tapPoint = NovelReaderWebGeometryPolicy.cssPointToViewportPoint(
-                        x = x.toDouble(),
-                        y = y.toDouble(),
+                val density = context.resources.displayMetrics.density
+                when (
+                    val action = NovelReaderWebBridgePolicy.backgroundTapAction(
+                        clientX = x.toDouble(),
+                        clientY = y.toDouble(),
+                        popupActive = isPopupActive,
+                        viewportWidth = width,
+                        viewportHeight = height,
                         scale = density.toDouble(),
+                        tapZonePx = tapZonePx,
+                        tapZonePercent = readerSettings.tapZonePercent,
+                        verticalWriting = readerSettings.verticalWriting,
                     )
-                    when (
-                        NovelReaderInputPolicy.backgroundTapAction(
-                            x = tapPoint.x.toFloat(),
-                            y = tapPoint.y.toFloat(),
-                            width = width,
-                            height = height,
-                            tapZonePx = tapZonePx,
-                            tapZonePercent = readerSettings.tapZonePercent,
-                            verticalWriting = readerSettings.verticalWriting,
-                        )
-                    ) {
-                        NovelReaderInputPolicy.TapAction.TOGGLE_OVERLAY -> onTapTop()
-                        NovelReaderInputPolicy.TapAction.FORWARD -> handleSwipe(forward = true)
-                        NovelReaderInputPolicy.TapAction.BACKWARD -> handleSwipe(forward = false)
-                        NovelReaderInputPolicy.TapAction.NONE -> Unit
-                    }
+                ) {
+                    NovelReaderWebBridgePolicy.BackgroundTapAction.DismissPopup -> onDismissPopupRequested()
+                    NovelReaderWebBridgePolicy.BackgroundTapAction.ToggleOverlay -> onTapTop()
+                    is NovelReaderWebBridgePolicy.BackgroundTapAction.Navigate -> handleSwipe(action.forward)
+                    NovelReaderWebBridgePolicy.BackgroundTapAction.Ignore -> Unit
                 }
             }
         },
