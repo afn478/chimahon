@@ -148,6 +148,58 @@ class NovelReaderWebCommandActionPolicyTest {
         )
     }
 
+    @Test
+    fun commandActionsCollapseLoadsAndCarryLoadedUrlForward() {
+        assertEquals(
+            listOf(
+                NovelReaderWebCommandActionPolicy.CommandAction.LoadChapter(
+                    url = "file:///chapter-2.xhtml",
+                    progress = 0.25,
+                ),
+                NovelReaderWebCommandActionPolicy.CommandAction.ReloadCurrentChapter(
+                    url = "file:///chapter-2.xhtml",
+                    continuousMode = true,
+                ),
+            ),
+            NovelReaderWebCommandActionPolicy.commandActions(
+                commands = listOf(
+                    NovelReaderWebCommand.LoadChapter("file:///chapter-1.xhtml", progress = 0.0),
+                    NovelReaderWebCommand.LoadChapter("file:///chapter-2.xhtml", progress = 0.25),
+                    NovelReaderWebCommand.ChangeMode(continuous = true),
+                ),
+                currentUrl = null,
+                lastAppliedSettings = ReaderSettings(),
+            ),
+        )
+    }
+
+    @Test
+    fun commandActionsCarryAppliedSettingsForward() {
+        val verticalSettings = ReaderSettings(verticalWriting = true)
+        val fontSettings = verticalSettings.copy(fontSize = 22.0)
+
+        assertEquals(
+            listOf(
+                NovelReaderWebCommandActionPolicy.CommandAction.ApplySettings(
+                    settings = verticalSettings,
+                    settingsAction = NovelReaderWebSettingsPolicy.SettingsCommandAction.ReinjectReader,
+                ),
+                NovelReaderWebCommandActionPolicy.CommandAction.ApplySettings(
+                    settings = fontSettings,
+                    settingsAction = NovelReaderWebSettingsPolicy.SettingsCommandAction.ApplyLiveSettings,
+                ),
+            ),
+            NovelReaderWebCommandActionPolicy.commandActions(
+                commands = listOf(
+                    NovelReaderWebCommand.ApplySettings(verticalSettings),
+                    NovelReaderWebCommand.ApplySettings(fontSettings),
+                ),
+                currentUrl = "file:///chapter.xhtml",
+                lastAppliedSettings = ReaderSettings(verticalWriting = false),
+            ),
+        )
+    }
+
     private fun actionFor(
         command: NovelReaderWebCommand,
         currentUrl: String? = null,

@@ -76,4 +76,33 @@ object NovelReaderWebCommandActionPolicy {
             -> CommandAction.Ignore
         }
     }
+
+    fun commandActions(
+        commands: Iterable<NovelReaderWebCommand>,
+        currentUrl: String?,
+        lastAppliedSettings: ReaderSettings,
+    ): List<CommandAction> {
+        var nextCurrentUrl = currentUrl
+        var nextLastAppliedSettings = lastAppliedSettings
+
+        return NovelReaderWebCommandPolicy.collapseConsecutiveLoads(commands).map { command ->
+            commandAction(
+                command = command,
+                currentUrl = nextCurrentUrl,
+                lastAppliedSettings = nextLastAppliedSettings,
+            ).also { action ->
+                when (action) {
+                    is CommandAction.LoadChapter -> nextCurrentUrl = action.url
+                    is CommandAction.ReloadCurrentChapter -> nextCurrentUrl = action.url
+                    is CommandAction.ApplySettings -> nextLastAppliedSettings = action.settings
+                    is CommandAction.SetFocusMode,
+                    is CommandAction.Paginate,
+                    is CommandAction.EvaluateScript,
+                    is CommandAction.RequestSelectionRects,
+                    CommandAction.Ignore,
+                    -> Unit
+                }
+            }
+        }
+    }
 }

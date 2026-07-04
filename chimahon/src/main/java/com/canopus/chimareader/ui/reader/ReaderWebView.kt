@@ -31,7 +31,6 @@ import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebBridgePolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandActionPolicy
-import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebHostPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebInjectionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebLoadPolicy
@@ -236,16 +235,14 @@ fun ReaderWebView(
             val commands = pendingCommands.toList()
             pendingCommands.clear()
 
-            val deduped = NovelReaderWebCommandPolicy.collapseConsecutiveLoads(commands)
+            val actions = NovelReaderWebCommandActionPolicy.commandActions(
+                commands = commands,
+                currentUrl = v.currentUrl,
+                lastAppliedSettings = v.lastAppliedSettings,
+            )
 
-            deduped.forEach { command ->
-                when (
-                    val action = NovelReaderWebCommandActionPolicy.commandAction(
-                        command = command,
-                        currentUrl = v.currentUrl,
-                        lastAppliedSettings = v.lastAppliedSettings,
-                    )
-                ) {
+            actions.forEach { action ->
+                when (action) {
                     is NovelReaderWebCommandActionPolicy.CommandAction.LoadChapter -> {
                         v.pendingProgress = action.progress
                         v.currentUrl = action.url
