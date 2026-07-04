@@ -113,20 +113,33 @@ class SasayakiPlayer(
 
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlayingNow: Boolean) {
-                    this@SasayakiPlayer.isPlaying = isPlayingNow
-                    if (isPlayingNow) {
-                        hasPlayedOnce = true
+                    val state = NovelReaderSasayakiPlaybackPolicy.playbackActivityState(
+                        isPlayingNow = isPlayingNow,
+                        hasPlayedOnce = hasPlayedOnce,
+                    )
+                    this@SasayakiPlayer.isPlaying = state.isPlaying
+                    hasPlayedOnce = state.hasPlayedOnce
+                    if (state.trackProgress) {
                         startProgressTracker()
                     } else {
                         stopProgressTracker()
-                        savePlayback()
+                        if (state.savePlayback) {
+                            savePlayback()
+                        }
                     }
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) {
-                        this@SasayakiPlayer.isPlaying = false
-                        stopPlaybackTime = null
+                    when (
+                        NovelReaderSasayakiPlaybackPolicy.playbackStateChangedAction(
+                            hasEnded = playbackState == Player.STATE_ENDED,
+                        )
+                    ) {
+                        NovelReaderSasayakiPlaybackPolicy.PlaybackStateChangedAction.Ignore -> Unit
+                        NovelReaderSasayakiPlaybackPolicy.PlaybackStateChangedAction.MarkEnded -> {
+                            this@SasayakiPlayer.isPlaying = false
+                            stopPlaybackTime = null
+                        }
                     }
                 }
             })
@@ -165,19 +178,21 @@ class SasayakiPlayer(
     }
 
     private fun tick(seconds: Double) {
-        currentTime = seconds
-        player?.let {
-            if (it.duration > 0) duration = it.duration / 1000.0
+        val state = NovelReaderSasayakiPlaybackPolicy.playbackTickState(
+            seconds = seconds,
+            durationSeconds = player?.duration?.let { it / 1000.0 },
+            stopPlaybackTime = stopPlaybackTime,
+        )
+        currentTime = state.currentTime
+        state.duration?.let {
+            duration = it
+        }
+        stopPlaybackTime = state.stopPlaybackTime
+        if (state.pausePlayback) {
+            player?.pause()
         }
 
-        stopPlaybackTime?.let { stopTime ->
-            if (seconds >= stopTime) {
-                player?.pause()
-                stopPlaybackTime = null
-            }
-        }
-
-        playback.lastPosition = seconds
+        playback.lastPosition = state.lastPosition
         updateCue(seconds)
     }
 
@@ -257,11 +272,18 @@ class SasayakiPlayer(
     }
 
     fun prepareTransition() {
-        shouldResume = player?.isPlaying == true
-        chapterTransition = true
-        stopPlaybackTime = null
-        clearDisplayedCue()
-        player?.pause()
+        val state = NovelReaderSasayakiPlaybackPolicy.transitionPreparationState(
+            isPlaying = player?.isPlaying == true,
+        )
+        shouldResume = state.shouldResume
+        chapterTransition = state.chapterTransition
+        stopPlaybackTime = state.stopPlaybackTime
+        if (state.clearDisplayedCue) {
+            clearDisplayedCue()
+        }
+        if (state.pausePlayback) {
+            player?.pause()
+        }
     }
 
     private fun displayCue(cue: SasayakiMatch, reveal: Boolean) {

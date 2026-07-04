@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.io.File
 import java.io.FileOutputStream
+import tachiyomi.domain.reader.service.NovelReaderSasayakiSheetPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,9 @@ fun SasayakiSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val context = LocalContext.current
+    val sheetContent = NovelReaderSasayakiSheetPolicy.sheetState(
+        hasAudio = viewModel.sasayakiPlayer?.hasAudio == true,
+    )
 
     val audioPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -41,7 +45,7 @@ fun SasayakiSheet(
         if (uri == null) return@rememberLauncherForActivityResult
 
         // In a real app we'd copy this safely into BookStorage
-        val tempFile = File(context.cacheDir, "sasayaki_imported.m4a")
+        val tempFile = File(context.cacheDir, NovelReaderSasayakiSheetPolicy.IMPORTED_AUDIO_FILE_NAME)
         context.contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(tempFile).use { output -> input.copyTo(output) }
         }
@@ -61,17 +65,17 @@ fun SasayakiSheet(
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             Text(
-                "Sasayaki",
+                sheetContent.title,
                 style = MaterialTheme.typography.headlineSmall,
             )
 
-            if (viewModel.sasayakiPlayer?.hasAudio == true) {
+            if (sheetContent.showAudioControls) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Audio Synchronization", style = MaterialTheme.typography.titleMedium)
+                    Text(sheetContent.audioSectionTitle, style = MaterialTheme.typography.titleMedium)
                     IconButton(onClick = { viewModel.sasayakiPlayer?.togglePlayback() }) {
                         val icon = if (viewModel.sasayakiPlayer?.isPlaying == true) {
                             // Using a placeholder icon since pause icon requires extended material icons
@@ -79,7 +83,7 @@ fun SasayakiSheet(
                         } else {
                             Icons.Default.PlayArrow
                         }
-                        Icon(icon, contentDescription = "Toggle Playback")
+                        Icon(icon, contentDescription = sheetContent.playbackButtonContentDescription)
                     }
                 }
 
@@ -87,11 +91,11 @@ fun SasayakiSheet(
                     onClick = { audioPicker.launch("audio/*") },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Replace Audio File")
+                    Text(sheetContent.importButtonText)
                 }
             } else {
                 Text(
-                    "No audio file matched or imported.",
+                    sheetContent.emptyMessage.orEmpty(),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -100,7 +104,7 @@ fun SasayakiSheet(
                     onClick = { audioPicker.launch("audio/*") },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Import Audio File")
+                    Text(sheetContent.importButtonText)
                 }
             }
         }

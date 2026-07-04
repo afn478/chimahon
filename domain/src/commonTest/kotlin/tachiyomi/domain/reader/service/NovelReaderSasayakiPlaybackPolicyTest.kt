@@ -7,10 +7,158 @@ import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.AudioIm
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.AudioRestoreAction
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.CueNavigationAction
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.CueUpdateAction
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.PlaybackActivityState
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.PlaybackStateChangedAction
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.PlaybackTickState
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.PlaybackToggleAction
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.RestoreCompletedAction
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.TransitionPreparationState
 
 class NovelReaderSasayakiPlaybackPolicyTest {
+    @Test
+    fun playbackActivityStateStartsTrackingWhenPlaybackStarts() {
+        assertEquals(
+            PlaybackActivityState(
+                isPlaying = true,
+                hasPlayedOnce = true,
+                trackProgress = true,
+                savePlayback = false,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackActivityState(
+                isPlayingNow = true,
+                hasPlayedOnce = false,
+            ),
+        )
+    }
+
+    @Test
+    fun playbackActivityStateStopsTrackingAndPreservesPlayedOnceWhenPlaybackStops() {
+        assertEquals(
+            PlaybackActivityState(
+                isPlaying = false,
+                hasPlayedOnce = true,
+                trackProgress = false,
+                savePlayback = true,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackActivityState(
+                isPlayingNow = false,
+                hasPlayedOnce = true,
+            ),
+        )
+        assertEquals(
+            PlaybackActivityState(
+                isPlaying = false,
+                hasPlayedOnce = false,
+                trackProgress = false,
+                savePlayback = true,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackActivityState(
+                isPlayingNow = false,
+                hasPlayedOnce = false,
+            ),
+        )
+    }
+
+    @Test
+    fun playbackTickStateUpdatesPositionAndPositiveDuration() {
+        assertEquals(
+            PlaybackTickState(
+                currentTime = 12.5,
+                lastPosition = 12.5,
+                duration = 90.0,
+                stopPlaybackTime = null,
+                pausePlayback = false,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackTickState(
+                seconds = 12.5,
+                durationSeconds = 90.0,
+                stopPlaybackTime = null,
+            ),
+        )
+        assertEquals(
+            PlaybackTickState(
+                currentTime = 12.5,
+                lastPosition = 12.5,
+                duration = null,
+                stopPlaybackTime = null,
+                pausePlayback = false,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackTickState(
+                seconds = 12.5,
+                durationSeconds = 0.0,
+                stopPlaybackTime = null,
+            ),
+        )
+    }
+
+    @Test
+    fun playbackTickStatePausesAndClearsStopTimeWhenReached() {
+        assertEquals(
+            PlaybackTickState(
+                currentTime = 12.5,
+                lastPosition = 12.5,
+                duration = null,
+                stopPlaybackTime = 20.0,
+                pausePlayback = false,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackTickState(
+                seconds = 12.5,
+                durationSeconds = null,
+                stopPlaybackTime = 20.0,
+            ),
+        )
+        assertEquals(
+            PlaybackTickState(
+                currentTime = 20.0,
+                lastPosition = 20.0,
+                duration = null,
+                stopPlaybackTime = null,
+                pausePlayback = true,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.playbackTickState(
+                seconds = 20.0,
+                durationSeconds = null,
+                stopPlaybackTime = 20.0,
+            ),
+        )
+    }
+
+    @Test
+    fun playbackStateChangedMarksOnlyEndedState() {
+        assertEquals(
+            PlaybackStateChangedAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.playbackStateChangedAction(hasEnded = false),
+        )
+        assertEquals(
+            PlaybackStateChangedAction.MarkEnded,
+            NovelReaderSasayakiPlaybackPolicy.playbackStateChangedAction(hasEnded = true),
+        )
+    }
+
+    @Test
+    fun transitionPreparationCapturesWhetherPlaybackShouldResume() {
+        assertEquals(
+            TransitionPreparationState(
+                shouldResume = false,
+                chapterTransition = true,
+                stopPlaybackTime = null,
+                clearDisplayedCue = true,
+                pausePlayback = true,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.transitionPreparationState(isPlaying = false),
+        )
+        assertEquals(
+            TransitionPreparationState(
+                shouldResume = true,
+                chapterTransition = true,
+                stopPlaybackTime = null,
+                clearDisplayedCue = true,
+                pausePlayback = true,
+            ),
+            NovelReaderSasayakiPlaybackPolicy.transitionPreparationState(isPlaying = true),
+        )
+    }
+
     @Test
     fun audioRestoreIgnoresMissingOrUnavailableBookmarks() {
         assertEquals(

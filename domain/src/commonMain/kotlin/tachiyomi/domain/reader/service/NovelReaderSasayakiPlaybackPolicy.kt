@@ -3,6 +3,29 @@ package tachiyomi.domain.reader.service
 import tachiyomi.domain.reader.model.NovelReaderSasayakiMatch
 
 object NovelReaderSasayakiPlaybackPolicy {
+    data class PlaybackActivityState(
+        val isPlaying: Boolean,
+        val hasPlayedOnce: Boolean,
+        val trackProgress: Boolean,
+        val savePlayback: Boolean,
+    )
+
+    data class PlaybackTickState(
+        val currentTime: Double,
+        val lastPosition: Double,
+        val duration: Double?,
+        val stopPlaybackTime: Double?,
+        val pausePlayback: Boolean,
+    )
+
+    data class TransitionPreparationState(
+        val shouldResume: Boolean,
+        val chapterTransition: Boolean = true,
+        val stopPlaybackTime: Double? = null,
+        val clearDisplayedCue: Boolean = true,
+        val pausePlayback: Boolean = true,
+    )
+
     sealed interface AudioRestoreAction {
         data object Ignore : AudioRestoreAction
         data class Restore(val audioPath: String) : AudioRestoreAction
@@ -17,6 +40,11 @@ object NovelReaderSasayakiPlaybackPolicy {
         data object Ignore : PlaybackToggleAction
         data object Pause : PlaybackToggleAction
         data object Play : PlaybackToggleAction
+    }
+
+    sealed interface PlaybackStateChangedAction {
+        data object Ignore : PlaybackStateChangedAction
+        data object MarkEnded : PlaybackStateChangedAction
     }
 
     sealed interface CueNavigationAction {
@@ -44,6 +72,45 @@ object NovelReaderSasayakiPlaybackPolicy {
             val reveal: Boolean,
             val resume: Boolean,
         ) : RestoreCompletedAction
+    }
+
+    fun playbackActivityState(
+        isPlayingNow: Boolean,
+        hasPlayedOnce: Boolean,
+    ): PlaybackActivityState {
+        return PlaybackActivityState(
+            isPlaying = isPlayingNow,
+            hasPlayedOnce = hasPlayedOnce || isPlayingNow,
+            trackProgress = isPlayingNow,
+            savePlayback = !isPlayingNow,
+        )
+    }
+
+    fun playbackTickState(
+        seconds: Double,
+        durationSeconds: Double?,
+        stopPlaybackTime: Double?,
+    ): PlaybackTickState {
+        val shouldStop = stopPlaybackTime != null && seconds >= stopPlaybackTime
+        return PlaybackTickState(
+            currentTime = seconds,
+            lastPosition = seconds,
+            duration = durationSeconds?.takeIf { it > 0.0 },
+            stopPlaybackTime = if (shouldStop) null else stopPlaybackTime,
+            pausePlayback = shouldStop,
+        )
+    }
+
+    fun playbackStateChangedAction(hasEnded: Boolean): PlaybackStateChangedAction {
+        return if (hasEnded) {
+            PlaybackStateChangedAction.MarkEnded
+        } else {
+            PlaybackStateChangedAction.Ignore
+        }
+    }
+
+    fun transitionPreparationState(isPlaying: Boolean): TransitionPreparationState {
+        return TransitionPreparationState(shouldResume = isPlaying)
     }
 
     fun audioRestoreAction(
