@@ -207,15 +207,15 @@ fun AppearanceSheet(
                     }
                     AddThemeButton(
                         onClick = {
-                            draftThemeName = ""
-                            draftBackgroundColor = viewModel.customBackgroundColor
-                            draftTextColor = viewModel.customTextColor
-                            draftBackgroundInput = NovelReaderAppearancePolicy.colorHex(
-                                viewModel.customBackgroundColor,
+                            val draft = NovelReaderAppearanceSheetPolicy.newCustomThemeDraft(
+                                backgroundColor = viewModel.customBackgroundColor,
+                                textColor = viewModel.customTextColor,
                             )
-                            draftTextInput = NovelReaderAppearancePolicy.colorHex(
-                                viewModel.customTextColor,
-                            )
+                            draftThemeName = draft.name
+                            draftBackgroundColor = draft.backgroundColor
+                            draftTextColor = draft.textColor
+                            draftBackgroundInput = draft.backgroundColorInput
+                            draftTextInput = draft.textColorInput
                             showCustomThemeDialog = true
                         },
                     )
@@ -700,18 +700,26 @@ fun AppearanceSheet(
             textColorInput = draftTextInput,
             onThemeNameChange = { draftThemeName = it },
             onBackgroundColorInputChange = { input ->
-                draftBackgroundInput = input
-                NovelReaderAppearancePolicy.parseColorInput(input)?.let { draftBackgroundColor = it }
+                val update = NovelReaderAppearanceSheetPolicy.customThemeColorInputUpdate(
+                    currentColor = draftBackgroundColor,
+                    input = input,
+                )
+                draftBackgroundInput = update.input
+                draftBackgroundColor = update.color
             },
             onTextColorInputChange = { input ->
-                draftTextInput = input
-                NovelReaderAppearancePolicy.parseColorInput(input)?.let { draftTextColor = it }
+                val update = NovelReaderAppearanceSheetPolicy.customThemeColorInputUpdate(
+                    currentColor = draftTextColor,
+                    input = input,
+                )
+                draftTextInput = update.input
+                draftTextColor = update.color
             },
             onDismiss = { showCustomThemeDialog = false },
             onConfirm = {
                 viewModel.addCustomTheme(
-                    CustomReaderTheme(
-                        name = draftThemeName,
+                    NovelReaderAppearanceSheetPolicy.customThemeSaveAction(
+                        themeName = draftThemeName,
                         backgroundColor = draftBackgroundColor,
                         textColor = draftTextColor,
                     ),
@@ -722,17 +730,18 @@ fun AppearanceSheet(
     }
 
     renameTarget?.let { target ->
+        val dialogState = NovelReaderAppearanceSheetPolicy.renameThemeDialogState(renameInput)
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text(NovelReaderAppearanceSheetPolicy.RENAME_THEME_TITLE) },
+            title = { Text(dialogState.title) },
             text = {
                 OutlinedTextField(
                     value = renameInput,
                     onValueChange = { renameInput = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text(NovelReaderAppearanceSheetPolicy.THEME_NAME_LABEL) },
-                    placeholder = { Text(NovelReaderAppearanceSheetPolicy.THEME_NAME_PLACEHOLDER) },
+                    label = { Text(dialogState.nameLabel) },
+                    placeholder = { Text(dialogState.namePlaceholder) },
                 )
             },
             confirmButton = {
@@ -741,12 +750,12 @@ fun AppearanceSheet(
                         viewModel.renameCustomTheme(target, renameInput)
                         renameTarget = null
                     },
-                    enabled = renameInput.isNotBlank(),
-                ) { Text(NovelReaderAppearanceSheetPolicy.RENAME_BUTTON_TEXT) }
+                    enabled = dialogState.confirmEnabled,
+                ) { Text(dialogState.confirmButtonText) }
             },
             dismissButton = {
                 TextButton(onClick = { renameTarget = null }) {
-                    Text(NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT)
+                    Text(dialogState.dismissButtonText)
                 }
             },
         )

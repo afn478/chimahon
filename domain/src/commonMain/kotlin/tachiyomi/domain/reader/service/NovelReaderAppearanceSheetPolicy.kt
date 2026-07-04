@@ -94,6 +94,28 @@ object NovelReaderAppearanceSheetPolicy {
         val confirmEnabled: Boolean,
     )
 
+    data class CustomThemeDraftState(
+        val name: String,
+        val backgroundColor: Int,
+        val textColor: Int,
+        val backgroundColorInput: String,
+        val textColorInput: String,
+    )
+
+    data class CustomThemeColorInputUpdate(
+        val input: String,
+        val color: Int,
+    )
+
+    data class RenameThemeDialogState(
+        val title: String,
+        val nameLabel: String,
+        val namePlaceholder: String,
+        val confirmButtonText: String,
+        val dismissButtonText: String,
+        val confirmEnabled: Boolean,
+    )
+
     data class FontDeleteAction(
         val fontName: String,
         val fallbackFont: String,
@@ -325,6 +347,52 @@ object NovelReaderAppearanceSheetPolicy {
             confirmButtonText = "Save",
             dismissButtonText = CANCEL_BUTTON_TEXT,
             confirmEnabled = parsedBackgroundColor != null && parsedTextColor != null,
+        )
+    }
+
+    fun newCustomThemeDraft(
+        backgroundColor: Int,
+        textColor: Int,
+    ): CustomThemeDraftState {
+        return CustomThemeDraftState(
+            name = "",
+            backgroundColor = backgroundColor,
+            textColor = textColor,
+            backgroundColorInput = NovelReaderAppearancePolicy.colorHex(backgroundColor),
+            textColorInput = NovelReaderAppearancePolicy.colorHex(textColor),
+        )
+    }
+
+    fun customThemeColorInputUpdate(
+        currentColor: Int,
+        input: String,
+    ): CustomThemeColorInputUpdate {
+        return CustomThemeColorInputUpdate(
+            input = input,
+            color = NovelReaderAppearancePolicy.parseColorInput(input) ?: currentColor,
+        )
+    }
+
+    fun customThemeSaveAction(
+        themeName: String,
+        backgroundColor: Int,
+        textColor: Int,
+    ): CustomReaderTheme {
+        return CustomReaderTheme(
+            name = themeName,
+            backgroundColor = backgroundColor,
+            textColor = textColor,
+        )
+    }
+
+    fun renameThemeDialogState(renameInput: String): RenameThemeDialogState {
+        return RenameThemeDialogState(
+            title = RENAME_THEME_TITLE,
+            nameLabel = THEME_NAME_LABEL,
+            namePlaceholder = THEME_NAME_PLACEHOLDER,
+            confirmButtonText = RENAME_BUTTON_TEXT,
+            dismissButtonText = CANCEL_BUTTON_TEXT,
+            confirmEnabled = renameInput.isNotBlank(),
         )
     }
 

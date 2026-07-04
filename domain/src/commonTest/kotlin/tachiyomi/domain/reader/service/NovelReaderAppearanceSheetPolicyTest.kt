@@ -242,6 +242,89 @@ class NovelReaderAppearanceSheetPolicyTest {
     }
 
     @Test
+    fun newCustomThemeDraftStartsFromCurrentColorsWithHexInputs() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.CustomThemeDraftState(
+                name = "",
+                backgroundColor = 0xFF010203.toInt(),
+                textColor = 0xFFABCDEF.toInt(),
+                backgroundColorInput = "#010203",
+                textColorInput = "#ABCDEF",
+            ),
+            NovelReaderAppearanceSheetPolicy.newCustomThemeDraft(
+                backgroundColor = 0xFF010203.toInt(),
+                textColor = 0xFFABCDEF.toInt(),
+            ),
+        )
+    }
+
+    @Test
+    fun customThemeColorInputUpdateKeepsLastValidColorForInvalidInput() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.CustomThemeColorInputUpdate(
+                input = "#112233",
+                color = 0xFF112233.toInt(),
+            ),
+            NovelReaderAppearanceSheetPolicy.customThemeColorInputUpdate(
+                currentColor = 0xFF010203.toInt(),
+                input = "#112233",
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.CustomThemeColorInputUpdate(
+                input = "not-a-color",
+                color = 0xFF010203.toInt(),
+            ),
+            NovelReaderAppearanceSheetPolicy.customThemeColorInputUpdate(
+                currentColor = 0xFF010203.toInt(),
+                input = "not-a-color",
+            ),
+        )
+    }
+
+    @Test
+    fun customThemeSaveActionBuildsThemeFromDraftValues() {
+        assertEquals(
+            CustomReaderTheme(
+                name = "Night",
+                backgroundColor = 0xFF101010.toInt(),
+                textColor = 0xFFEAEAEA.toInt(),
+            ),
+            NovelReaderAppearanceSheetPolicy.customThemeSaveAction(
+                themeName = "Night",
+                backgroundColor = 0xFF101010.toInt(),
+                textColor = 0xFFEAEAEA.toInt(),
+            ),
+        )
+    }
+
+    @Test
+    fun renameThemeDialogStateEnablesConfirmOnlyForNonBlankNames() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.RenameThemeDialogState(
+                title = NovelReaderAppearanceSheetPolicy.RENAME_THEME_TITLE,
+                nameLabel = NovelReaderAppearanceSheetPolicy.THEME_NAME_LABEL,
+                namePlaceholder = NovelReaderAppearanceSheetPolicy.THEME_NAME_PLACEHOLDER,
+                confirmButtonText = NovelReaderAppearanceSheetPolicy.RENAME_BUTTON_TEXT,
+                dismissButtonText = NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT,
+                confirmEnabled = true,
+            ),
+            NovelReaderAppearanceSheetPolicy.renameThemeDialogState(renameInput = "Night"),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.RenameThemeDialogState(
+                title = NovelReaderAppearanceSheetPolicy.RENAME_THEME_TITLE,
+                nameLabel = NovelReaderAppearanceSheetPolicy.THEME_NAME_LABEL,
+                namePlaceholder = NovelReaderAppearanceSheetPolicy.THEME_NAME_PLACEHOLDER,
+                confirmButtonText = NovelReaderAppearanceSheetPolicy.RENAME_BUTTON_TEXT,
+                dismissButtonText = NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT,
+                confirmEnabled = false,
+            ),
+            NovelReaderAppearanceSheetPolicy.renameThemeDialogState(renameInput = "   "),
+        )
+    }
+
+    @Test
     fun fontImportMimeTypesRemainStable() {
         assertEquals(
             listOf(
