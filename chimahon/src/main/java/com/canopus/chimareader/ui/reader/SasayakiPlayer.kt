@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import tachiyomi.domain.reader.service.NovelReaderSasayakiCueTimeline
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy
 
 class SasayakiPlayer(
     private val context: Context,
@@ -159,52 +160,77 @@ class SasayakiPlayer(
     }
 
     private fun updateCue(time: Double) {
-        if (!hasAudio || !hasMatch || chapterTransition) return
-
-        val lookupTime = time - delay
-        val cue = timeline.cueAt(lookupTime)
-
-        if (cue == null) {
-            clearDisplayedCue()
-            return
-        }
-
-        if (cue.id == currentCue?.id) return
-
-        val currentIndex = getCurrentIndex()
-        if (cue.chapterIndex == currentIndex) {
-            displayCue(cue, reveal = autoScroll && hasPlayedOnce)
-        } else if (autoScroll && hasPlayedOnce) {
-            currentCue = cue
-            pendingCue = cue
-            loadChapter(cue.chapterIndex)
+        val hasAudioNow = hasAudio
+        val hasMatchNow = hasMatch
+        val chapterTransitionNow = chapterTransition
+        val canUpdateCue = hasAudioNow && hasMatchNow && !chapterTransitionNow
+        val cue = if (canUpdateCue) {
+            timeline.cueAt(time - delay)
         } else {
-            clearDisplayedCue()
+            null
+        }
+        val currentCueId = currentCue?.id
+        val shouldReadCurrentIndex = cue != null && cue.id != currentCueId
+        val action = NovelReaderSasayakiPlaybackPolicy.cueUpdateAction(
+            hasAudio = hasAudioNow,
+            hasMatch = hasMatchNow,
+            chapterTransition = chapterTransitionNow,
+            cue = cue,
+            currentCueId = currentCueId,
+            currentChapterIndex = if (shouldReadCurrentIndex) getCurrentIndex() else -1,
+            autoScroll = autoScroll,
+            hasPlayedOnce = hasPlayedOnce,
+        )
+
+        when (action) {
+            NovelReaderSasayakiPlaybackPolicy.CueUpdateAction.Ignore -> Unit
+            NovelReaderSasayakiPlaybackPolicy.CueUpdateAction.ClearDisplayedCue -> clearDisplayedCue()
+            is NovelReaderSasayakiPlaybackPolicy.CueUpdateAction.DisplayCue -> {
+                displayCue(action.cue, reveal = action.reveal)
+            }
+            is NovelReaderSasayakiPlaybackPolicy.CueUpdateAction.LoadChapterForCue -> {
+                currentCue = action.cue
+                pendingCue = action.cue
+                loadChapter(action.chapterIndex)
+            }
         }
     }
 
     fun handleRestoreCompleted(currentIndex: Int) {
-        if (!hasMatch || !chapterTransition) return
-
-        val cue: SasayakiMatch? = when {
-            pendingCue?.chapterIndex == currentIndex -> pendingCue
-            timeline.cueAt(currentTime - delay)?.chapterIndex == currentIndex -> timeline.cueAt(currentTime - delay)
-            else -> null
-        }
-
-        val resume = shouldResume
-        chapterTransition = false
-        shouldResume = false
-        pendingCue = null
-
-        if (cue != null) {
-            displayCue(cue, reveal = autoScroll && hasPlayedOnce)
+        val timelineCue = if (hasMatch && chapterTransition) {
+            timeline.cueAt(currentTime - delay)
         } else {
-            clearDisplayedCue()
+            null
         }
+        when (
+            val action = NovelReaderSasayakiPlaybackPolicy.restoreCompletedAction(
+                hasMatch = hasMatch,
+                chapterTransition = chapterTransition,
+                currentChapterIndex = currentIndex,
+                pendingCue = pendingCue,
+                timelineCue = timelineCue,
+                shouldResume = shouldResume,
+                autoScroll = autoScroll,
+                hasPlayedOnce = hasPlayedOnce,
+            )
+        ) {
+            NovelReaderSasayakiPlaybackPolicy.RestoreCompletedAction.Ignore -> Unit
+            is NovelReaderSasayakiPlaybackPolicy.RestoreCompletedAction.Complete -> {
+                chapterTransition = false
+                shouldResume = false
+                pendingCue = null
 
-        if (resume) {
-            player?.play()
+                val cue = action.cue
+                if (cue != null) {
+                    displayCue(cue, reveal = action.reveal)
+                } else {
+                    clearDisplayedCue()
+                }
+
+                if (action.resume) {
+                    player?.play()
+                }
+            }
         }
     }
 
