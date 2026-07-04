@@ -86,7 +86,12 @@ fun AppearanceSheet(
     val scope = rememberCoroutineScope()
 
     var importedFonts by remember { mutableStateOf(FontManager.getImportedFonts(context)) }
-    val allFonts = remember(importedFonts) { FontManager.defaultFonts + importedFonts }
+    val allFonts = remember(importedFonts) {
+        NovelReaderAppearanceSheetPolicy.fontChoices(
+            defaultFonts = FontManager.defaultFonts,
+            importedFonts = importedFonts,
+        )
+    }
 
     var isImporting by remember { mutableStateOf(false) }
     var showCustomThemeDialog by remember { mutableStateOf(false) }
@@ -110,8 +115,20 @@ fun AppearanceSheet(
             isImporting = true
             scope.launch {
                 val success = FontManager.importFont(context, it)
-                if (success) {
-                    importedFonts = FontManager.getImportedFonts(context)
+                when (
+                    val action = NovelReaderAppearanceSheetPolicy.fontImportResultAction(
+                        success = success,
+                        importedFonts = if (success) {
+                            FontManager.getImportedFonts(context)
+                        } else {
+                            importedFonts
+                        },
+                    )
+                ) {
+                    NovelReaderAppearanceSheetPolicy.FontImportResultAction.KeepExistingFonts -> Unit
+                    is NovelReaderAppearanceSheetPolicy.FontImportResultAction.RefreshFonts -> {
+                        importedFonts = action.importedFonts
+                    }
                 }
                 isImporting = false
             }
@@ -294,12 +311,7 @@ fun AppearanceSheet(
                     OutlinedButton(
                         onClick = {
                             fontPickerLauncher.launch(
-                                arrayOf(
-                                    "application/font-ttf",
-                                    "application/x-font-ttf",
-                                    "font/ttf",
-                                    "application/octet-stream",
-                                ),
+                                NovelReaderAppearanceSheetPolicy.fontImportMimeTypes.toTypedArray(),
                             )
                         },
                         modifier = Modifier.weight(1f),
@@ -316,12 +328,23 @@ fun AppearanceSheet(
                     }
 
                     // Delete imported font button
-                    if (importedFonts.contains(viewModel.selectedFont)) {
+                    if (
+                        NovelReaderAppearanceSheetPolicy.shouldShowDeleteFontButton(
+                            selectedFont = viewModel.selectedFont,
+                            importedFonts = importedFonts,
+                        )
+                    ) {
                         OutlinedButton(
                             onClick = {
-                                FontManager.deleteFont(context, viewModel.selectedFont)
-                                importedFonts = FontManager.getImportedFonts(context)
-                                viewModel.updateSelectedFont(FontManager.defaultFonts.first())
+                                NovelReaderAppearanceSheetPolicy.fontDeleteAction(
+                                    selectedFont = viewModel.selectedFont,
+                                    importedFonts = importedFonts,
+                                    defaultFonts = FontManager.defaultFonts,
+                                )?.let { action ->
+                                    FontManager.deleteFont(context, action.fontName)
+                                    importedFonts = FontManager.getImportedFonts(context)
+                                    viewModel.updateSelectedFont(action.fallbackFont)
+                                }
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.outlinedButtonColors(

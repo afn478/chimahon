@@ -49,6 +49,12 @@ object NovelReaderAppearanceSheetPolicy {
     const val DELETE_THEME_TITLE = "Delete theme"
     const val DELETE_BUTTON_TEXT = "Delete"
     const val INVALID_COLOR_LABEL = "Invalid"
+    val fontImportMimeTypes = listOf(
+        "application/font-ttf",
+        "application/x-font-ttf",
+        "font/ttf",
+        "application/octet-stream",
+    )
 
     data class ThemeOption(
         val theme: NovelReaderTheme,
@@ -88,6 +94,16 @@ object NovelReaderAppearanceSheetPolicy {
         val confirmEnabled: Boolean,
     )
 
+    data class FontDeleteAction(
+        val fontName: String,
+        val fallbackFont: String,
+    )
+
+    sealed interface FontImportResultAction {
+        data object KeepExistingFonts : FontImportResultAction
+        data class RefreshFonts(val importedFonts: List<String>) : FontImportResultAction
+    }
+
     val fixedThemeOptions = listOf(
         ThemeOption(
             theme = NovelReaderTheme.SYSTEM,
@@ -121,6 +137,44 @@ object NovelReaderAppearanceSheetPolicy {
             textColor = 0xFFE0E0E0.toInt(),
         ),
     )
+
+    fun fontChoices(
+        defaultFonts: List<String>,
+        importedFonts: List<String>,
+    ): List<String> {
+        return defaultFonts + importedFonts
+    }
+
+    fun shouldShowDeleteFontButton(
+        selectedFont: String,
+        importedFonts: List<String>,
+    ): Boolean {
+        return selectedFont in importedFonts
+    }
+
+    fun fontDeleteAction(
+        selectedFont: String,
+        importedFonts: List<String>,
+        defaultFonts: List<String>,
+    ): FontDeleteAction? {
+        if (!shouldShowDeleteFontButton(selectedFont, importedFonts)) return null
+
+        return FontDeleteAction(
+            fontName = selectedFont,
+            fallbackFont = defaultFonts.firstOrNull() ?: selectedFont,
+        )
+    }
+
+    fun fontImportResultAction(
+        success: Boolean,
+        importedFonts: List<String>,
+    ): FontImportResultAction {
+        return if (success) {
+            FontImportResultAction.RefreshFonts(importedFonts)
+        } else {
+            FontImportResultAction.KeepExistingFonts
+        }
+    }
 
     fun customThemeChoices(
         theme: NovelReaderTheme,

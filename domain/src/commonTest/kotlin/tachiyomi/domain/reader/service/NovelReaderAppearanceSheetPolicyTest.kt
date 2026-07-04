@@ -117,6 +117,100 @@ class NovelReaderAppearanceSheetPolicyTest {
     }
 
     @Test
+    fun fontImportMimeTypesRemainStable() {
+        assertEquals(
+            listOf(
+                "application/font-ttf",
+                "application/x-font-ttf",
+                "font/ttf",
+                "application/octet-stream",
+            ),
+            NovelReaderAppearanceSheetPolicy.fontImportMimeTypes.toList(),
+        )
+    }
+
+    @Test
+    fun fontChoicesAppendImportedFontsAfterDefaults() {
+        assertEquals(
+            listOf("System", "Serif", "Mincho", "Gothic"),
+            NovelReaderAppearanceSheetPolicy.fontChoices(
+                defaultFonts = listOf("System", "Serif"),
+                importedFonts = listOf("Mincho", "Gothic"),
+            ),
+        )
+    }
+
+    @Test
+    fun deleteFontActionOnlyTargetsImportedFontsAndFallsBackToFirstDefault() {
+        assertTrue(
+            NovelReaderAppearanceSheetPolicy.shouldShowDeleteFontButton(
+                selectedFont = "Mincho",
+                importedFonts = listOf("Mincho"),
+            ),
+        )
+        assertFalse(
+            NovelReaderAppearanceSheetPolicy.shouldShowDeleteFontButton(
+                selectedFont = "System",
+                importedFonts = listOf("Mincho"),
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDeleteAction(
+                fontName = "Mincho",
+                fallbackFont = "System",
+            ),
+            NovelReaderAppearanceSheetPolicy.fontDeleteAction(
+                selectedFont = "Mincho",
+                importedFonts = listOf("Mincho"),
+                defaultFonts = listOf("System", "Serif"),
+            ),
+        )
+        assertEquals(
+            null,
+            NovelReaderAppearanceSheetPolicy.fontDeleteAction(
+                selectedFont = "System",
+                importedFonts = listOf("Mincho"),
+                defaultFonts = listOf("System", "Serif"),
+            ),
+        )
+    }
+
+    @Test
+    fun deleteFontActionFallsBackToSelectedFontWhenDefaultsAreMissing() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDeleteAction(
+                fontName = "Mincho",
+                fallbackFont = "Mincho",
+            ),
+            NovelReaderAppearanceSheetPolicy.fontDeleteAction(
+                selectedFont = "Mincho",
+                importedFonts = listOf("Mincho"),
+                defaultFonts = emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun fontImportResultActionRefreshesOnlyAfterSuccessfulImport() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontImportResultAction.RefreshFonts(
+                listOf("Mincho"),
+            ),
+            NovelReaderAppearanceSheetPolicy.fontImportResultAction(
+                success = true,
+                importedFonts = listOf("Mincho"),
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontImportResultAction.KeepExistingFonts,
+            NovelReaderAppearanceSheetPolicy.fontImportResultAction(
+                success = false,
+                importedFonts = listOf("Mincho"),
+            ),
+        )
+    }
+
+    @Test
     fun valueLabelsAndSnappingMatchSheetControls() {
         assertEquals("18px", NovelReaderAppearanceSheetPolicy.fontSizeLabel(18.0))
         assertEquals("18.5px", NovelReaderAppearanceSheetPolicy.fontSizeLabel(18.5))
