@@ -4,6 +4,7 @@ import kotlin.math.abs
 import tachiyomi.domain.reader.model.NovelReaderChapterProgress
 
 object NovelReaderProgressPolicy {
+    const val READER_AUTO_PERSIST_INTERVAL_MS = 60_000L
     const val WEB_SCROLL_PROGRESS_REPORT_INTERVAL_MS = 1000L
 
     sealed interface ScrollProgressReportAction {
@@ -80,6 +81,14 @@ object NovelReaderProgressPolicy {
             chapterIndex != lastChapterIndex ||
             characterCount != lastCharacterCount ||
             abs(progress - lastProgress) > progressEpsilon
+    }
+
+    fun shouldPersistPeriodically(
+        nowMillis: Long,
+        lastPersistTimeMillis: Long,
+        intervalMillis: Long = READER_AUTO_PERSIST_INTERVAL_MS,
+    ): Boolean {
+        return nowMillis - lastPersistTimeMillis >= maxOf(0L, intervalMillis)
     }
 
     fun scrollProgressReportAction(

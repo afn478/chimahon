@@ -110,6 +110,47 @@ class NovelReaderProgressPolicyTest {
     }
 
     @Test
+    fun shouldPersistPeriodicallyUsesReaderAutoPersistInterval() {
+        assertFalse(
+            NovelReaderProgressPolicy.shouldPersistPeriodically(
+                nowMillis = 60_999L,
+                lastPersistTimeMillis = 1_000L,
+            ),
+        )
+        assertTrue(
+            NovelReaderProgressPolicy.shouldPersistPeriodically(
+                nowMillis = 61_000L,
+                lastPersistTimeMillis = 1_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldPersistPeriodicallySupportsCustomAndZeroIntervals() {
+        assertFalse(
+            NovelReaderProgressPolicy.shouldPersistPeriodically(
+                nowMillis = 1_249L,
+                lastPersistTimeMillis = 1_000L,
+                intervalMillis = 250L,
+            ),
+        )
+        assertTrue(
+            NovelReaderProgressPolicy.shouldPersistPeriodically(
+                nowMillis = 1_250L,
+                lastPersistTimeMillis = 1_000L,
+                intervalMillis = 250L,
+            ),
+        )
+        assertTrue(
+            NovelReaderProgressPolicy.shouldPersistPeriodically(
+                nowMillis = 1_000L,
+                lastPersistTimeMillis = 1_000L,
+                intervalMillis = -1L,
+            ),
+        )
+    }
+
+    @Test
     fun scrollProgressReportActionIgnoresInactiveReaderModes() {
         assertEquals(
             NovelReaderProgressPolicy.ScrollProgressReportAction.Ignore,

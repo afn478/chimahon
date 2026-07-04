@@ -81,6 +81,7 @@ class WebViewBridge {
 class ReaderLoaderViewModel(
     context: Context,
     book: BookMetadata,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     var document: EpubBook? = null
         private set
@@ -95,7 +96,7 @@ class ReaderLoaderViewModel(
     private fun loadBook(book: BookMetadata, context: Context) {
         val root = rootUrl ?: return
         val doc = BookStorage.loadEpub(root)
-        val bookCopy = book.copy(lastAccess = System.currentTimeMillis())
+        val bookCopy = book.copy(lastAccess = nowMillis())
         BookStorage.save(bookCopy, root, FileNames.metadata)
         document = doc
     }
@@ -108,6 +109,7 @@ class ReaderViewModel(
     val rootUrl: File,
     val settings: NovelReaderSettings,
     private val scope: CoroutineScope,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     var index by mutableIntStateOf(0)
     var currentProgress by mutableDoubleStateOf(0.0)
@@ -150,7 +152,7 @@ class ReaderViewModel(
         get() = accumulatedCharCounts.getOrDefault(index + 1, 0)
 
     var fullStatistics = mutableStateListOf<Statistics>()
-    private var lastPersistTimeMs = System.currentTimeMillis()
+    private var lastPersistTimeMs = nowMillis()
     private var lastSavedChapterIndex = 0
     private var lastSavedProgress = 0.0
     private var lastSavedCharacterCount = 0
@@ -217,7 +219,7 @@ class ReaderViewModel(
             title = document.title ?: "Unknown",
             initialStatistics = fullStatistics,
             enabled = true,
-            nowMillis = System::currentTimeMillis,
+            nowMillis = nowMillis,
             dateKeyProvider = ::currentReaderDateKey,
         )
 
@@ -227,9 +229,10 @@ class ReaderViewModel(
                 if (!trackingLocked && !appBackgrounded) {
                     statisticsTracker.update(totalExploredCharCount)
                 }
-                if (System.currentTimeMillis() - lastPersistTimeMs >= 60000L) {
+                val now = nowMillis()
+                if (NovelReaderProgressPolicy.shouldPersistPeriodically(now, lastPersistTimeMs)) {
                     persistToDisk()
-                    lastPersistTimeMs = System.currentTimeMillis()
+                    lastPersistTimeMs = now
                 }
             }
         }
@@ -497,7 +500,7 @@ class ReaderViewModel(
                 chapterIndex = index,
                 progress = progress,
                 characterCount = characterCount,
-                lastModified = System.currentTimeMillis(),
+                lastModified = nowMillis(),
             ),
             rootUrl,
             FileNames.bookmark,
