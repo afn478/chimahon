@@ -1,6 +1,7 @@
 package tachiyomi.domain.reader.service
 
 import kotlin.math.abs
+import tachiyomi.domain.reader.model.NovelReaderStatisticsState
 import tachiyomi.domain.reader.model.NovelReadingStatistic
 
 object NovelReaderStatisticsPolicy {
@@ -20,6 +21,27 @@ object NovelReaderStatisticsPolicy {
         dateKey: String,
     ): NovelReadingStatistic {
         return statistics.firstOrNull { it.dateKey == dateKey } ?: defaultStatistic(title, dateKey)
+    }
+
+    fun initialState(
+        title: String,
+        dateKey: String,
+        statistics: List<NovelReadingStatistic>,
+    ): NovelReaderStatisticsState {
+        return NovelReaderStatisticsState(
+            isTracking = false,
+            session = defaultStatistic(title = title, dateKey = dateKey),
+            today = statisticForDate(
+                statistics = statistics,
+                title = title,
+                dateKey = dateKey,
+            ),
+            allTime = allTimeStatistic(
+                title = title,
+                dateKey = dateKey,
+                statistics = statistics,
+            ),
+        )
     }
 
     fun normalizeLoadedStatistics(statistics: List<NovelReadingStatistic>): List<NovelReadingStatistic> {
@@ -106,6 +128,62 @@ object NovelReaderStatisticsPolicy {
                 statistic.altMinReadingSpeed
             },
             lastStatisticModified = lastStatisticModified,
+        )
+    }
+
+    fun shouldRollDate(
+        state: NovelReaderStatisticsState,
+        dateKey: String,
+    ): Boolean {
+        return state.today.dateKey != dateKey
+    }
+
+    fun stateAfterDateRoll(
+        state: NovelReaderStatisticsState,
+        statistics: List<NovelReadingStatistic>,
+        title: String,
+        dateKey: String,
+    ): NovelReaderStatisticsState {
+        if (!shouldRollDate(state, dateKey)) return state
+
+        return state.copy(
+            today = statisticForDate(
+                statistics = statistics,
+                title = title,
+                dateKey = dateKey,
+            ),
+        )
+    }
+
+    fun stateAfterTick(
+        state: NovelReaderStatisticsState,
+        timeDiffSeconds: Double,
+        characterDiff: Int,
+        lastStatisticModified: Long,
+    ): NovelReaderStatisticsState {
+        val finalCharacterDiff = clampBackwardCharacterDiff(
+            characterDiff = characterDiff,
+            sessionCharactersRead = state.session.charactersRead,
+        )
+        return state.copy(
+            session = updateStatistic(
+                statistic = state.session,
+                timeDiffSeconds = timeDiffSeconds,
+                characterDiff = finalCharacterDiff,
+                lastStatisticModified = lastStatisticModified,
+            ),
+            today = updateStatistic(
+                statistic = state.today,
+                timeDiffSeconds = timeDiffSeconds,
+                characterDiff = finalCharacterDiff,
+                lastStatisticModified = lastStatisticModified,
+            ),
+            allTime = updateStatistic(
+                statistic = state.allTime,
+                timeDiffSeconds = timeDiffSeconds,
+                characterDiff = finalCharacterDiff,
+                lastStatisticModified = lastStatisticModified,
+            ),
         )
     }
 

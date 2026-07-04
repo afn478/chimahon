@@ -2,6 +2,7 @@ package tachiyomi.domain.reader.service
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import tachiyomi.domain.reader.model.NovelReaderStatisticsState
 import tachiyomi.domain.reader.model.NovelReadingStatistic
 
 class NovelReaderStatisticsPolicyTest {
@@ -126,6 +127,80 @@ class NovelReaderStatisticsPolicyTest {
         assertEquals(400, result.charactersRead)
         assertEquals(40.0, result.readingTime)
         assertEquals(36_000, result.lastReadingSpeed)
+    }
+
+    @Test
+    fun initialStateBuildsSessionTodayAndAllTimeBuckets() {
+        val today = statistic(dateKey = "2026-07-04", charactersRead = 100, readingTime = 10.0)
+        val result = NovelReaderStatisticsPolicy.initialState(
+            title = "Book",
+            dateKey = "2026-07-04",
+            statistics = listOf(
+                statistic(dateKey = "2026-07-03", charactersRead = 50, readingTime = 5.0),
+                today,
+            ),
+        )
+
+        assertEquals(false, result.isTracking)
+        assertEquals(statistic(dateKey = "2026-07-04"), result.session)
+        assertEquals(today, result.today)
+        assertEquals(150, result.allTime.charactersRead)
+        assertEquals(15.0, result.allTime.readingTime)
+        assertEquals(36_000, result.allTime.lastReadingSpeed)
+    }
+
+    @Test
+    fun stateAfterDateRollReplacesTodayOnlyWhenDateChanges() {
+        val state = NovelReaderStatisticsState(
+            isTracking = true,
+            session = statistic(dateKey = "2026-07-03", charactersRead = 10),
+            today = statistic(dateKey = "2026-07-03", charactersRead = 20),
+            allTime = statistic(dateKey = "2026-07-03", charactersRead = 30),
+        )
+
+        assertEquals(
+            state,
+            NovelReaderStatisticsPolicy.stateAfterDateRoll(
+                state = state,
+                statistics = emptyList(),
+                title = "Book",
+                dateKey = "2026-07-03",
+            ),
+        )
+
+        val result = NovelReaderStatisticsPolicy.stateAfterDateRoll(
+            state = state,
+            statistics = listOf(statistic(dateKey = "2026-07-04", charactersRead = 99)),
+            title = "Book",
+            dateKey = "2026-07-04",
+        )
+
+        assertEquals(state.session, result.session)
+        assertEquals(statistic(dateKey = "2026-07-04", charactersRead = 99), result.today)
+        assertEquals(state.allTime, result.allTime)
+    }
+
+    @Test
+    fun stateAfterTickUpdatesAllBucketsAndClampsLargeBacktracking() {
+        val result = NovelReaderStatisticsPolicy.stateAfterTick(
+            state = NovelReaderStatisticsState(
+                isTracking = true,
+                session = statistic(charactersRead = 40, readingTime = 10.0),
+                today = statistic(charactersRead = 100, readingTime = 20.0),
+                allTime = statistic(charactersRead = 200, readingTime = 30.0),
+            ),
+            timeDiffSeconds = 10.0,
+            characterDiff = -100,
+            lastStatisticModified = 42,
+        )
+
+        assertEquals(0, result.session.charactersRead)
+        assertEquals(20.0, result.session.readingTime)
+        assertEquals(60, result.today.charactersRead)
+        assertEquals(30.0, result.today.readingTime)
+        assertEquals(160, result.allTime.charactersRead)
+        assertEquals(40.0, result.allTime.readingTime)
+        assertEquals(42, result.allTime.lastStatisticModified)
     }
 
     @Test
