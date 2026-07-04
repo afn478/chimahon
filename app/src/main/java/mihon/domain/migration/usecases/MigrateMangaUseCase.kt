@@ -20,7 +20,7 @@ import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaUpdate
+import tachiyomi.domain.manga.service.MangaMigrationUpdatePolicy
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
@@ -165,28 +165,20 @@ class MigrateMangaUseCase(
                 coverCache.setCustomCoverToCache(target, coverCache.getCustomCoverFile(current.id).inputStream())
             }
 
-            val currentMangaUpdate = MangaUpdate(
-                id = current.id,
-                favorite = false,
-                dateAdded = 0,
-            )
-                .takeIf { replace }
-            val targetMangaUpdate = MangaUpdate(
-                id = target.id,
-                favorite = true,
-                chapterFlags = current.chapterFlags
-                    // KMK -->
-                    .takeIf { MigrationFlag.EXTRA in flags },
-                // KMK <--
-                viewerFlags = current.viewerFlags
-                    // KMK -->
-                    .takeIf { MigrationFlag.EXTRA in flags },
-                // KMK <--
-                dateAdded = if (replace) current.dateAdded else Instant.now().toEpochMilli(),
-                notes = if (MigrationFlag.NOTES in flags) current.notes else null,
+            val targetDateAdded = if (replace) current.dateAdded else Instant.now().toEpochMilli()
+            val mangaUpdates = MangaMigrationUpdatePolicy.migrationUpdates(
+                currentMangaId = current.id,
+                targetMangaId = target.id,
+                replace = replace,
+                targetDateAdded = targetDateAdded,
+                includeExtra = MigrationFlag.EXTRA in flags,
+                includeNotes = MigrationFlag.NOTES in flags,
+                currentChapterFlags = current.chapterFlags,
+                currentViewerFlags = current.viewerFlags,
+                currentNotes = current.notes,
             )
 
-            updateManga.awaitAll(listOfNotNull(currentMangaUpdate, targetMangaUpdate))
+            updateManga.awaitAll(mangaUpdates)
         } catch (e: Throwable) {
             if (e is CancellationException) {
                 throw e

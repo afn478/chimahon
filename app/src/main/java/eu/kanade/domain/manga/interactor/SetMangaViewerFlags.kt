@@ -1,9 +1,7 @@
 package eu.kanade.domain.manga.interactor
 
-import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
-import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
-import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.manga.service.MangaViewerFlagUpdatePolicy
 
 class SetMangaViewerFlags(
     private val mangaRepository: MangaRepository,
@@ -12,9 +10,10 @@ class SetMangaViewerFlags(
     suspend fun awaitSetReadingMode(id: Long, flag: Long) {
         val manga = mangaRepository.getMangaById(id)
         mangaRepository.update(
-            MangaUpdate(
-                id = id,
-                viewerFlags = manga.viewerFlags.setFlag(flag, ReadingMode.MASK.toLong()),
+            MangaViewerFlagUpdatePolicy.readingModeUpdate(
+                mangaId = id,
+                currentFlags = manga.viewerFlags,
+                flag = flag,
             ),
         )
     }
@@ -22,14 +21,11 @@ class SetMangaViewerFlags(
     suspend fun awaitSetOrientation(id: Long, flag: Long) {
         val manga = mangaRepository.getMangaById(id)
         mangaRepository.update(
-            MangaUpdate(
-                id = id,
-                viewerFlags = manga.viewerFlags.setFlag(flag, ReaderOrientation.MASK.toLong()),
+            MangaViewerFlagUpdatePolicy.orientationUpdate(
+                mangaId = id,
+                currentFlags = manga.viewerFlags,
+                flag = flag,
             ),
         )
-    }
-
-    private fun Long.setFlag(flag: Long, mask: Long): Long {
-        return this and mask.inv() or (flag and mask)
     }
 }

@@ -2,8 +2,8 @@ package mihon.domain.upcoming.interactor
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.flow.Flow
-import mihon.domain.upcoming.service.UpcomingMangaUpdatePolicy
-import tachiyomi.domain.library.service.LibraryUpdateCategoryPolicy
+import mihon.domain.upcoming.model.UpcomingMangaCandidate
+import mihon.domain.upcoming.service.UpcomingMangaSelectionPolicy
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
@@ -36,34 +36,32 @@ class GetUpcomingManga(
 
         val includedCategories = libraryPreferences.updateCategories().get().map { it.toLong() }.toSet()
         val excludedCategories = libraryPreferences.updateCategoriesExclude().get().map { it.toLong() }.toSet()
-
-        val listToUpdate = libraryManga.filter {
-            LibraryUpdateCategoryPolicy.shouldInclude(
-                categoryIds = it.categories,
-                includedCategoryIds = includedCategories,
-                excludedCategoryIds = excludedCategories,
-            )
-        }
-
         val restrictions = libraryPreferences.autoUpdateMangaRestrictions().get()
         val today = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
+        val mangaById = libraryManga
+            .map { it.manga }
+            .distinctBy { it.id }
+            .associateBy { it.id }
 
-        return listToUpdate
-            .distinctBy { it.manga.id }
-            .filter {
-                UpcomingMangaUpdatePolicy.shouldUpdate(
+        return UpcomingMangaSelectionPolicy.selectMangaIdsForUpdate(
+            candidates = libraryManga.map {
+                UpcomingMangaCandidate(
+                    mangaId = it.manga.id,
+                    categoryIds = it.categories,
                     updateStrategy = it.manga.updateStrategy,
                     status = it.manga.status,
                     nextUpdate = it.manga.nextUpdate,
                     totalChapters = it.totalChapters,
                     unreadCount = it.unreadCount,
                     hasStarted = it.hasStarted,
-                    restrictions = restrictions,
-                    today = today,
                 )
-            }
-            .map { it.manga }
-            .sortedBy { it.nextUpdate }
+            },
+            includedCategoryIds = includedCategories,
+            excludedCategoryIds = excludedCategories,
+            restrictions = restrictions,
+            today = today,
+        )
+            .mapNotNull { mangaById[it] }
     }
     // KMK <--
 }

@@ -1,11 +1,10 @@
 package tachiyomi.domain.category.interactor
 
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.model.CategoryUpdate
 import tachiyomi.domain.category.repository.CategoryRepository
+import tachiyomi.domain.category.service.CategorySortModePolicy
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
-import tachiyomi.domain.library.model.plus
 import tachiyomi.domain.library.service.LibraryPreferences
 import kotlin.random.Random
 
@@ -15,28 +14,23 @@ class SetSortModeForCategory(
 ) {
 
     suspend fun await(categoryId: Long?, type: LibrarySort.Type, direction: LibrarySort.Direction) {
-        // SY -->
-        if (preferences.groupLibraryBy().get() != LibraryGroup.BY_DEFAULT) {
-            preferences.sortingMode().set(LibrarySort(type, direction))
-            return
-        }
-        // SY <--
-        val category = categoryId?.let { categoryRepository.get(it) }
-        val flags = (category?.flags ?: 0) + type + direction
-        if (type == LibrarySort.Type.Random) {
+        val groupLibraryMode = preferences.groupLibraryBy().get()
+        val defaultGroupMode = groupLibraryMode == LibraryGroup.BY_DEFAULT
+        val category = if (defaultGroupMode) categoryId?.let { categoryRepository.get(it) } else null
+        val plan = CategorySortModePolicy.plan(
+            groupLibraryMode = groupLibraryMode,
+            category = category,
+            categorizedDisplaySettings = defaultGroupMode && preferences.categorizedDisplaySettings().get(),
+            type = type,
+            direction = direction,
+        )
+
+        if (plan.refreshRandomSortSeed) {
             preferences.randomSortSeed().set(Random.nextInt())
         }
-        if (category != null && preferences.categorizedDisplaySettings().get()) {
-            categoryRepository.updatePartial(
-                CategoryUpdate(
-                    id = category.id,
-                    flags = flags,
-                ),
-            )
-        } else {
-            preferences.sortingMode().set(LibrarySort(type, direction))
-            categoryRepository.updateAllFlags(flags)
-        }
+        plan.globalSort?.let { preferences.sortingMode().set(it) }
+        plan.categoryUpdate?.let { categoryRepository.updatePartial(it) }
+        plan.allCategoryFlags?.let { categoryRepository.updateAllFlags(it) }
     }
 
     suspend fun await(

@@ -5,6 +5,8 @@ import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.repository.CategoryRepository
+import tachiyomi.domain.category.service.CategoryCreationPolicy
+import tachiyomi.domain.category.service.CategorySortModePolicy
 import tachiyomi.domain.library.service.LibraryPreferences
 
 class CreateCategoryWithName(
@@ -14,21 +16,15 @@ class CreateCategoryWithName(
 
     private val initialFlags: Long
         get() {
-            val sort = preferences.sortingMode().get()
-            return sort.type.flag or sort.direction.flag
+            return CategorySortModePolicy.flagsFor(preferences.sortingMode().get())
         }
 
     suspend fun await(name: String): Result = withNonCancellableContext {
         val categories = categoryRepository.getAll()
-        val nextOrder = categories.maxOfOrNull { it.order }?.plus(1) ?: 0
-        val newCategory = Category(
-            id = 0,
+        val newCategory = CategoryCreationPolicy.create(
             name = name,
-            order = nextOrder,
+            existingCategories = categories,
             flags = initialFlags,
-            // KMK -->
-            hidden = false,
-            // KMK <--
         )
 
         try {

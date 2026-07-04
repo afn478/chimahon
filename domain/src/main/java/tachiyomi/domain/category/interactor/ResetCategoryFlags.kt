@@ -1,7 +1,7 @@
 package tachiyomi.domain.category.interactor
 
 import tachiyomi.domain.category.repository.CategoryRepository
-import tachiyomi.domain.library.model.plus
+import tachiyomi.domain.category.service.CategorySortModePolicy
 import tachiyomi.domain.library.service.LibraryPreferences
 
 class ResetCategoryFlags(
@@ -11,6 +11,6 @@ class ResetCategoryFlags(
 
     suspend fun await() {
         val sort = preferences.sortingMode().get()
-        categoryRepository.updateAllFlags(sort.type + sort.direction)
+        categoryRepository.updateAllFlags(CategorySortModePolicy.flagsFor(sort))
     }
 }

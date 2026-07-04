@@ -20,12 +20,12 @@ import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.chapter.model.toChapterUpdate
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.chapter.service.ChapterRecognition
+import tachiyomi.domain.chapter.service.ChapterSyncPolicy
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.source.local.isLocal
 import java.lang.Long.max
 import java.time.ZonedDateTime
-import java.util.TreeSet
 
 class SyncChaptersWithSource(
     private val downloadManager: DownloadManager,
@@ -158,75 +158,19 @@ class SyncChaptersWithSource(
             return emptyList()
         }
 
-        val changedOrDuplicateReadUrls = mutableSetOf<String>()
-
-        val deletedChapterNumbers = TreeSet<Double>()
-        val deletedReadChapterNumbers = TreeSet<Double>()
-        val deletedBookmarkedChapterNumbers = TreeSet<Double>()
-
-        val readChapterNumbers = dbChapters
-            .asSequence()
-            .filter { it.read && it.isRecognizedNumber }
-            .map { it.chapterNumber }
-            .toSet()
-
-        removedChapters.forEach { chapter ->
-            if (chapter.read) deletedReadChapterNumbers.add(chapter.chapterNumber)
-            if (chapter.bookmark) deletedBookmarkedChapterNumbers.add(chapter.chapterNumber)
-            deletedChapterNumbers.add(chapter.chapterNumber)
-        }
-
-        val deletedChapterNumberDateFetchMap = removedChapters.sortedByDescending { it.dateFetch }
-            .associate { it.chapterNumber to it.dateFetch }
-
         val markDuplicateAsRead = libraryPreferences.markDuplicateReadChapterAsRead().get()
             .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_NEW)
 
-        // Date fetch is set in such a way that the upper ones will have bigger value than the lower ones
-        // Sources MUST return the chapters from most to less recent, which is common.
-        var itemCount = newChapters.size
-        var updatedToAdd = newChapters.map { toAddItem ->
-            var chapter = toAddItem.copy(dateFetch = nowMillis + itemCount--)
-
-            if (chapter.chapterNumber in readChapterNumbers && markDuplicateAsRead) {
-                changedOrDuplicateReadUrls.add(chapter.url)
-                chapter = chapter.copy(read = true)
-            }
-
-            if (!chapter.isRecognizedNumber || chapter.chapterNumber !in deletedChapterNumbers) return@map chapter
-
-            chapter = chapter.copy(
-                read = chapter.chapterNumber in deletedReadChapterNumbers,
-                bookmark = chapter.chapterNumber in deletedBookmarkedChapterNumbers,
-            )
-
-            // Try to use the fetch date of the original entry to not pollute 'Updates' tab
-            deletedChapterNumberDateFetchMap[chapter.chapterNumber]?.let {
-                chapter = chapter.copy(dateFetch = it)
-            }
-
-            changedOrDuplicateReadUrls.add(chapter.url)
-
-            chapter
-        }
-
-        // --> EXH (carry over reading progress)
-        if (manga.isEhBasedManga()) {
-            val hasNewChapters = updatedToAdd.any { it.url !in changedOrDuplicateReadUrls }
-            if (hasNewChapters) {
-                val max = dbChapters.maxOfOrNull { it.lastPageRead }
-                if (max != null && max > 0) {
-                    updatedToAdd = updatedToAdd.map {
-                        if (it.url !in changedOrDuplicateReadUrls) {
-                            it.copy(lastPageRead = max)
-                        } else {
-                            it
-                        }
-                    }
-                }
-            }
-        }
-        // <-- EXH
+        val newChapterSyncResult = ChapterSyncPolicy.prepareNewChaptersForInsert(
+            newChapters = newChapters,
+            dbChapters = dbChapters,
+            removedChapters = removedChapters,
+            nowMillis = nowMillis,
+            markDuplicateAsRead = markDuplicateAsRead,
+            carryOverLastPageRead = manga.isEhBasedManga(),
+        )
+        val changedOrDuplicateReadUrls = newChapterSyncResult.changedOrDuplicateReadUrls
+        var updatedToAdd = newChapterSyncResult.chaptersToAdd
 
         if (removedChapters.isNotEmpty()) {
             val toDeleteIds = removedChapters.map { it.id }

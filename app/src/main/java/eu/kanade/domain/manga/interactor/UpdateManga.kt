@@ -9,6 +9,8 @@ import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.manga.service.MangaSourceUpdatePolicy
+import tachiyomi.domain.manga.service.MangaUserUpdatePolicy
 import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -42,14 +44,6 @@ class UpdateManga(
             ""
         }
 
-        // if the manga isn't a favorite (or 'update titles' preference is enabled), set its title from source and update in db
-        val title =
-            if (remoteTitle.isNotEmpty() && (!localManga.favorite || libraryPreferences.updateMangaTitles().get())) {
-                remoteTitle
-            } else {
-                null
-            }
-
         val coverLastModified =
             when {
                 // Never refresh covers if the url is empty to avoid "losing" existing covers
@@ -66,23 +60,17 @@ class UpdateManga(
                 }
             }
 
-        val thumbnailUrl = remoteManga.thumbnail_url?.takeIf { it.isNotEmpty() }
-
-        val success = mangaRepository.update(
-            MangaUpdate(
-                id = localManga.id,
-                title = title,
-                coverLastModified = coverLastModified,
-                author = remoteManga.author,
-                artist = remoteManga.artist,
-                description = remoteManga.description,
-                genre = remoteManga.getGenres(),
-                thumbnailUrl = thumbnailUrl,
-                status = remoteManga.status.toLong(),
-                updateStrategy = remoteManga.update_strategy,
-                initialized = true,
-            ),
+        val mangaUpdate = MangaSourceUpdatePolicy.sourceMetadataUpdate(
+            mangaId = localManga.id,
+            remoteManga = remoteManga,
+            remoteTitle = remoteTitle,
+            localFavorite = localManga.favorite,
+            updateTitle = libraryPreferences.updateMangaTitles().get(),
+            coverLastModified = coverLastModified,
         )
+        val success = mangaRepository.update(mangaUpdate)
+        val title = mangaUpdate.title
+
         if (success && title != null) {
             downloadManager.renameManga(localManga, title)
         }
@@ -100,20 +88,31 @@ class UpdateManga(
     }
 
     suspend fun awaitUpdateLastUpdate(mangaId: Long): Boolean {
-        return mangaRepository.update(MangaUpdate(id = mangaId, lastUpdate = Instant.now().toEpochMilli()))
+        return mangaRepository.update(
+            MangaUserUpdatePolicy.lastUpdateUpdate(
+                mangaId = mangaId,
+                updatedAtMillis = Instant.now().toEpochMilli(),
+            ),
+        )
     }
 
     suspend fun awaitUpdateCoverLastModified(mangaId: Long): Boolean {
-        return mangaRepository.update(MangaUpdate(id = mangaId, coverLastModified = Instant.now().toEpochMilli()))
+        return mangaRepository.update(
+            MangaUserUpdatePolicy.coverLastModifiedUpdate(
+                mangaId = mangaId,
+                modifiedAtMillis = Instant.now().toEpochMilli(),
+            ),
+        )
     }
 
     suspend fun awaitUpdateFavorite(mangaId: Long, favorite: Boolean): Boolean {
-        val dateAdded = when (favorite) {
-            true -> Instant.now().toEpochMilli()
-            false -> 0
-        }
+        val addedAtMillis = if (favorite) Instant.now().toEpochMilli() else 0L
         return mangaRepository.update(
-            MangaUpdate(id = mangaId, favorite = favorite, dateAdded = dateAdded),
+            MangaUserUpdatePolicy.favoriteUpdate(
+                mangaId = mangaId,
+                favorite = favorite,
+                addedAtMillis = addedAtMillis,
+            ),
         )
     }
 }

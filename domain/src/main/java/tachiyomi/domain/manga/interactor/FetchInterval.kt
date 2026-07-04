@@ -7,8 +7,6 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.time.temporal.ChronoUnit
-import kotlin.math.absoluteValue
 
 class FetchInterval(
     private val getChaptersByMangaId: GetChaptersByMangaId,
@@ -28,9 +26,19 @@ class FetchInterval(
         } else {
             window
         }
-        val nextUpdate = calculateNextUpdate(manga, interval, dateTime, currentWindow)
 
-        return MangaUpdate(id = manga.id, nextUpdate = nextUpdate, fetchInterval = interval)
+        return FetchIntervalPolicy.mangaUpdate(
+            mangaId = manga.id,
+            currentNextUpdate = manga.nextUpdate,
+            latestUpdateEpochDay = localEpochDay(
+                if (manga.lastUpdate > 0) manga.lastUpdate else Instant.now().toEpochMilli(),
+                dateTime.zone,
+            ),
+            todayEpochDay = dateTime.toLocalDate().toEpochDay(),
+            currentOffsetMillis = dateTime.offset.totalSeconds * 1000L,
+            intervalDays = interval,
+            window = currentWindow,
+        )
     }
 
     fun getWindow(dateTime: ZonedDateTime): Pair<Long, Long> {
@@ -41,71 +49,20 @@ class FetchInterval(
     }
 
     internal fun calculateInterval(chapters: List<Chapter>, zone: ZoneId): Int {
-        val chapterWindow = if (chapters.size <= 8) 3 else 10
-
-        val uploadDates = chapters.asSequence()
-            .filter { it.dateUpload > 0L }
-            .sortedByDescending { it.dateUpload }
-            .map {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it.dateUpload), zone)
-                    .toLocalDate()
-                    .atStartOfDay()
-            }
-            .distinct()
-            .take(chapterWindow)
-            .toList()
-
-        val fetchDates = chapters.asSequence()
-            .sortedByDescending { it.dateFetch }
-            .map {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it.dateFetch), zone)
-                    .toLocalDate()
-                    .atStartOfDay()
-            }
-            .distinct()
-            .take(chapterWindow)
-            .toList()
-
-        val interval = when {
-            // Enough upload date from source
-            uploadDates.size >= 3 -> {
-                val ranges = uploadDates.windowed(2).map { x -> x[1].until(x[0], ChronoUnit.DAYS) }.sorted()
-                ranges[(ranges.size - 1) / 2].toInt()
-            }
-            // Enough fetch date from client
-            fetchDates.size >= 3 -> {
-                val ranges = fetchDates.windowed(2).map { x -> x[1].until(x[0], ChronoUnit.DAYS) }.sorted()
-                ranges[(ranges.size - 1) / 2].toInt()
-            }
-            // Default to 7 days
-            else -> 7
+        return FetchIntervalPolicy.calculateInterval(chapters) { timestampMillis ->
+            ZonedDateTime.ofInstant(Instant.ofEpochMilli(timestampMillis), zone)
+                .toLocalDate()
+                .toEpochDay()
         }
-
-        return FetchIntervalPolicy.coerceInterval(interval)
     }
 
-    private fun calculateNextUpdate(
-        manga: Manga,
-        interval: Int,
-        dateTime: ZonedDateTime,
-        window: Pair<Long, Long>,
+    private fun localEpochDay(
+        timestampMillis: Long,
+        zone: ZoneId,
     ): Long {
-        if (manga.nextUpdate in window.first.rangeTo(window.second + 1)) {
-            return manga.nextUpdate
-        }
-
-        val latestDate = ZonedDateTime.ofInstant(
-            if (manga.lastUpdate > 0) Instant.ofEpochMilli(manga.lastUpdate) else Instant.now(),
-            dateTime.zone,
-        )
+        return ZonedDateTime.ofInstant(Instant.ofEpochMilli(timestampMillis), zone)
             .toLocalDate()
-            .atStartOfDay()
-        val timeSinceLatest = ChronoUnit.DAYS.between(latestDate, dateTime).toInt()
-        val cycle = timeSinceLatest.floorDiv(
-            interval.absoluteValue.takeIf { interval < 0 }
-                ?: FetchIntervalPolicy.increaseIntervalWhenOverdue(interval, timeSinceLatest),
-        )
-        return latestDate.plusDays((cycle + 1) * interval.absoluteValue.toLong()).toEpochSecond(dateTime.offset) * 1000
+            .toEpochDay()
     }
 
     companion object {
