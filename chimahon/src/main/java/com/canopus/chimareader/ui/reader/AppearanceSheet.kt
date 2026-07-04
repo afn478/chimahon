@@ -3,11 +3,9 @@ package com.canopus.chimareader.ui.reader
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -27,18 +25,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import app.chimahon.shared.reader.ReaderAddThemeButton
-import app.chimahon.shared.reader.ReaderAppearanceAdvancedToggleRow
 import app.chimahon.shared.reader.ReaderAppearanceBooleanSegmentedControl
-import app.chimahon.shared.reader.ReaderAppearanceSectionTitle
-import app.chimahon.shared.reader.ReaderAppearanceSlider
-import app.chimahon.shared.reader.ReaderAppearanceSwitchRow
 import app.chimahon.shared.reader.ReaderCustomThemeDialog
 import app.chimahon.shared.reader.ReaderDeleteThemeDialog
-import app.chimahon.shared.reader.ReaderFontActionRow
-import app.chimahon.shared.reader.ReaderFontDropdown
+import app.chimahon.shared.reader.ReaderLayoutSection
+import app.chimahon.shared.reader.ReaderMarginsSection
 import app.chimahon.shared.reader.ReaderRenameThemeDialog
-import app.chimahon.shared.reader.ReaderThemeSwatchButton
+import app.chimahon.shared.reader.ReaderThemeSection
+import app.chimahon.shared.reader.ReaderTypographySection
 import com.canopus.chimareader.data.CustomReaderTheme
 import com.canopus.chimareader.data.FontManager
 import kotlinx.coroutines.launch
@@ -122,78 +116,45 @@ fun AppearanceSheet(
             )
 
             // Theme (moved to top)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val themeSectionState = remember(
-                    viewModel.customThemes,
-                    viewModel.theme,
-                    viewModel.customBackgroundColor,
-                    viewModel.customTextColor,
-                    viewModel.systemLightSepia,
-                ) {
-                    NovelReaderAppearanceSheetPolicy.themeSectionState(
-                        theme = viewModel.theme,
-                        customThemes = viewModel.customThemes,
-                        customBackgroundColor = viewModel.customBackgroundColor,
-                        customTextColor = viewModel.customTextColor,
-                        systemLightSepia = viewModel.systemLightSepia,
-                    )
-                }
-                ReaderAppearanceSectionTitle(themeSectionState.title)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    themeSectionState.fixedOptions.forEach { option ->
-                        ReaderThemeSwatchButton(
-                            label = option.label,
-                            backgroundColor = option.backgroundColor,
-                            textColor = option.textColor,
-                            splitBackgroundColor = option.splitBackgroundColor,
-                            selected = viewModel.theme == option.theme,
-                            onClick = { viewModel.updateTheme(option.theme) },
-                        )
-                    }
-                    themeSectionState.customChoices.forEach { choice ->
-                        val customTheme = choice.theme
-                        ReaderThemeSwatchButton(
-                            label = choice.label,
-                            backgroundColor = customTheme.backgroundColor,
-                            textColor = customTheme.textColor,
-                            selected = choice.selected,
-                            onClick = { viewModel.applyCustomTheme(customTheme) },
-                            onRenameClick = {
-                                renameTarget = customTheme
-                                renameInput = customTheme.name
-                            },
-                            onDeleteClick = { deleteTarget = customTheme },
-                        )
-                    }
-                    ReaderAddThemeButton(
-                        onClick = {
-                            val draft = NovelReaderAppearanceSheetPolicy.newCustomThemeDraft(
-                                backgroundColor = viewModel.customBackgroundColor,
-                                textColor = viewModel.customTextColor,
-                            )
-                            draftThemeName = draft.name
-                            draftBackgroundColor = draft.backgroundColor
-                            draftTextColor = draft.textColor
-                            draftBackgroundInput = draft.backgroundColorInput
-                            draftTextInput = draft.textColorInput
-                            showCustomThemeDialog = true
-                        },
-                    )
-                }
-
-                val systemLightSepiaSwitchState = themeSectionState.systemLightSepia
-                if (systemLightSepiaSwitchState.visible) {
-                    ReaderAppearanceSwitchRow(
-                        state = systemLightSepiaSwitchState.switchState,
-                        onCheckedChange = { viewModel.updateSystemLightSepia(it) },
-                    )
-                }
+            val themeSectionState = remember(
+                viewModel.customThemes,
+                viewModel.theme,
+                viewModel.customBackgroundColor,
+                viewModel.customTextColor,
+                viewModel.systemLightSepia,
+            ) {
+                NovelReaderAppearanceSheetPolicy.themeSectionState(
+                    theme = viewModel.theme,
+                    customThemes = viewModel.customThemes,
+                    customBackgroundColor = viewModel.customBackgroundColor,
+                    customTextColor = viewModel.customTextColor,
+                    systemLightSepia = viewModel.systemLightSepia,
+                )
             }
+            ReaderThemeSection(
+                state = themeSectionState,
+                selectedTheme = viewModel.theme,
+                onThemeSelected = { viewModel.updateTheme(it) },
+                onCustomThemeSelected = { viewModel.applyCustomTheme(it) },
+                onCustomThemeRename = { customTheme ->
+                    renameTarget = customTheme
+                    renameInput = customTheme.name
+                },
+                onCustomThemeDelete = { deleteTarget = it },
+                onAddCustomTheme = {
+                    val draft = NovelReaderAppearanceSheetPolicy.newCustomThemeDraft(
+                        backgroundColor = viewModel.customBackgroundColor,
+                        textColor = viewModel.customTextColor,
+                    )
+                    draftThemeName = draft.name
+                    draftBackgroundColor = draft.backgroundColor
+                    draftTextColor = draft.textColor
+                    draftBackgroundInput = draft.backgroundColorInput
+                    draftTextInput = draft.textColorInput
+                    showCustomThemeDialog = true
+                },
+                onSystemLightSepiaChange = { viewModel.updateSystemLightSepia(it) },
+            )
 
             // Layout Mode
             ReaderAppearanceBooleanSegmentedControl(
@@ -206,193 +167,96 @@ fun AppearanceSheet(
             )
 
             // Typography
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                val typographySectionState = remember(
-                    viewModel.selectedFont,
-                    importedFonts,
-                    isImporting,
-                    viewModel.fontSize,
-                    viewModel.lineHeight,
-                    viewModel.hideFurigana,
-                    viewModel.keepScreenOn,
-                ) {
-                    NovelReaderAppearanceSheetPolicy.typographySectionState(
-                        selectedFont = viewModel.selectedFont,
-                        defaultFonts = FontManager.defaultFonts,
-                        importedFonts = importedFonts,
-                        isImporting = isImporting,
-                        fontSize = viewModel.fontSize,
-                        lineHeight = viewModel.lineHeight,
-                        hideFurigana = viewModel.hideFurigana,
-                        keepScreenOn = viewModel.keepScreenOn,
-                    )
-                }
-                ReaderAppearanceSectionTitle(typographySectionState.title)
-
-                // Font Family
-                val fontDropdownState = typographySectionState.fontDropdown
-                ReaderFontDropdown(
-                    state = fontDropdownState,
-                    onFontSelected = { viewModel.updateSelectedFont(it) },
-                )
-
-                // Import Font Button
-                val fontImportButtonState = typographySectionState.fontImportButton
-                val fontDeleteButtonState = typographySectionState.fontDeleteButton
-                ReaderFontActionRow(
-                    importState = fontImportButtonState,
-                    deleteState = fontDeleteButtonState,
-                    onImportClick = {
-                        fontPickerLauncher.launch(
-                            fontImportButtonState.mimeTypes.toTypedArray(),
-                        )
-                    },
-                    onDeleteClick = {
-                        NovelReaderAppearanceSheetPolicy.fontDeleteAction(
-                            selectedFont = viewModel.selectedFont,
-                            importedFonts = importedFonts,
-                            defaultFonts = FontManager.defaultFonts,
-                        )?.let { action ->
-                            FontManager.deleteFont(context, action.fontName)
-                            importedFonts = FontManager.getImportedFonts(context)
-                            viewModel.updateSelectedFont(action.fallbackFont)
-                        }
-                    },
-                )
-
-                // Font Size
-                ReaderAppearanceSlider(
-                    state = typographySectionState.fontSizeSlider,
-                    onValueChange = {
-                        viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it))
-                    },
-                )
-
-                // Line Height
-                ReaderAppearanceSlider(
-                    state = typographySectionState.lineHeightSlider,
-                    onValueChange = {
-                        viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it))
-                    },
-                )
-
-                // Hide Furigana
-                ReaderAppearanceSwitchRow(
-                    state = typographySectionState.hideFuriganaSwitch,
-                    onCheckedChange = { viewModel.updateHideFurigana(it) },
-                )
-
-                // Keep screen on
-                ReaderAppearanceSwitchRow(
-                    state = typographySectionState.keepScreenOnSwitch,
-                    onCheckedChange = { viewModel.updateKeepScreenOn(it) },
+            val typographySectionState = remember(
+                viewModel.selectedFont,
+                importedFonts,
+                isImporting,
+                viewModel.fontSize,
+                viewModel.lineHeight,
+                viewModel.hideFurigana,
+                viewModel.keepScreenOn,
+            ) {
+                NovelReaderAppearanceSheetPolicy.typographySectionState(
+                    selectedFont = viewModel.selectedFont,
+                    defaultFonts = FontManager.defaultFonts,
+                    importedFonts = importedFonts,
+                    isImporting = isImporting,
+                    fontSize = viewModel.fontSize,
+                    lineHeight = viewModel.lineHeight,
+                    hideFurigana = viewModel.hideFurigana,
+                    keepScreenOn = viewModel.keepScreenOn,
                 )
             }
+            ReaderTypographySection(
+                state = typographySectionState,
+                onFontSelected = { viewModel.updateSelectedFont(it) },
+                onImportFontClick = {
+                    fontPickerLauncher.launch(
+                        typographySectionState.fontImportButton.mimeTypes.toTypedArray(),
+                    )
+                },
+                onDeleteFontClick = {
+                    NovelReaderAppearanceSheetPolicy.fontDeleteAction(
+                        selectedFont = viewModel.selectedFont,
+                        importedFonts = importedFonts,
+                        defaultFonts = FontManager.defaultFonts,
+                    )?.let { action ->
+                        FontManager.deleteFont(context, action.fontName)
+                        importedFonts = FontManager.getImportedFonts(context)
+                        viewModel.updateSelectedFont(action.fallbackFont)
+                    }
+                },
+                onFontSizeChange = {
+                    viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it))
+                },
+                onLineHeightChange = {
+                    viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it))
+                },
+                onHideFuriganaChange = { viewModel.updateHideFurigana(it) },
+                onKeepScreenOnChange = { viewModel.updateKeepScreenOn(it) },
+            )
 
             // Margins
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                val marginsSectionState = NovelReaderAppearanceSheetPolicy.marginsSectionState(
-                    horizontalPadding = viewModel.horizontalPadding,
-                    verticalPadding = viewModel.verticalPadding,
-                )
-                ReaderAppearanceSectionTitle(marginsSectionState.title)
-
-                ReaderAppearanceSlider(
-                    state = marginsSectionState.horizontalPaddingSlider,
-                    onValueChange = {
-                        viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it))
-                    },
-                )
-
-                ReaderAppearanceSlider(
-                    state = marginsSectionState.verticalPaddingSlider,
-                    onValueChange = {
-                        viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it))
-                    },
-                )
-            }
+            val marginsSectionState = NovelReaderAppearanceSheetPolicy.marginsSectionState(
+                horizontalPadding = viewModel.horizontalPadding,
+                verticalPadding = viewModel.verticalPadding,
+            )
+            ReaderMarginsSection(
+                state = marginsSectionState,
+                onHorizontalPaddingChange = {
+                    viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it))
+                },
+                onVerticalPaddingChange = {
+                    viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it))
+                },
+            )
 
             // Layout Settings
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                val layoutSectionState = NovelReaderAppearanceSheetPolicy.layoutSectionState(
-                    verticalWriting = viewModel.verticalWriting,
-                    tapZonePercent = viewModel.tapZonePercent,
-                    layoutAdvanced = viewModel.layoutAdvanced,
-                    avoidPageBreak = viewModel.avoidPageBreak,
-                    justifyText = viewModel.justifyText,
-                    characterSpacing = viewModel.characterSpacing,
-                    paragraphSpacing = viewModel.paragraphSpacing,
-                )
-                ReaderAppearanceSectionTitle(layoutSectionState.title)
-
-                // Writing Mode
-                ReaderAppearanceBooleanSegmentedControl(
-                    state = layoutSectionState.writingMode,
-                    onOptionSelected = { viewModel.updateVerticalWriting(it) },
-                )
-
-                // Tap Zone Size
-                ReaderAppearanceSlider(
-                    state = layoutSectionState.tapZoneSlider,
-                    onValueChange = {
-                        viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it))
-                    },
-                )
-
-                // Advanced Header
-                val advancedToggleState = layoutSectionState.advancedToggle
-                ReaderAppearanceAdvancedToggleRow(
-                    label = layoutSectionState.advancedLabel,
-                    state = advancedToggleState,
-                    onClick = { viewModel.updateLayoutAdvanced(advancedToggleState.nextExpanded) },
-                )
-
-                // Advanced settings - only visible when enabled
-                if (advancedToggleState.expanded) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        // Avoid Page Break
-                        ReaderAppearanceSwitchRow(
-                            state = layoutSectionState.avoidPageBreakSwitch,
-                            onCheckedChange = { viewModel.updateAvoidPageBreak(it) },
-                            compact = true,
-                        )
-
-                        // Justify Text
-                        ReaderAppearanceSwitchRow(
-                            state = layoutSectionState.justifyTextSwitch,
-                            onCheckedChange = { viewModel.updateJustifyText(it) },
-                            compact = true,
-                        )
-
-                        // Character Spacing
-                        ReaderAppearanceSlider(
-                            state = layoutSectionState.characterSpacingSlider,
-                            onValueChange = {
-                                viewModel.updateCharacterSpacing(
-                                    NovelReaderAppearanceSheetPolicy.snapTwentieth(it),
-                                )
-                            },
-                            compact = true,
-                        )
-
-                        // Paragraph Spacing
-                        ReaderAppearanceSlider(
-                            state = layoutSectionState.paragraphSpacingSlider,
-                            onValueChange = {
-                                viewModel.updateParagraphSpacing(
-                                    NovelReaderAppearanceSheetPolicy.snapTwentieth(it),
-                                )
-                            },
-                            compact = true,
-                        )
-                    }
-                }
-            }
+            val layoutSectionState = NovelReaderAppearanceSheetPolicy.layoutSectionState(
+                verticalWriting = viewModel.verticalWriting,
+                tapZonePercent = viewModel.tapZonePercent,
+                layoutAdvanced = viewModel.layoutAdvanced,
+                avoidPageBreak = viewModel.avoidPageBreak,
+                justifyText = viewModel.justifyText,
+                characterSpacing = viewModel.characterSpacing,
+                paragraphSpacing = viewModel.paragraphSpacing,
+            )
+            ReaderLayoutSection(
+                state = layoutSectionState,
+                onWritingModeChange = { viewModel.updateVerticalWriting(it) },
+                onTapZonePercentChange = {
+                    viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it))
+                },
+                onAdvancedExpandedChange = { viewModel.updateLayoutAdvanced(it) },
+                onAvoidPageBreakChange = { viewModel.updateAvoidPageBreak(it) },
+                onJustifyTextChange = { viewModel.updateJustifyText(it) },
+                onCharacterSpacingChange = {
+                    viewModel.updateCharacterSpacing(NovelReaderAppearanceSheetPolicy.snapTwentieth(it))
+                },
+                onParagraphSpacingChange = {
+                    viewModel.updateParagraphSpacing(NovelReaderAppearanceSheetPolicy.snapTwentieth(it))
+                },
+            )
 
             // Additional app-side settings (like volume buttons)
             additionalSettings()
