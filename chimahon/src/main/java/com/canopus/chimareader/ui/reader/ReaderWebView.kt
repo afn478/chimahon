@@ -35,6 +35,7 @@ import tachiyomi.domain.reader.service.NovelReaderWebBridgePolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandActionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebGeometryPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebHostPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebInjectionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebLoadPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebNavigationPolicy
@@ -103,6 +104,7 @@ fun ReaderWebView(
     AndroidView(
         modifier = modifier,
         factory = { context ->
+            val hostSettings = NovelReaderWebHostPolicy.defaultHostSettings()
             ReaderAndroidWebView(
                 context = context,
                 readerJs = loadAssetText(context, "novel/reader.js"),
@@ -124,21 +126,21 @@ fun ReaderWebView(
                 onInternalLinkClicked = onInternalLinkClicked,
             ).apply {
                 setSelectionRectsCallback(onSelectionRectsReceived)
-                settings.allowFileAccess = true
-                settings.allowContentAccess = true
-                settings.allowFileAccessFromFileURLs = true
-                settings.allowUniversalAccessFromFileURLs = true
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                settings.builtInZoomControls = false
-                settings.displayZoomControls = false
-                settings.loadWithOverviewMode = false
-                settings.useWideViewPort = true
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                isVerticalScrollBarEnabled = false
-                isHorizontalScrollBarEnabled = false
-                overScrollMode = WebView.OVER_SCROLL_NEVER
+                settings.allowFileAccess = hostSettings.allowFileAccess
+                settings.allowContentAccess = hostSettings.allowContentAccess
+                settings.allowFileAccessFromFileURLs = hostSettings.allowFileAccessFromFileUrls
+                settings.allowUniversalAccessFromFileURLs = hostSettings.allowUniversalAccessFromFileUrls
+                settings.javaScriptEnabled = hostSettings.javaScriptEnabled
+                settings.domStorageEnabled = hostSettings.domStorageEnabled
+                settings.cacheMode = hostSettings.cacheMode()
+                settings.builtInZoomControls = hostSettings.builtInZoomControls
+                settings.displayZoomControls = hostSettings.displayZoomControls
+                settings.loadWithOverviewMode = hostSettings.loadWithOverviewMode
+                settings.useWideViewPort = hostSettings.useWideViewPort
+                settings.mixedContentMode = hostSettings.mixedContentMode()
+                isVerticalScrollBarEnabled = hostSettings.verticalScrollBarEnabled
+                isHorizontalScrollBarEnabled = hostSettings.horizontalScrollBarEnabled
+                overScrollMode = hostSettings.overScrollMode()
                 webChromeClient = object : WebChromeClient() {
                     override fun onConsoleMessage(message: ConsoleMessage): Boolean {
                         Log.d("HoshiReader", "${message.message()} [line ${message.lineNumber()}]")
@@ -723,5 +725,25 @@ private class ReaderJavascriptBridge(
 private fun loadAssetText(context: Context, path: String): String {
     return context.assets.open(path).use { input ->
         BufferedReader(input.reader()).readText()
+    }
+}
+
+private fun NovelReaderWebHostPolicy.HostSettings.cacheMode(): Int {
+    return when (cachePolicy) {
+        NovelReaderWebHostPolicy.CachePolicy.NO_CACHE -> WebSettings.LOAD_NO_CACHE
+    }
+}
+
+private fun NovelReaderWebHostPolicy.HostSettings.mixedContentMode(): Int {
+    return if (allowMixedContent) {
+        WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+    } else {
+        WebSettings.MIXED_CONTENT_NEVER_ALLOW
+    }
+}
+
+private fun NovelReaderWebHostPolicy.HostSettings.overScrollMode(): Int {
+    return when (overScrollPolicy) {
+        NovelReaderWebHostPolicy.OverScrollPolicy.NEVER -> WebView.OVER_SCROLL_NEVER
     }
 }
