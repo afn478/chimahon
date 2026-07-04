@@ -88,6 +88,51 @@ class NovelReaderWebBridgePolicyTest {
     }
 
     @Test
+    fun textSelectionActionIgnoresBlankWords() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.TextSelectionAction.Ignore,
+            NovelReaderWebBridgePolicy.textSelectionAction(
+                word = "   ",
+                sentence = "Ignored sentence",
+                x = 10.0,
+                y = 20.0,
+                width = 30.0,
+                height = 40.0,
+                viewportLeft = 100.0,
+                viewportTop = 200.0,
+                scale = 2.0,
+            ),
+        )
+    }
+
+    @Test
+    fun textSelectionActionMapsCssBoundsToScreenBounds() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.TextSelectionAction.ShowSelection(
+                word = "word",
+                sentence = "Selected word in sentence",
+                bounds = NovelReaderWebGeometryPolicy.Bounds(
+                    x = 120.0,
+                    y = 240.0,
+                    width = 60.0,
+                    height = 80.0,
+                ),
+            ),
+            NovelReaderWebBridgePolicy.textSelectionAction(
+                word = "word",
+                sentence = "Selected word in sentence",
+                x = 10.0,
+                y = 20.0,
+                width = 30.0,
+                height = 40.0,
+                viewportLeft = 100.0,
+                viewportTop = 200.0,
+                scale = 2.0,
+            ),
+        )
+    }
+
+    @Test
     fun nativeCallbackBridgeScriptInstallsReaderBridgeCallbacks() {
         val script = NovelReaderWebBridgePolicy.nativeCallbackBridgeScript(
             nativeBridgeName = "Native'Bridge",

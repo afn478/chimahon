@@ -416,23 +416,32 @@ private class ReaderAndroidWebView(
                 val density = context.resources.displayMetrics.density
                 val loc = IntArray(2)
                 getLocationOnScreen(loc)
-                val bounds = NovelReaderWebGeometryPolicy.cssBoundsToScreenBounds(
-                    x = x.toDouble(),
-                    y = y.toDouble(),
-                    width = w.toDouble(),
-                    height = h.toDouble(),
-                    viewportLeft = loc[0].toDouble(),
-                    viewportTop = loc[1].toDouble(),
-                    scale = density.toDouble(),
-                )
-                onTextSelectedCallback(
-                    word,
-                    sentence,
-                    bounds.x.toFloat(),
-                    bounds.y.toFloat(),
-                    bounds.width.toFloat(),
-                    bounds.height.toFloat(),
-                )
+                when (
+                    val action = NovelReaderWebBridgePolicy.textSelectionAction(
+                        word = word,
+                        sentence = sentence,
+                        x = x.toDouble(),
+                        y = y.toDouble(),
+                        width = w.toDouble(),
+                        height = h.toDouble(),
+                        viewportLeft = loc[0].toDouble(),
+                        viewportTop = loc[1].toDouble(),
+                        scale = density.toDouble(),
+                    )
+                ) {
+                    NovelReaderWebBridgePolicy.TextSelectionAction.Ignore -> Unit
+                    is NovelReaderWebBridgePolicy.TextSelectionAction.ShowSelection -> {
+                        val bounds = action.bounds
+                        onTextSelectedCallback(
+                            action.word,
+                            action.sentence,
+                            bounds.x.toFloat(),
+                            bounds.y.toFloat(),
+                            bounds.width.toFloat(),
+                            bounds.height.toFloat(),
+                        )
+                    }
+                }
             }
         },
         onBackgroundTap = { x, y ->
@@ -700,7 +709,7 @@ private class ReaderJavascriptBridge(
 
     @JavascriptInterface
     fun onTextSelected(word: String, sentence: String, x: Float, y: Float, w: Float, h: Float) {
-        if (word.isNotBlank()) onTextSelectedCallback.invoke(word, sentence, x, y, w, h)
+        onTextSelectedCallback.invoke(word, sentence, x, y, w, h)
     }
 
     @JavascriptInterface

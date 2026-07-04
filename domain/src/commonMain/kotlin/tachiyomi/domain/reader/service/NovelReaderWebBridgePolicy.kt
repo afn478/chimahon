@@ -11,6 +11,15 @@ object NovelReaderWebBridgePolicy {
         data object Ignore : BackgroundTapAction
     }
 
+    sealed interface TextSelectionAction {
+        data object Ignore : TextSelectionAction
+        data class ShowSelection(
+            val word: String,
+            val sentence: String,
+            val bounds: NovelReaderWebGeometryPolicy.Bounds,
+        ) : TextSelectionAction
+    }
+
     fun backgroundTapAction(
         clientX: Double,
         clientY: Double,
@@ -46,6 +55,34 @@ object NovelReaderWebBridgePolicy {
             NovelReaderInputPolicy.TapAction.BACKWARD -> BackgroundTapAction.Navigate(forward = false)
             NovelReaderInputPolicy.TapAction.NONE -> BackgroundTapAction.Ignore
         }
+    }
+
+    fun textSelectionAction(
+        word: String,
+        sentence: String,
+        x: Double,
+        y: Double,
+        width: Double,
+        height: Double,
+        viewportLeft: Double,
+        viewportTop: Double,
+        scale: Double,
+    ): TextSelectionAction {
+        if (word.isBlank()) return TextSelectionAction.Ignore
+
+        return TextSelectionAction.ShowSelection(
+            word = word,
+            sentence = sentence,
+            bounds = NovelReaderWebGeometryPolicy.cssBoundsToScreenBounds(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                viewportLeft = viewportLeft,
+                viewportTop = viewportTop,
+                scale = scale,
+            ),
+        )
     }
 
     fun nativeCallbackBridgeScript(
