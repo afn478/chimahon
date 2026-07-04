@@ -60,6 +60,7 @@ fun ReaderWebView(
     onSentenceReady: (sentence: String) -> Unit = {},
     onDismissPopupRequested: () -> Unit = {},
     onInternalLinkClicked: (url: String) -> Unit = {},
+    onRestoreCompleted: () -> Unit = {},
     onSelectionRectsReceived: ((String) -> Unit)? = null,
     nowMillis: () -> Long = System::currentTimeMillis,
 ) {
@@ -127,6 +128,7 @@ fun ReaderWebView(
                 onSentenceReadyCallback = onSentenceReady,
                 onDismissPopupRequested = onDismissPopupRequested,
                 onInternalLinkClicked = onInternalLinkClicked,
+                onRestoreCompleted = onRestoreCompleted,
                 nowMillis = nowMillis,
             ).apply {
                 setSelectionRectsCallback(onSelectionRectsReceived)
@@ -227,8 +229,7 @@ fun ReaderWebView(
                 }
             }
         },
-        update = { androidWebView ->
-            val v = androidWebView as ReaderAndroidWebView
+        update = { v ->
             v.isImageOnly = isImageOnly
             v.continuousMode = continuousMode
             v.readerSettings = readerSettings
@@ -328,6 +329,7 @@ private class ReaderAndroidWebView(
     private val onSentenceReadyCallback: (sentence: String) -> Unit = {},
     private val onDismissPopupRequested: () -> Unit = {},
     internal val onInternalLinkClicked: (url: String) -> Unit = {},
+    private val onRestoreCompleted: () -> Unit = {},
     private val nowMillis: () -> Long,
 ) : WebView(context) {
 
@@ -431,6 +433,7 @@ private class ReaderAndroidWebView(
         onRestoreCompleted = {
             post {
                 applyHostViewTransition(NovelReaderWebHostPolicy.restoreCompletedTransition())
+                onRestoreCompleted()
             }
         },
         onTextSelectedCallback = { word, sentence, x, y, w, h ->

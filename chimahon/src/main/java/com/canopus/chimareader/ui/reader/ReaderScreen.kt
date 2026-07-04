@@ -228,6 +228,9 @@ fun ReaderScreen(
                         onTextSelected = { word, sentence, x, y, w, h -> onLookupRequested(word, sentence, x, y, w, h) },
                         onSentenceReady = onSentenceReady,
                         onInternalLinkClicked = { viewModel.jumpToUrl(it) },
+                        onRestoreCompleted = {
+                            viewModel.sasayakiPlayer?.handleRestoreCompleted(viewModel.index)
+                        },
                         onSelectionRectsReceived = onSelectionRectsReceived,
                     )
                 }
