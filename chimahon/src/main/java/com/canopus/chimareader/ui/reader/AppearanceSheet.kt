@@ -91,19 +91,6 @@ fun AppearanceSheet(
 
     var importedFonts by remember { mutableStateOf(FontManager.getImportedFonts(context)) }
     var isImporting by remember { mutableStateOf(false) }
-    val fontDropdownState = remember(viewModel.selectedFont, importedFonts) {
-        NovelReaderAppearanceSheetPolicy.fontDropdownState(
-            selectedFont = viewModel.selectedFont,
-            defaultFonts = FontManager.defaultFonts,
-            importedFonts = importedFonts,
-        )
-    }
-    val fontImportButtonState = NovelReaderAppearanceSheetPolicy.fontImportButtonState(isImporting)
-    val fontDeleteButtonState = NovelReaderAppearanceSheetPolicy.fontDeleteButtonState(
-        selectedFont = viewModel.selectedFont,
-        importedFonts = importedFonts,
-    )
-
     var showCustomThemeDialog by remember { mutableStateOf(false) }
     var draftThemeName by remember { mutableStateOf(initialCustomThemeDraft.name) }
     var draftBackgroundColor by remember { mutableIntStateOf(initialCustomThemeDraft.backgroundColor) }
@@ -163,21 +150,23 @@ fun AppearanceSheet(
 
             // Theme (moved to top)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val customThemeChoices = remember(
+                val themeSectionState = remember(
                     viewModel.customThemes,
                     viewModel.theme,
                     viewModel.customBackgroundColor,
                     viewModel.customTextColor,
+                    viewModel.systemLightSepia,
                 ) {
-                    NovelReaderAppearanceSheetPolicy.customThemeChoices(
+                    NovelReaderAppearanceSheetPolicy.themeSectionState(
                         theme = viewModel.theme,
                         customThemes = viewModel.customThemes,
                         customBackgroundColor = viewModel.customBackgroundColor,
                         customTextColor = viewModel.customTextColor,
+                        systemLightSepia = viewModel.systemLightSepia,
                     )
                 }
                 Text(
-                    NovelReaderAppearanceSheetPolicy.THEME_SECTION_TITLE,
+                    themeSectionState.title,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -187,7 +176,7 @@ fun AppearanceSheet(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    NovelReaderAppearanceSheetPolicy.fixedThemeOptions.forEach { option ->
+                    themeSectionState.fixedOptions.forEach { option ->
                         ReaderThemeSwatchButton(
                             label = option.label,
                             backgroundColor = option.backgroundColor,
@@ -197,7 +186,7 @@ fun AppearanceSheet(
                             onClick = { viewModel.updateTheme(option.theme) },
                         )
                     }
-                    customThemeChoices.forEach { choice ->
+                    themeSectionState.customChoices.forEach { choice ->
                         val customTheme = choice.theme
                         ReaderThemeSwatchButton(
                             label = choice.label,
@@ -228,10 +217,7 @@ fun AppearanceSheet(
                     )
                 }
 
-                val systemLightSepiaSwitchState = NovelReaderAppearanceSheetPolicy.systemLightSepiaSwitchState(
-                    theme = viewModel.theme,
-                    systemLightSepia = viewModel.systemLightSepia,
-                )
+                val systemLightSepiaSwitchState = themeSectionState.systemLightSepia
                 if (systemLightSepiaSwitchState.visible) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -278,13 +264,34 @@ fun AppearanceSheet(
 
             // Typography
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                val typographySectionState = remember(
+                    viewModel.selectedFont,
+                    importedFonts,
+                    isImporting,
+                    viewModel.fontSize,
+                    viewModel.lineHeight,
+                    viewModel.hideFurigana,
+                    viewModel.keepScreenOn,
+                ) {
+                    NovelReaderAppearanceSheetPolicy.typographySectionState(
+                        selectedFont = viewModel.selectedFont,
+                        defaultFonts = FontManager.defaultFonts,
+                        importedFonts = importedFonts,
+                        isImporting = isImporting,
+                        fontSize = viewModel.fontSize,
+                        lineHeight = viewModel.lineHeight,
+                        hideFurigana = viewModel.hideFurigana,
+                        keepScreenOn = viewModel.keepScreenOn,
+                    )
+                }
                 Text(
-                    NovelReaderAppearanceSheetPolicy.TYPOGRAPHY_SECTION_TITLE,
+                    typographySectionState.title,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
 
                 // Font Family
+                val fontDropdownState = typographySectionState.fontDropdown
                 var fontExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = fontExpanded,
@@ -315,6 +322,8 @@ fun AppearanceSheet(
                 }
 
                 // Import Font Button
+                val fontImportButtonState = typographySectionState.fontImportButton
+                val fontDeleteButtonState = typographySectionState.fontDeleteButton
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -364,7 +373,7 @@ fun AppearanceSheet(
 
                 // Font Size
                 Column {
-                    val sliderState = NovelReaderAppearanceSheetPolicy.fontSizeSliderState(viewModel.fontSize)
+                    val sliderState = typographySectionState.fontSizeSlider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -390,7 +399,7 @@ fun AppearanceSheet(
 
                 // Line Height
                 Column {
-                    val sliderState = NovelReaderAppearanceSheetPolicy.lineHeightSliderState(viewModel.lineHeight)
+                    val sliderState = typographySectionState.lineHeightSlider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -415,9 +424,7 @@ fun AppearanceSheet(
                 }
 
                 // Hide Furigana
-                val hideFuriganaSwitchState = NovelReaderAppearanceSheetPolicy.hideFuriganaSwitchState(
-                    viewModel.hideFurigana,
-                )
+                val hideFuriganaSwitchState = typographySectionState.hideFuriganaSwitch
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -434,9 +441,7 @@ fun AppearanceSheet(
                 }
 
                 // Keep screen on
-                val keepScreenOnSwitchState = NovelReaderAppearanceSheetPolicy.keepScreenOnSwitchState(
-                    viewModel.keepScreenOn,
-                )
+                val keepScreenOnSwitchState = typographySectionState.keepScreenOnSwitch
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -455,16 +460,18 @@ fun AppearanceSheet(
 
             // Margins
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                val marginsSectionState = NovelReaderAppearanceSheetPolicy.marginsSectionState(
+                    horizontalPadding = viewModel.horizontalPadding,
+                    verticalPadding = viewModel.verticalPadding,
+                )
                 Text(
-                    NovelReaderAppearanceSheetPolicy.MARGINS_SECTION_TITLE,
+                    marginsSectionState.title,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
 
                 Column {
-                    val sliderState = NovelReaderAppearanceSheetPolicy.horizontalPaddingSliderState(
-                        viewModel.horizontalPadding,
-                    )
+                    val sliderState = marginsSectionState.horizontalPaddingSlider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -489,9 +496,7 @@ fun AppearanceSheet(
                 }
 
                 Column {
-                    val sliderState = NovelReaderAppearanceSheetPolicy.verticalPaddingSliderState(
-                        viewModel.verticalPadding,
-                    )
+                    val sliderState = marginsSectionState.verticalPaddingSlider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -518,17 +523,24 @@ fun AppearanceSheet(
 
             // Layout Settings
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                val layoutSectionState = NovelReaderAppearanceSheetPolicy.layoutSectionState(
+                    verticalWriting = viewModel.verticalWriting,
+                    tapZonePercent = viewModel.tapZonePercent,
+                    layoutAdvanced = viewModel.layoutAdvanced,
+                    avoidPageBreak = viewModel.avoidPageBreak,
+                    justifyText = viewModel.justifyText,
+                    characterSpacing = viewModel.characterSpacing,
+                    paragraphSpacing = viewModel.paragraphSpacing,
+                )
                 Text(
-                    NovelReaderAppearanceSheetPolicy.LAYOUT_SECTION_TITLE,
+                    layoutSectionState.title,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
 
                 // Writing Mode
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val writingModeControlState = NovelReaderAppearanceSheetPolicy.writingModeControlState(
-                        verticalWriting = viewModel.verticalWriting,
-                    )
+                    val writingModeControlState = layoutSectionState.writingMode
                     Text(
                         writingModeControlState.label,
                         style = MaterialTheme.typography.labelMedium,
@@ -551,7 +563,7 @@ fun AppearanceSheet(
 
                 // Tap Zone Size
                 Column {
-                    val sliderState = NovelReaderAppearanceSheetPolicy.tapZoneSliderState(viewModel.tapZonePercent)
+                    val sliderState = layoutSectionState.tapZoneSlider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -576,9 +588,7 @@ fun AppearanceSheet(
                 }
 
                 // Advanced Header
-                val advancedToggleState = NovelReaderAppearanceSheetPolicy.advancedToggleState(
-                    layoutAdvanced = viewModel.layoutAdvanced,
-                )
+                val advancedToggleState = layoutSectionState.advancedToggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -588,7 +598,7 @@ fun AppearanceSheet(
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Text(
-                        NovelReaderAppearanceSheetPolicy.ADVANCED_LABEL,
+                        layoutSectionState.advancedLabel,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Icon(
@@ -614,9 +624,7 @@ fun AppearanceSheet(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         // Avoid Page Break
-                        val avoidPageBreakSwitchState = NovelReaderAppearanceSheetPolicy.avoidPageBreakSwitchState(
-                            viewModel.avoidPageBreak,
-                        )
+                        val avoidPageBreakSwitchState = layoutSectionState.avoidPageBreakSwitch
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -634,9 +642,7 @@ fun AppearanceSheet(
                         }
 
                         // Justify Text
-                        val justifyTextSwitchState = NovelReaderAppearanceSheetPolicy.justifyTextSwitchState(
-                            viewModel.justifyText,
-                        )
+                        val justifyTextSwitchState = layoutSectionState.justifyTextSwitch
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -655,9 +661,7 @@ fun AppearanceSheet(
 
                         // Character Spacing
                         Column {
-                            val sliderState = NovelReaderAppearanceSheetPolicy.characterSpacingSliderState(
-                                viewModel.characterSpacing,
-                            )
+                            val sliderState = layoutSectionState.characterSpacingSlider
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -685,9 +689,7 @@ fun AppearanceSheet(
 
                         // Paragraph Spacing
                         Column {
-                            val sliderState = NovelReaderAppearanceSheetPolicy.paragraphSpacingSliderState(
-                                viewModel.paragraphSpacing,
-                            )
+                            val sliderState = layoutSectionState.paragraphSpacingSlider
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,

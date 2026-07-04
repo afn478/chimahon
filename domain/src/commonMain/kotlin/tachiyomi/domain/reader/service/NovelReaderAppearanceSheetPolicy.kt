@@ -214,6 +214,42 @@ object NovelReaderAppearanceSheetPolicy {
         val spec: SliderSpec,
     )
 
+    data class ThemeSectionState(
+        val title: String,
+        val fixedOptions: List<ThemeOption>,
+        val customChoices: List<CustomThemeChoice>,
+        val systemLightSepia: ConditionalSwitchControlState,
+    )
+
+    data class TypographySectionState(
+        val title: String,
+        val fontDropdown: FontDropdownState,
+        val fontImportButton: FontImportButtonState,
+        val fontDeleteButton: FontDeleteButtonState,
+        val fontSizeSlider: SliderControlState,
+        val lineHeightSlider: SliderControlState,
+        val hideFuriganaSwitch: SwitchControlState,
+        val keepScreenOnSwitch: SwitchControlState,
+    )
+
+    data class MarginsSectionState(
+        val title: String,
+        val horizontalPaddingSlider: SliderControlState,
+        val verticalPaddingSlider: SliderControlState,
+    )
+
+    data class LayoutSectionState(
+        val title: String,
+        val writingMode: BooleanSegmentedControlState,
+        val tapZoneSlider: SliderControlState,
+        val advancedLabel: String,
+        val advancedToggle: AdvancedToggleState,
+        val avoidPageBreakSwitch: SwitchControlState,
+        val justifyTextSwitch: SwitchControlState,
+        val characterSpacingSlider: SliderControlState,
+        val paragraphSpacingSlider: SliderControlState,
+    )
+
     val fixedThemeOptions = listOf(
         ThemeOption(
             theme = NovelReaderTheme.SYSTEM,
@@ -497,6 +533,91 @@ object NovelReaderAppearanceSheetPolicy {
             value = paragraphSpacing,
             valueText = paragraphSpacingLabel(paragraphSpacing),
             spec = paragraphSpacingSliderSpec,
+        )
+    }
+
+    fun themeSectionState(
+        theme: NovelReaderTheme,
+        customThemes: List<CustomReaderTheme>,
+        customBackgroundColor: Int,
+        customTextColor: Int,
+        systemLightSepia: Boolean,
+    ): ThemeSectionState {
+        return ThemeSectionState(
+            title = THEME_SECTION_TITLE,
+            fixedOptions = fixedThemeOptions,
+            customChoices = customThemeChoices(
+                theme = theme,
+                customThemes = customThemes,
+                customBackgroundColor = customBackgroundColor,
+                customTextColor = customTextColor,
+            ),
+            systemLightSepia = systemLightSepiaSwitchState(
+                theme = theme,
+                systemLightSepia = systemLightSepia,
+            ),
+        )
+    }
+
+    fun typographySectionState(
+        selectedFont: String,
+        defaultFonts: List<String>,
+        importedFonts: List<String>,
+        isImporting: Boolean,
+        fontSize: Double,
+        lineHeight: Double,
+        hideFurigana: Boolean,
+        keepScreenOn: Boolean,
+    ): TypographySectionState {
+        return TypographySectionState(
+            title = TYPOGRAPHY_SECTION_TITLE,
+            fontDropdown = fontDropdownState(
+                selectedFont = selectedFont,
+                defaultFonts = defaultFonts,
+                importedFonts = importedFonts,
+            ),
+            fontImportButton = fontImportButtonState(isImporting),
+            fontDeleteButton = fontDeleteButtonState(
+                selectedFont = selectedFont,
+                importedFonts = importedFonts,
+            ),
+            fontSizeSlider = fontSizeSliderState(fontSize),
+            lineHeightSlider = lineHeightSliderState(lineHeight),
+            hideFuriganaSwitch = hideFuriganaSwitchState(hideFurigana),
+            keepScreenOnSwitch = keepScreenOnSwitchState(keepScreenOn),
+        )
+    }
+
+    fun marginsSectionState(
+        horizontalPadding: Double,
+        verticalPadding: Double,
+    ): MarginsSectionState {
+        return MarginsSectionState(
+            title = MARGINS_SECTION_TITLE,
+            horizontalPaddingSlider = horizontalPaddingSliderState(horizontalPadding),
+            verticalPaddingSlider = verticalPaddingSliderState(verticalPadding),
+        )
+    }
+
+    fun layoutSectionState(
+        verticalWriting: Boolean,
+        tapZonePercent: Int,
+        layoutAdvanced: Boolean,
+        avoidPageBreak: Boolean,
+        justifyText: Boolean,
+        characterSpacing: Double,
+        paragraphSpacing: Double,
+    ): LayoutSectionState {
+        return LayoutSectionState(
+            title = LAYOUT_SECTION_TITLE,
+            writingMode = writingModeControlState(verticalWriting),
+            tapZoneSlider = tapZoneSliderState(tapZonePercent),
+            advancedLabel = ADVANCED_LABEL,
+            advancedToggle = advancedToggleState(layoutAdvanced),
+            avoidPageBreakSwitch = avoidPageBreakSwitchState(avoidPageBreak),
+            justifyTextSwitch = justifyTextSwitchState(justifyText),
+            characterSpacingSlider = characterSpacingSliderState(characterSpacing),
+            paragraphSpacingSlider = paragraphSpacingSliderState(paragraphSpacing),
         )
     }
 

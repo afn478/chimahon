@@ -622,6 +622,131 @@ class NovelReaderAppearanceSheetPolicyTest {
     }
 
     @Test
+    fun themeSectionStateCollectsThemeControls() {
+        val customTheme = CustomReaderTheme(
+            name = "Night",
+            backgroundColor = 0xFF101010.toInt(),
+            textColor = 0xFFEAEAEA.toInt(),
+        )
+
+        val state = NovelReaderAppearanceSheetPolicy.themeSectionState(
+            theme = NovelReaderTheme.CUSTOM,
+            customThemes = listOf(customTheme),
+            customBackgroundColor = customTheme.backgroundColor,
+            customTextColor = customTheme.textColor,
+            systemLightSepia = true,
+        )
+
+        assertEquals(NovelReaderAppearanceSheetPolicy.THEME_SECTION_TITLE, state.title)
+        assertEquals(NovelReaderAppearanceSheetPolicy.fixedThemeOptions, state.fixedOptions)
+        assertEquals(
+            listOf(
+                NovelReaderAppearanceSheetPolicy.CustomThemeChoice(
+                    theme = customTheme,
+                    label = "Night",
+                    selected = true,
+                ),
+            ),
+            state.customChoices,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ConditionalSwitchControlState(
+                visible = false,
+                switchState = NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                    label = NovelReaderAppearanceSheetPolicy.SYSTEM_LIGHT_SEPIA_LABEL,
+                    checked = true,
+                ),
+            ),
+            state.systemLightSepia,
+        )
+    }
+
+    @Test
+    fun typographySectionStateCollectsFontAndTypographyControls() {
+        val state = NovelReaderAppearanceSheetPolicy.typographySectionState(
+            selectedFont = "Mincho",
+            defaultFonts = listOf("System"),
+            importedFonts = listOf("Mincho"),
+            isImporting = true,
+            fontSize = 20.0,
+            lineHeight = 1.5,
+            hideFurigana = true,
+            keepScreenOn = false,
+        )
+
+        assertEquals(NovelReaderAppearanceSheetPolicy.TYPOGRAPHY_SECTION_TITLE, state.title)
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDropdownState(
+                label = NovelReaderAppearanceSheetPolicy.FONT_FAMILY_LABEL,
+                selectedFont = "Mincho",
+                choices = listOf("System", "Mincho"),
+            ),
+            state.fontDropdown,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontImportButtonState(
+                buttonText = NovelReaderAppearanceSheetPolicy.IMPORT_FONT_BUTTON_TEXT,
+                enabled = false,
+                showProgress = true,
+                mimeTypes = NovelReaderAppearanceSheetPolicy.fontImportMimeTypes,
+            ),
+            state.fontImportButton,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDeleteButtonState(
+                visible = true,
+                buttonText = NovelReaderAppearanceSheetPolicy.DELETE_FONT_BUTTON_TEXT,
+            ),
+            state.fontDeleteButton,
+        )
+        assertEquals(NovelReaderAppearanceSheetPolicy.fontSizeSliderState(20.0), state.fontSizeSlider)
+        assertEquals(NovelReaderAppearanceSheetPolicy.lineHeightSliderState(1.5), state.lineHeightSlider)
+        assertEquals(NovelReaderAppearanceSheetPolicy.hideFuriganaSwitchState(true), state.hideFuriganaSwitch)
+        assertEquals(NovelReaderAppearanceSheetPolicy.keepScreenOnSwitchState(false), state.keepScreenOnSwitch)
+    }
+
+    @Test
+    fun marginsSectionStateCollectsPaddingControls() {
+        val state = NovelReaderAppearanceSheetPolicy.marginsSectionState(
+            horizontalPadding = 12.5,
+            verticalPadding = 14.0,
+        )
+
+        assertEquals(NovelReaderAppearanceSheetPolicy.MARGINS_SECTION_TITLE, state.title)
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.horizontalPaddingSliderState(12.5),
+            state.horizontalPaddingSlider,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.verticalPaddingSliderState(14.0),
+            state.verticalPaddingSlider,
+        )
+    }
+
+    @Test
+    fun layoutSectionStateCollectsWritingAndAdvancedControls() {
+        val state = NovelReaderAppearanceSheetPolicy.layoutSectionState(
+            verticalWriting = false,
+            tapZonePercent = 30,
+            layoutAdvanced = true,
+            avoidPageBreak = true,
+            justifyText = false,
+            characterSpacing = 0.1,
+            paragraphSpacing = 1.5,
+        )
+
+        assertEquals(NovelReaderAppearanceSheetPolicy.LAYOUT_SECTION_TITLE, state.title)
+        assertEquals(NovelReaderAppearanceSheetPolicy.writingModeControlState(false), state.writingMode)
+        assertEquals(NovelReaderAppearanceSheetPolicy.tapZoneSliderState(30), state.tapZoneSlider)
+        assertEquals(NovelReaderAppearanceSheetPolicy.ADVANCED_LABEL, state.advancedLabel)
+        assertEquals(NovelReaderAppearanceSheetPolicy.advancedToggleState(true), state.advancedToggle)
+        assertEquals(NovelReaderAppearanceSheetPolicy.avoidPageBreakSwitchState(true), state.avoidPageBreakSwitch)
+        assertEquals(NovelReaderAppearanceSheetPolicy.justifyTextSwitchState(false), state.justifyTextSwitch)
+        assertEquals(NovelReaderAppearanceSheetPolicy.characterSpacingSliderState(0.1), state.characterSpacingSlider)
+        assertEquals(NovelReaderAppearanceSheetPolicy.paragraphSpacingSliderState(1.5), state.paragraphSpacingSlider)
+    }
+
+    @Test
     fun valueLabelsAndSnappingMatchSheetControls() {
         assertEquals("18px", NovelReaderAppearanceSheetPolicy.fontSizeLabel(18.0))
         assertEquals("18.5px", NovelReaderAppearanceSheetPolicy.fontSizeLabel(18.5))
