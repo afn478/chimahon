@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.reader.model.ReaderSettings
 import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
+import tachiyomi.domain.reader.service.NovelReaderHudPolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsDefaults
 import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 
@@ -293,9 +294,13 @@ fun ReaderScreen(
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
             ) {
+                val bottomBarState = NovelReaderHudPolicy.bottomBarState(readyVm.currentProgress)
                 ReaderBottomBar(
                     focusMode = focusMode,
-                    progressText = "${(readyVm.currentProgress * 100).toInt()}%",
+                    progressText = bottomBarState.progressText,
+                    chaptersContentDescription = bottomBarState.chaptersContentDescription,
+                    appearanceContentDescription = bottomBarState.appearanceContentDescription,
+                    statisticsContentDescription = bottomBarState.statisticsContentDescription,
                     backgroundColor = currentSettings.backgroundColor,
                     contentColor = currentSettings.textColor,
                     onToggleHud = { onShowHudChanged(false) },
@@ -375,6 +380,9 @@ private fun ReaderTopBar(
 private fun ReaderBottomBar(
     focusMode: Boolean,
     progressText: String,
+    chaptersContentDescription: String,
+    appearanceContentDescription: String,
+    statisticsContentDescription: String,
     backgroundColor: Int,
     contentColor: Int,
     onToggleHud: () -> Unit,
@@ -407,21 +415,21 @@ private fun ReaderBottomBar(
             IconButton(onClick = onOpenChapters) {
                 Icon(
                     Icons.AutoMirrored.Filled.List,
-                    contentDescription = "Chapters",
+                    contentDescription = chaptersContentDescription,
                     tint = Color(contentColor)
                 )
             }
             IconButton(onClick = onOpenAppearance) {
                 Icon(
                     Icons.Default.Settings,
-                    contentDescription = "Appearance",
+                    contentDescription = appearanceContentDescription,
                     tint = Color(contentColor)
                 )
             }
             IconButton(onClick = onOpenStatistics) {
                 Icon(
                     Icons.Outlined.QueryStats,
-                    contentDescription = "Statistics",
+                    contentDescription = statisticsContentDescription,
                     tint = Color(contentColor)
                 )
             }

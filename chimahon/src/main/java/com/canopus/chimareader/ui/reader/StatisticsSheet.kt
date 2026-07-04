@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
+import tachiyomi.domain.reader.service.NovelReaderStatisticsSheetPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,9 +34,13 @@ fun StatisticsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scrollState = rememberScrollState()
     val trackerState = viewModel.statisticsTracker.state
-    val session = trackerState.session
-    val today = trackerState.today
-    val allTime = trackerState.allTime
+    val sheetContent = NovelReaderStatisticsSheetPolicy.sheetState(
+        trackerState = trackerState,
+        currentCharacter = viewModel.currentCharacter,
+        frozenPosition = viewModel.statisticsTracker.frozenPosition,
+        totalCharacters = viewModel.totalCharacters,
+        currentChapterEndCharacter = viewModel.currentChapterEndCharacter,
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -57,73 +61,28 @@ fun StatisticsSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Statistics",
+                    sheetContent.title,
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 IconButton(onClick = { viewModel.togglePause() }) {
                     Icon(
-                        imageVector = if (!trackerState.isTracking) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                        contentDescription = if (!trackerState.isTracking) "Resume Timer" else "Pause Timer",
+                        imageVector = if (sheetContent.showPauseIcon) {
+                            Icons.Filled.Pause
+                        } else {
+                            Icons.Filled.PlayArrow
+                        },
+                        contentDescription = sheetContent.toggleContentDescription,
                         modifier = Modifier.size(24.dp),
                     )
                 }
             }
 
-            Section(title = "Session") {
-                StatRow("Characters Read", session.charactersRead.toString())
-                StatRow("Reading Speed", "${session.lastReadingSpeed} / h")
-                StatRow(
-                    "Reading Time",
-                    NovelReaderStatisticsPolicy.elapsedDurationLabel(session.readingTime.toLong()),
-                )
-
-                // Use frozen position for projections when tracking is paused
-                // so page flips during pause don't shift the ETA
-                val projectionChar = if (trackerState.isTracking) {
-                    viewModel.currentCharacter
-                } else {
-                    viewModel.statisticsTracker.frozenPosition
+            sheetContent.sections.forEach { section ->
+                Section(title = section.title) {
+                    section.rows.forEach { row ->
+                        StatRow(row.label, row.value)
+                    }
                 }
-
-                val bookTimeRemaining = NovelReaderStatisticsPolicy.secondsRemaining(
-                    viewModel.totalCharacters - projectionChar,
-                    session.lastReadingSpeed,
-                )
-                if (bookTimeRemaining > 0.0) {
-                    StatRow(
-                        "Time to finish Book",
-                        NovelReaderStatisticsPolicy.remainingDurationLabel(bookTimeRemaining),
-                    )
-                }
-
-                val chapterTimeRemaining = NovelReaderStatisticsPolicy.secondsRemaining(
-                    viewModel.currentChapterEndCharacter - projectionChar,
-                    session.lastReadingSpeed,
-                )
-                if (chapterTimeRemaining > 0.0) {
-                    StatRow(
-                        "Time to finish Chapter",
-                        NovelReaderStatisticsPolicy.remainingDurationLabel(chapterTimeRemaining),
-                    )
-                }
-            }
-
-            Section(title = "Today") {
-                StatRow("Characters Read", today.charactersRead.toString())
-                StatRow("Reading Speed", "${today.lastReadingSpeed} / h")
-                StatRow(
-                    "Reading Time",
-                    NovelReaderStatisticsPolicy.elapsedDurationLabel(today.readingTime.toLong()),
-                )
-            }
-
-            Section(title = "All Time") {
-                StatRow("Characters Read", allTime.charactersRead.toString())
-                StatRow("Reading Speed", "${allTime.lastReadingSpeed} / h")
-                StatRow(
-                    "Reading Time",
-                    NovelReaderStatisticsPolicy.elapsedDurationLabel(allTime.readingTime.toLong()),
-                )
             }
         }
     }
