@@ -9,6 +9,7 @@ plugins {
 }
 
 val composeMultiplatformVersion = compose.versions.multiplatform.get()
+val composeMaterial3MultiplatformVersion = "1.11.0-alpha07"
 
 kotlin {
     androidTarget()
@@ -33,6 +34,7 @@ kotlin {
             implementation(projects.core.extensions)
             implementation(projects.core.platform)
             implementation(projects.data)
+            implementation(projects.domain)
             implementation(projects.sourceApi)
             implementation(project.dependencies.platform(kotlinx.coroutines.bom))
             implementation(kotlinx.coroutines.core)
@@ -43,6 +45,7 @@ kotlin {
             // JetBrains last published the multiplatform extended icon pack at 1.7.3.
             implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
             implementation("org.jetbrains.compose.material:material:$composeMultiplatformVersion")
+            implementation("org.jetbrains.compose.material3:material3:$composeMaterial3MultiplatformVersion")
             implementation("org.jetbrains.compose.ui:ui:$composeMultiplatformVersion")
             implementation("org.jetbrains.compose.components:components-resources:$composeMultiplatformVersion")
         }

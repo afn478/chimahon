@@ -41,12 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -62,10 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import app.chimahon.shared.reader.ReaderAppearanceBooleanSegmentedControl
+import app.chimahon.shared.reader.ReaderAppearanceSectionTitle
+import app.chimahon.shared.reader.ReaderAppearanceSlider
+import app.chimahon.shared.reader.ReaderAppearanceSwitchRow
 import com.canopus.chimareader.data.CustomReaderTheme
 import com.canopus.chimareader.data.FontManager
 import kotlinx.coroutines.launch
@@ -165,11 +163,7 @@ fun AppearanceSheet(
                         systemLightSepia = viewModel.systemLightSepia,
                     )
                 }
-                Text(
-                    themeSectionState.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                ReaderAppearanceSectionTitle(themeSectionState.title)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -219,48 +213,22 @@ fun AppearanceSheet(
 
                 val systemLightSepiaSwitchState = themeSectionState.systemLightSepia
                 if (systemLightSepiaSwitchState.visible) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            systemLightSepiaSwitchState.switchState.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Switch(
-                            checked = systemLightSepiaSwitchState.switchState.checked,
-                            onCheckedChange = { viewModel.updateSystemLightSepia(it) },
-                        )
-                    }
+                    ReaderAppearanceSwitchRow(
+                        state = systemLightSepiaSwitchState.switchState,
+                        onCheckedChange = { viewModel.updateSystemLightSepia(it) },
+                    )
                 }
             }
 
             // Layout Mode
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val readerModeControlState = NovelReaderAppearanceSheetPolicy.readerModeControlState(
+            ReaderAppearanceBooleanSegmentedControl(
+                state = NovelReaderAppearanceSheetPolicy.readerModeControlState(
                     continuousMode = viewModel.continuousMode,
-                )
-                Text(
-                    readerModeControlState.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    readerModeControlState.options.forEachIndexed { index, option ->
-                        SegmentedButton(
-                            selected = option.selected,
-                            onClick = { viewModel.updateContinuousMode(option.value) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = readerModeControlState.options.size,
-                            ),
-                        ) {
-                            Text(option.label)
-                        }
-                    }
-                }
-            }
+                ),
+                onOptionSelected = { viewModel.updateContinuousMode(it) },
+                labelStyle = MaterialTheme.typography.labelLarge,
+                labelColor = MaterialTheme.colorScheme.primary,
+            )
 
             // Typography
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -284,11 +252,7 @@ fun AppearanceSheet(
                         keepScreenOn = viewModel.keepScreenOn,
                     )
                 }
-                Text(
-                    typographySectionState.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                ReaderAppearanceSectionTitle(typographySectionState.title)
 
                 // Font Family
                 val fontDropdownState = typographySectionState.fontDropdown
@@ -372,90 +336,32 @@ fun AppearanceSheet(
                 }
 
                 // Font Size
-                Column {
-                    val sliderState = typographySectionState.fontSizeSlider
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            sliderState.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            sliderState.valueText,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Slider(
-                        value = sliderState.value.toFloat(),
-                        onValueChange = {
-                            viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
-                        },
-                        valueRange = sliderState.spec.toFloatRange(),
-                        steps = sliderState.spec.steps,
-                    )
-                }
+                ReaderAppearanceSlider(
+                    state = typographySectionState.fontSizeSlider,
+                    onValueChange = {
+                        viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it))
+                    },
+                )
 
                 // Line Height
-                Column {
-                    val sliderState = typographySectionState.lineHeightSlider
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            sliderState.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            sliderState.valueText,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Slider(
-                        value = sliderState.value.toFloat(),
-                        onValueChange = {
-                            viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
-                        },
-                        valueRange = sliderState.spec.toFloatRange(),
-                        steps = sliderState.spec.steps,
-                    )
-                }
+                ReaderAppearanceSlider(
+                    state = typographySectionState.lineHeightSlider,
+                    onValueChange = {
+                        viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it))
+                    },
+                )
 
                 // Hide Furigana
-                val hideFuriganaSwitchState = typographySectionState.hideFuriganaSwitch
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    Text(
-                        hideFuriganaSwitchState.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Switch(
-                        checked = hideFuriganaSwitchState.checked,
-                        onCheckedChange = { viewModel.updateHideFurigana(it) },
-                    )
-                }
+                ReaderAppearanceSwitchRow(
+                    state = typographySectionState.hideFuriganaSwitch,
+                    onCheckedChange = { viewModel.updateHideFurigana(it) },
+                )
 
                 // Keep screen on
-                val keepScreenOnSwitchState = typographySectionState.keepScreenOnSwitch
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    Text(
-                        keepScreenOnSwitchState.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Switch(
-                        checked = keepScreenOnSwitchState.checked,
-                        onCheckedChange = { viewModel.updateKeepScreenOn(it) },
-                    )
-                }
+                ReaderAppearanceSwitchRow(
+                    state = typographySectionState.keepScreenOnSwitch,
+                    onCheckedChange = { viewModel.updateKeepScreenOn(it) },
+                )
             }
 
             // Margins
@@ -464,61 +370,21 @@ fun AppearanceSheet(
                     horizontalPadding = viewModel.horizontalPadding,
                     verticalPadding = viewModel.verticalPadding,
                 )
-                Text(
-                    marginsSectionState.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                ReaderAppearanceSectionTitle(marginsSectionState.title)
+
+                ReaderAppearanceSlider(
+                    state = marginsSectionState.horizontalPaddingSlider,
+                    onValueChange = {
+                        viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it))
+                    },
                 )
 
-                Column {
-                    val sliderState = marginsSectionState.horizontalPaddingSlider
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            sliderState.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            sliderState.valueText,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Slider(
-                        value = sliderState.value.toFloat(),
-                        onValueChange = {
-                            viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
-                        },
-                        valueRange = sliderState.spec.toFloatRange(),
-                        steps = sliderState.spec.steps,
-                    )
-                }
-
-                Column {
-                    val sliderState = marginsSectionState.verticalPaddingSlider
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            sliderState.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            sliderState.valueText,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Slider(
-                        value = sliderState.value.toFloat(),
-                        onValueChange = {
-                            viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
-                        },
-                        valueRange = sliderState.spec.toFloatRange(),
-                        steps = sliderState.spec.steps,
-                    )
-                }
+                ReaderAppearanceSlider(
+                    state = marginsSectionState.verticalPaddingSlider,
+                    onValueChange = {
+                        viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it))
+                    },
+                )
             }
 
             // Layout Settings
@@ -532,60 +398,21 @@ fun AppearanceSheet(
                     characterSpacing = viewModel.characterSpacing,
                     paragraphSpacing = viewModel.paragraphSpacing,
                 )
-                Text(
-                    layoutSectionState.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                ReaderAppearanceSectionTitle(layoutSectionState.title)
 
                 // Writing Mode
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val writingModeControlState = layoutSectionState.writingMode
-                    Text(
-                        writingModeControlState.label,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        writingModeControlState.options.forEachIndexed { index, option ->
-                            SegmentedButton(
-                                selected = option.selected,
-                                onClick = { viewModel.updateVerticalWriting(option.value) },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = writingModeControlState.options.size,
-                                ),
-                            ) {
-                                Text(option.label)
-                            }
-                        }
-                    }
-                }
+                ReaderAppearanceBooleanSegmentedControl(
+                    state = layoutSectionState.writingMode,
+                    onOptionSelected = { viewModel.updateVerticalWriting(it) },
+                )
 
                 // Tap Zone Size
-                Column {
-                    val sliderState = layoutSectionState.tapZoneSlider
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            sliderState.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            sliderState.valueText,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Slider(
-                        value = sliderState.value.toFloat(),
-                        onValueChange = {
-                            viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it.toDouble()))
-                        },
-                        valueRange = sliderState.spec.toFloatRange(),
-                        steps = sliderState.spec.steps,
-                    )
-                }
+                ReaderAppearanceSlider(
+                    state = layoutSectionState.tapZoneSlider,
+                    onValueChange = {
+                        viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it))
+                    },
+                )
 
                 // Advanced Header
                 val advancedToggleState = layoutSectionState.advancedToggle
@@ -624,96 +451,40 @@ fun AppearanceSheet(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         // Avoid Page Break
-                        val avoidPageBreakSwitchState = layoutSectionState.avoidPageBreakSwitch
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                avoidPageBreakSwitchState.label,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Switch(
-                                checked = avoidPageBreakSwitchState.checked,
-                                onCheckedChange = { viewModel.updateAvoidPageBreak(it) },
-                                modifier = Modifier.scale(0.85f),
-                            )
-                        }
+                        ReaderAppearanceSwitchRow(
+                            state = layoutSectionState.avoidPageBreakSwitch,
+                            onCheckedChange = { viewModel.updateAvoidPageBreak(it) },
+                            compact = true,
+                        )
 
                         // Justify Text
-                        val justifyTextSwitchState = layoutSectionState.justifyTextSwitch
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                justifyTextSwitchState.label,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Switch(
-                                checked = justifyTextSwitchState.checked,
-                                onCheckedChange = { viewModel.updateJustifyText(it) },
-                                modifier = Modifier.scale(0.85f),
-                            )
-                        }
+                        ReaderAppearanceSwitchRow(
+                            state = layoutSectionState.justifyTextSwitch,
+                            onCheckedChange = { viewModel.updateJustifyText(it) },
+                            compact = true,
+                        )
 
                         // Character Spacing
-                        Column {
-                            val sliderState = layoutSectionState.characterSpacingSlider
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    sliderState.label,
-                                    style = MaterialTheme.typography.bodySmall,
+                        ReaderAppearanceSlider(
+                            state = layoutSectionState.characterSpacingSlider,
+                            onValueChange = {
+                                viewModel.updateCharacterSpacing(
+                                    NovelReaderAppearanceSheetPolicy.snapTwentieth(it),
                                 )
-                                Text(
-                                    sliderState.valueText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            Slider(
-                                value = sliderState.value.toFloat(),
-                                onValueChange = {
-                                    viewModel.updateCharacterSpacing(
-                                        NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()),
-                                    )
-                                },
-                                valueRange = sliderState.spec.toFloatRange(),
-                                steps = sliderState.spec.steps,
-                            )
-                        }
+                            },
+                            compact = true,
+                        )
 
                         // Paragraph Spacing
-                        Column {
-                            val sliderState = layoutSectionState.paragraphSpacingSlider
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    sliderState.label,
-                                    style = MaterialTheme.typography.bodySmall,
+                        ReaderAppearanceSlider(
+                            state = layoutSectionState.paragraphSpacingSlider,
+                            onValueChange = {
+                                viewModel.updateParagraphSpacing(
+                                    NovelReaderAppearanceSheetPolicy.snapTwentieth(it),
                                 )
-                                Text(
-                                    sliderState.valueText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            Slider(
-                                value = sliderState.value.toFloat(),
-                                onValueChange = {
-                                    viewModel.updateParagraphSpacing(
-                                        NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()),
-                                    )
-                                },
-                                valueRange = sliderState.spec.toFloatRange(),
-                                steps = sliderState.spec.steps,
-                            )
-                        }
+                            },
+                            compact = true,
+                        )
                     }
                 }
             }
@@ -819,10 +590,6 @@ fun AppearanceSheet(
             },
         )
     }
-}
-
-private fun NovelReaderAppearanceSheetPolicy.SliderSpec.toFloatRange(): ClosedFloatingPointRange<Float> {
-    return min.toFloat()..max.toFloat()
 }
 
 @Composable
