@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.util.system.isPreviewBuildType
 import exh.source.ExhPreferences
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.release.interactor.GetApplicationRelease
+import tachiyomi.domain.release.model.ApplicationReleaseArguments
 import tachiyomi.domain.release.service.AppUpdatePolicy
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -34,7 +35,7 @@ class AppUpdateChecker(
     ): GetApplicationRelease.Result {
         return withIOContext {
             val result = getApplicationRelease.await(
-                GetApplicationRelease.Arguments(
+                ApplicationReleaseArguments(
                     isFoss = isFossBuildType,
                     isPreview = isPreviewBuildType || peekIntoPreview,
                     commitCount = BuildConfig.COMMIT_COUNT.toInt(),
@@ -80,7 +81,7 @@ class AppUpdateChecker(
     suspend fun getReleaseNotes(): GetApplicationRelease.Result {
         return withIOContext {
             getApplicationRelease.awaitReleaseNotes(
-                GetApplicationRelease.Arguments(
+                ApplicationReleaseArguments(
                     isFoss = isFossBuildType,
                     isPreview = isPreviewBuildType || peekIntoPreview,
                     commitCount = BuildConfig.COMMIT_COUNT.toInt(),

@@ -20,14 +20,22 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                api(projects.sourceApi)
                 api(project.dependencies.platform(kotlinx.coroutines.bom))
                 api(kotlinx.coroutines.core)
+                implementation(kotlinx.serialization.json)
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.coroutines.test)
             }
         }
         val androidMain by getting {
             kotlin.srcDir("src/main/java")
             dependencies {
-                implementation(projects.sourceApi)
                 implementation(projects.core.common)
 
                 implementation(kotlinx.bundles.coroutines)
@@ -45,6 +53,12 @@ kotlin {
             dependencies {
                 implementation(libs.bundles.test)
                 implementation(kotlinx.coroutines.test)
+                runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.bundles.test)
                 runtimeOnly(libs.junit.platform.launcher)
             }
         }

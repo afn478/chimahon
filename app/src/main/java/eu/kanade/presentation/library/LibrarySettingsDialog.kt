@@ -425,6 +425,16 @@ private fun groupTypeDrawableRes(type: Int): Int {
     }
 }
 
+private fun groupTypeStringRes(type: Int): StringResource {
+    return when (type) {
+        LibraryGroup.BY_STATUS -> MR.strings.status
+        LibraryGroup.BY_SOURCE -> MR.strings.label_sources
+        LibraryGroup.BY_TRACK_STATUS -> SYMR.strings.tracking_status
+        LibraryGroup.UNGROUPED -> SYMR.strings.ungrouped
+        else -> MR.strings.categories
+    }
+}
+
 @Suppress("UnusedReceiverParameter")
 @Composable
 private fun ColumnScope.GroupPage(
@@ -446,7 +456,7 @@ private fun ColumnScope.GroupPage(
         }.map {
             GroupMode(
                 it,
-                LibraryGroup.groupTypeStringRes(it),
+                groupTypeStringRes(it),
                 groupTypeDrawableRes(it),
             )
         }.toImmutableList()

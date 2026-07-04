@@ -2,82 +2,157 @@ package exh.source
 
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
-import tachiyomi.domain.release.service.AppUpdatePolicy
 
 class ExhPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
     // KMK -->
     fun appShouldAutoUpdate() = preferenceStore.getStringSet(
-        "should_auto_update",
-        setOf(
-            AppUpdatePolicy.DEVICE_ONLY_ON_WIFI,
-        ),
+        ExhPreferenceKeys.SHOULD_AUTO_UPDATE,
+        ExhPreferenceDefaults.SHOULD_AUTO_UPDATE,
     )
     // KMK <--
 
     // SY -->
-    fun isHentaiEnabled() = preferenceStore.getBoolean("eh_is_hentai_enabled", false)
+    fun isHentaiEnabled() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.HENTAI_ENABLED,
+        ExhPreferenceDefaults.HENTAI_ENABLED,
+    )
 
     // KMK -->
-    fun ehIncognitoMode() = preferenceStore.getBoolean("eh_incognito_mode", false)
+    fun ehIncognitoMode() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.INCOGNITO_MODE,
+        ExhPreferenceDefaults.INCOGNITO_MODE,
+    )
     // KMK <--
 
-    fun enableExhentai() = preferenceStore.getBoolean(Preference.Companion.privateKey("enable_exhentai"), false)
+    fun enableExhentai() = preferenceStore.getBoolean(
+        Preference.privateKey(ExhPreferenceKeys.ENABLE_EXHENTAI),
+        ExhPreferenceDefaults.ENABLE_EXHENTAI,
+    )
 
-    fun imageQuality() = preferenceStore.getString("ehentai_quality", "auto")
+    fun imageQuality() = preferenceStore.getString(
+        ExhPreferenceKeys.IMAGE_QUALITY,
+        ExhPreferenceDefaults.IMAGE_QUALITY,
+    )
 
-    fun useHentaiAtHome() = preferenceStore.getInt("eh_enable_hah", 0)
+    fun useHentaiAtHome() = preferenceStore.getInt(
+        ExhPreferenceKeys.USE_HENTAI_AT_HOME,
+        ExhPreferenceDefaults.USE_HENTAI_AT_HOME,
+    )
 
-    fun useJapaneseTitle() = preferenceStore.getBoolean("use_jp_title", false)
+    fun useJapaneseTitle() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.USE_JAPANESE_TITLE,
+        ExhPreferenceDefaults.USE_JAPANESE_TITLE,
+    )
 
-    fun exhUseOriginalImages() = preferenceStore.getBoolean("eh_useOrigImages", false)
+    fun exhUseOriginalImages() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.USE_ORIGINAL_IMAGES,
+        ExhPreferenceDefaults.USE_ORIGINAL_IMAGES,
+    )
 
-    fun ehTagFilterValue() = preferenceStore.getInt("eh_tag_filtering_value", 0)
+    fun ehTagFilterValue() = preferenceStore.getInt(
+        ExhPreferenceKeys.TAG_FILTER_VALUE,
+        ExhPreferenceDefaults.TAG_FILTER_VALUE,
+    )
 
-    fun ehTagWatchingValue() = preferenceStore.getInt("eh_tag_watching_value", 0)
+    fun ehTagWatchingValue() = preferenceStore.getInt(
+        ExhPreferenceKeys.TAG_WATCHING_VALUE,
+        ExhPreferenceDefaults.TAG_WATCHING_VALUE,
+    )
 
     // EH Cookies
-    fun memberIdVal() = preferenceStore.getString(Preference.Companion.privateKey("eh_ipb_member_id"), "")
+    fun memberIdVal() = preferenceStore.getString(
+        Preference.privateKey(ExhPreferenceKeys.MEMBER_ID),
+        ExhPreferenceDefaults.MEMBER_ID,
+    )
 
-    fun passHashVal() = preferenceStore.getString(Preference.Companion.privateKey("eh_ipb_pass_hash"), "")
-    fun igneousVal() = preferenceStore.getString(Preference.Companion.privateKey("eh_igneous"), "")
-    fun ehSettingsProfile() = preferenceStore.getInt(Preference.Companion.privateKey("eh_ehSettingsProfile"), -1)
-    fun exhSettingsProfile() = preferenceStore.getInt(Preference.Companion.privateKey("eh_exhSettingsProfile"), -1)
-    fun exhSettingsKey() = preferenceStore.getString(Preference.Companion.privateKey("eh_settingsKey"), "")
-    fun exhSessionCookie() = preferenceStore.getString(Preference.Companion.privateKey("eh_sessionCookie"), "")
-    fun exhHathPerksCookies() = preferenceStore.getString(Preference.Companion.privateKey("eh_hathPerksCookie"), "")
+    fun passHashVal() = preferenceStore.getString(
+        Preference.privateKey(ExhPreferenceKeys.PASS_HASH),
+        ExhPreferenceDefaults.PASS_HASH,
+    )
+    fun igneousVal() = preferenceStore.getString(
+        Preference.privateKey(ExhPreferenceKeys.IGNEOUS),
+        ExhPreferenceDefaults.IGNEOUS,
+    )
+    fun ehSettingsProfile() = preferenceStore.getInt(
+        Preference.privateKey(ExhPreferenceKeys.EH_SETTINGS_PROFILE),
+        ExhPreferenceDefaults.EH_SETTINGS_PROFILE,
+    )
+    fun exhSettingsProfile() = preferenceStore.getInt(
+        Preference.privateKey(ExhPreferenceKeys.EXH_SETTINGS_PROFILE),
+        ExhPreferenceDefaults.EXH_SETTINGS_PROFILE,
+    )
+    fun exhSettingsKey() = preferenceStore.getString(
+        Preference.privateKey(ExhPreferenceKeys.SETTINGS_KEY),
+        ExhPreferenceDefaults.SETTINGS_KEY,
+    )
+    fun exhSessionCookie() = preferenceStore.getString(
+        Preference.privateKey(ExhPreferenceKeys.SESSION_COOKIE),
+        ExhPreferenceDefaults.SESSION_COOKIE,
+    )
+    fun exhHathPerksCookies() = preferenceStore.getString(
+        Preference.privateKey(ExhPreferenceKeys.HATH_PERKS_COOKIE),
+        ExhPreferenceDefaults.HATH_PERKS_COOKIE,
+    )
 
-    fun exhShowSyncIntro() = preferenceStore.getBoolean("eh_show_sync_intro", true)
+    fun exhShowSyncIntro() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.SHOW_SYNC_INTRO,
+        ExhPreferenceDefaults.SHOW_SYNC_INTRO,
+    )
 
-    fun exhReadOnlySync() = preferenceStore.getBoolean("eh_sync_read_only", false)
+    fun exhReadOnlySync() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.READ_ONLY_SYNC,
+        ExhPreferenceDefaults.READ_ONLY_SYNC,
+    )
 
-    fun exhLenientSync() = preferenceStore.getBoolean("eh_lenient_sync", false)
+    fun exhLenientSync() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.LENIENT_SYNC,
+        ExhPreferenceDefaults.LENIENT_SYNC,
+    )
 
-    fun exhShowSettingsUploadWarning() = preferenceStore.getBoolean("eh_showSettingsUploadWarning2", true)
+    fun exhShowSettingsUploadWarning() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.SHOW_SETTINGS_UPLOAD_WARNING,
+        ExhPreferenceDefaults.SHOW_SETTINGS_UPLOAD_WARNING,
+    )
 
-    fun logLevel() = preferenceStore.getInt("eh_log_level", 0)
+    fun logLevel() = preferenceStore.getInt(
+        ExhPreferenceKeys.LOG_LEVEL,
+        ExhPreferenceDefaults.LOG_LEVEL,
+    )
 
-    fun exhAutoUpdateFrequency() = preferenceStore.getInt("eh_auto_update_frequency", 1)
+    fun exhAutoUpdateFrequency() = preferenceStore.getInt(
+        ExhPreferenceKeys.AUTO_UPDATE_FREQUENCY,
+        ExhPreferenceDefaults.AUTO_UPDATE_FREQUENCY,
+    )
 
-    fun exhAutoUpdateRequirements() = preferenceStore.getStringSet("eh_auto_update_restrictions", emptySet())
+    fun exhAutoUpdateRequirements() = preferenceStore.getStringSet(
+        ExhPreferenceKeys.AUTO_UPDATE_REQUIREMENTS,
+        ExhPreferenceDefaults.AUTO_UPDATE_REQUIREMENTS,
+    )
 
-    fun exhAutoUpdateStats() = preferenceStore.getString(Preference.Companion.appStateKey("eh_auto_update_stats"), "")
+    fun exhAutoUpdateStats() = preferenceStore.getString(
+        Preference.appStateKey(ExhPreferenceKeys.AUTO_UPDATE_STATS),
+        ExhPreferenceDefaults.AUTO_UPDATE_STATS,
+    )
 
-    fun exhWatchedListDefaultState() = preferenceStore.getBoolean("eh_watched_list_default_state", false)
+    fun exhWatchedListDefaultState() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.WATCHED_LIST_DEFAULT_STATE,
+        ExhPreferenceDefaults.WATCHED_LIST_DEFAULT_STATE,
+    )
 
     fun exhSettingsLanguages() = preferenceStore.getString(
-        "eh_settings_languages",
-        "false*false*false\nfalse*false*false\nfalse*false*false\nfalse*false*false\nfalse*false*false\n" +
-            "false*false*false\nfalse*false*false\nfalse*false*false\nfalse*false*false\nfalse*false*false\n" +
-            "false*false*false\nfalse*false*false\nfalse*false*false\nfalse*false*false\nfalse*false*false\n" +
-            "false*false*false\nfalse*false*false",
+        ExhPreferenceKeys.SETTINGS_LANGUAGES,
+        ExhPreferenceDefaults.SETTINGS_LANGUAGES,
     )
 
     fun exhEnabledCategories() = preferenceStore.getString(
-        "eh_enabled_categories",
-        "false,false,false,false,false,false,false,false,false,false",
+        ExhPreferenceKeys.ENABLED_CATEGORIES,
+        ExhPreferenceDefaults.ENABLED_CATEGORIES,
     )
 
-    fun enhancedEHentaiView() = preferenceStore.getBoolean("enhanced_e_hentai_view", true)
+    fun enhancedEHentaiView() = preferenceStore.getBoolean(
+        ExhPreferenceKeys.ENHANCED_EHENTAI_VIEW,
+        ExhPreferenceDefaults.ENHANCED_EHENTAI_VIEW,
+    )
 }

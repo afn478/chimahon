@@ -33,6 +33,9 @@ data class HistoryWithRelations(
 
     // KMK -->
     val unreadCount
-        get() = totalCountCalculated - readCountCalculated
+        get() = HistoryCounters.unreadCount(
+            totalCount = totalCountCalculated,
+            readCount = readCountCalculated,
+        )
     // KMK <--
 }

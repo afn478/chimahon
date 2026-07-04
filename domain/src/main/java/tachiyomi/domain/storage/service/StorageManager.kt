@@ -50,9 +50,9 @@ class StorageManager(
             .onEach { uri ->
                 baseDir = getBaseDir(uri)
                 baseDir?.let { parent ->
-                    parent.createDirectory(AUTOMATIC_BACKUPS_PATH)
-                    parent.createDirectory(LOCAL_SOURCE_PATH)
-                    parent.createDirectory(DOWNLOADS_PATH).also {
+                    parent.createDirectory(StorageDirectoryNames.AUTOMATIC_BACKUPS)
+                    parent.createDirectory(StorageDirectoryNames.LOCAL_SOURCE)
+                    parent.createDirectory(StorageDirectoryNames.DOWNLOADS).also {
                         DiskUtil.createNoMediaFile(it, context)
                     }
                 }
@@ -71,20 +71,20 @@ class StorageManager(
     }
 
     fun getAutomaticBackupsDirectory(): UniFile? {
-        return baseDir?.createDirectory(AUTOMATIC_BACKUPS_PATH)
+        return baseDir?.createDirectory(StorageDirectoryNames.AUTOMATIC_BACKUPS)
     }
 
     fun getDownloadsDirectory(): UniFile? {
-        return baseDir?.createDirectory(DOWNLOADS_PATH)
+        return baseDir?.createDirectory(StorageDirectoryNames.DOWNLOADS)
     }
 
     fun getLocalSourceDirectory(): UniFile? {
-        return baseDir?.createDirectory(LOCAL_SOURCE_PATH)
+        return baseDir?.createDirectory(StorageDirectoryNames.LOCAL_SOURCE)
     }
 
     // SY -->
     fun getLogsDirectory(): UniFile? {
-        return baseDir?.createDirectory(LOGS_PATH)
+        return baseDir?.createDirectory(StorageDirectoryNames.LOGS)
     }
     // SY <--
 
@@ -218,11 +218,3 @@ class StorageManager(
         // KMK <--
     }
 }
-
-private const val AUTOMATIC_BACKUPS_PATH = "autobackup"
-private const val DOWNLOADS_PATH = "downloads"
-private const val LOCAL_SOURCE_PATH = "local"
-
-// SY -->
-private const val LOGS_PATH = "logs"
-// SY <--

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.domain.release.model.ApplicationReleaseArguments
 import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.ReleaseService
 import java.time.Instant
@@ -47,7 +48,7 @@ class GetApplicationReleaseTest {
         coEvery { releaseService.releaseNotes(any()) } returns releases
 
         val result = getApplicationRelease.await(
-            GetApplicationRelease.Arguments(
+            ApplicationReleaseArguments(
                 isFoss = false,
                 isPreview = true,
                 commitCount = 1000,
@@ -57,7 +58,7 @@ class GetApplicationReleaseTest {
         )
 
         // KMK: Don't cast, will throw exception if the result is different from expected
-        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatest()!!)
+        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatestRelease()!!)
     }
 
     @Test
@@ -78,7 +79,7 @@ class GetApplicationReleaseTest {
         coEvery { releaseService.releaseNotes(any()) } returns releases
 
         val result = getApplicationRelease.await(
-            GetApplicationRelease.Arguments(
+            ApplicationReleaseArguments(
                 isFoss = false,
                 isPreview = false,
                 commitCount = 0,
@@ -88,7 +89,7 @@ class GetApplicationReleaseTest {
         )
 
         // KMK: Don't cast, will throw exception if the result is different from expected
-        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatest()!!)
+        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatestRelease()!!)
     }
 
     @Test
@@ -108,7 +109,7 @@ class GetApplicationReleaseTest {
         coEvery { releaseService.releaseNotes(any()) } returns releases
 
         val result = getApplicationRelease.await(
-            GetApplicationRelease.Arguments(
+            ApplicationReleaseArguments(
                 isFoss = false,
                 isPreview = false,
                 commitCount = 0,
@@ -137,7 +138,7 @@ class GetApplicationReleaseTest {
         coEvery { releaseService.releaseNotes(any()) } returns releases
 
         val result = getApplicationRelease.await(
-            GetApplicationRelease.Arguments(
+            ApplicationReleaseArguments(
                 isFoss = false,
                 isPreview = false,
                 commitCount = 0,

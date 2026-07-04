@@ -13,10 +13,10 @@ import tachiyomi.core.common.util.system.logcat
 class ExtensionRepoService(
     networkHelper: NetworkHelper,
     private val json: Json,
-) {
+) : ExtensionRepoDetailsFetcher {
     val client = networkHelper.client
 
-    suspend fun fetchRepoDetails(
+    override suspend fun fetchRepoDetails(
         repo: String,
     ): ExtensionRepo? {
         return withIOContext {

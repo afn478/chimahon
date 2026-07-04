@@ -1,12 +1,15 @@
 package mihon.core.migration.migrations
 
 import android.app.Application
+import exh.source.ExhPreferenceKeys
 import mihon.core.migration.MigrateUtils
 import mihon.core.migration.Migration
 import mihon.core.migration.MigrationContext
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.domain.library.service.LibraryPreferenceKeys
+import tachiyomi.domain.storage.service.StoragePreferenceKeys
 
 class MoveSettingsToPrivateOrAppStateMigration : Migration {
     override val version: Float = 59f
@@ -20,15 +23,15 @@ class MoveSettingsToPrivateOrAppStateMigration : Migration {
             "last_catalogue_source",
             "trusted_signatures",
             "last_app_closed",
-            "library_update_last_timestamp",
-            "library_unseen_updates_count",
-            "last_used_category",
+            LibraryPreferenceKeys.LAST_UPDATED_TIMESTAMP,
+            LibraryPreferenceKeys.NEW_UPDATES_COUNT,
+            LibraryPreferenceKeys.LAST_USED_CATEGORY,
             "last_app_check",
             "last_ext_check",
             "last_version_code",
             "skip_pre_migration",
-            "eh_auto_update_stats",
-            "storage_dir",
+            ExhPreferenceKeys.AUTO_UPDATE_STATS,
+            StoragePreferenceKeys.BASE_STORAGE_DIRECTORY,
         )
         MigrateUtils.replacePreferences(
             preferenceStore = preferenceStore,
@@ -41,16 +44,16 @@ class MoveSettingsToPrivateOrAppStateMigration : Migration {
             "encrypt_database",
             "cbz_password",
             "password_protect_downloads",
-            "eh_ipb_member_id",
-            "enable_exhentai",
-            "eh_ipb_member_id",
-            "eh_ipb_pass_hash",
-            "eh_igneous",
-            "eh_ehSettingsProfile",
-            "eh_exhSettingsProfile",
-            "eh_settingsKey",
-            "eh_sessionCookie",
-            "eh_hathPerksCookie",
+            ExhPreferenceKeys.MEMBER_ID,
+            ExhPreferenceKeys.ENABLE_EXHENTAI,
+            ExhPreferenceKeys.MEMBER_ID,
+            ExhPreferenceKeys.PASS_HASH,
+            ExhPreferenceKeys.IGNEOUS,
+            ExhPreferenceKeys.EH_SETTINGS_PROFILE,
+            ExhPreferenceKeys.EXH_SETTINGS_PROFILE,
+            ExhPreferenceKeys.SETTINGS_KEY,
+            ExhPreferenceKeys.SESSION_COOKIE,
+            ExhPreferenceKeys.HATH_PERKS_COOKIE,
         )
 
         MigrateUtils.replacePreferences(

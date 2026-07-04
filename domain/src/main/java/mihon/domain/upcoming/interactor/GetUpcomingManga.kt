@@ -1,13 +1,10 @@
 package mihon.domain.upcoming.interactor
 
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.coroutines.flow.Flow
+import mihon.domain.upcoming.service.UpcomingMangaUpdatePolicy
+import tachiyomi.domain.library.service.LibraryUpdateCategoryPolicy
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_HAS_UNREAD
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_COMPLETED
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_READ
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSIDE_RELEASE_PERIOD
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -41,9 +38,11 @@ class GetUpcomingManga(
         val excludedCategories = libraryPreferences.updateCategoriesExclude().get().map { it.toLong() }.toSet()
 
         val listToUpdate = libraryManga.filter {
-            val included = includedCategories.isEmpty() || it.categories.intersect(includedCategories).isNotEmpty()
-            val excluded = it.categories.intersect(excludedCategories).isNotEmpty()
-            included && !excluded
+            LibraryUpdateCategoryPolicy.shouldInclude(
+                categoryIds = it.categories,
+                includedCategoryIds = includedCategories,
+                excludedCategoryIds = excludedCategories,
+            )
         }
 
         val restrictions = libraryPreferences.autoUpdateMangaRestrictions().get()
@@ -52,19 +51,16 @@ class GetUpcomingManga(
         return listToUpdate
             .distinctBy { it.manga.id }
             .filter {
-                when {
-                    it.manga.updateStrategy != UpdateStrategy.ALWAYS_UPDATE -> false
-
-                    MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> false
-
-                    MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> false
-
-                    MANGA_NON_READ in restrictions && it.totalChapters > 0L && !it.hasStarted -> false
-
-                    MANGA_OUTSIDE_RELEASE_PERIOD in restrictions && it.manga.nextUpdate < today -> false
-
-                    else -> true
-                }
+                UpcomingMangaUpdatePolicy.shouldUpdate(
+                    updateStrategy = it.manga.updateStrategy,
+                    status = it.manga.status,
+                    nextUpdate = it.manga.nextUpdate,
+                    totalChapters = it.totalChapters,
+                    unreadCount = it.unreadCount,
+                    hasStarted = it.hasStarted,
+                    restrictions = restrictions,
+                    today = today,
+                )
             }
             .map { it.manga }
             .sortedBy { it.nextUpdate }

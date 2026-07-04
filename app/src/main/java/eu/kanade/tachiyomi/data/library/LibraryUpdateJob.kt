@@ -20,8 +20,6 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.sync.SyncDataJob
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.all.MergedSource
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.setForegroundSafely
@@ -66,14 +64,12 @@ import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibraryManga
+import tachiyomi.domain.library.service.LibraryMangaUpdatePolicy
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.service.LibraryUpdateCategoryPolicy
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_NETWORK_NOT_METERED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_ONLY_ON_WIFI
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_HAS_UNREAD
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_COMPLETED
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_READ
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSIDE_RELEASE_PERIOD
 import tachiyomi.domain.libraryUpdateError.interactor.DeleteLibraryUpdateErrors
 import tachiyomi.domain.libraryUpdateError.interactor.InsertLibraryUpdateErrors
 import tachiyomi.domain.libraryUpdateError.model.LibraryUpdateError
@@ -238,12 +234,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             mangaToUpdate = libraryManga
                 .filter {
                     it.manga.id in targetMangaIds &&
-                        when {
-                            // Apply update restrictions even for targeted updates
-                            it.manga.updateStrategy == UpdateStrategy.ONLY_FETCH_ONCE && it.totalChapters > 0L -> false
-                            // Skip other restrictions for targeted updates to allow forced refresh
-                            else -> true
-                        }
+                        LibraryMangaUpdatePolicy.skipReason(
+                            updateStrategy = it.manga.updateStrategy,
+                            status = it.manga.status,
+                            nextUpdate = it.manga.nextUpdate,
+                            totalChapters = it.totalChapters,
+                            unreadCount = it.unreadCount,
+                            hasStarted = it.hasStarted,
+                            restrictions = emptySet(),
+                            fetchWindowUpperBound = Long.MAX_VALUE,
+                        ) == null
                 }
 
             notifier.showQueueSizeWarningNotificationIfNeeded(mangaToUpdate)
@@ -264,9 +264,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             val excludedCategories = libraryPreferences.updateCategoriesExclude().get().map { it.toLong() }.toSet()
 
             libraryManga.filter {
-                val included = includedCategories.isEmpty() || it.categories.intersect(includedCategories).isNotEmpty()
-                val excluded = it.categories.intersect(excludedCategories).isNotEmpty()
-                included && !excluded
+                LibraryUpdateCategoryPolicy.shouldInclude(
+                    categoryIds = it.categories,
+                    includedCategoryIds = includedCategories,
+                    excludedCategoryIds = excludedCategories,
+                )
             }
             // SY -->
         } else {
@@ -315,39 +317,22 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             .distinctBy { it.manga.id }
             // SY <--
             .filter {
-                when {
-                    it.manga.updateStrategy == UpdateStrategy.ONLY_FETCH_ONCE && it.totalChapters > 0L -> {
-                        skippedUpdates.add(
-                            it.manga to
-                                context.stringResource(MR.strings.skipped_reason_not_always_update),
-                        )
-                        false
-                    }
+                val skipReason = LibraryMangaUpdatePolicy.skipReason(
+                    updateStrategy = it.manga.updateStrategy,
+                    status = it.manga.status,
+                    nextUpdate = it.manga.nextUpdate,
+                    totalChapters = it.totalChapters,
+                    unreadCount = it.unreadCount,
+                    hasStarted = it.hasStarted,
+                    restrictions = restrictions,
+                    fetchWindowUpperBound = fetchWindowUpperBound,
+                )
 
-                    MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_completed))
-                        false
-                    }
-
-                    MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
-                        false
-                    }
-
-                    MANGA_NON_READ in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
-                        false
-                    }
-
-                    MANGA_OUTSIDE_RELEASE_PERIOD in restrictions && it.manga.nextUpdate > fetchWindowUpperBound -> {
-                        skippedUpdates.add(
-                            it.manga to
-                                context.stringResource(MR.strings.skipped_reason_not_in_release_period),
-                        )
-                        false
-                    }
-
-                    else -> true
+                if (skipReason != null) {
+                    skippedUpdates.add(it.manga to skipReason.message())
+                    false
+                } else {
+                    true
                 }
             }
             .sortedWith(
@@ -701,6 +686,26 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         insertLibraryUpdateErrors.insertAll(errorList)
     }
     // KMK <--
+
+    private fun LibraryMangaUpdatePolicy.SkipReason.message(): String {
+        return when (this) {
+            LibraryMangaUpdatePolicy.SkipReason.ONLY_FETCH_ONCE -> {
+                context.stringResource(MR.strings.skipped_reason_not_always_update)
+            }
+            LibraryMangaUpdatePolicy.SkipReason.COMPLETED -> {
+                context.stringResource(MR.strings.skipped_reason_completed)
+            }
+            LibraryMangaUpdatePolicy.SkipReason.HAS_UNREAD -> {
+                context.stringResource(MR.strings.skipped_reason_not_caught_up)
+            }
+            LibraryMangaUpdatePolicy.SkipReason.NOT_STARTED -> {
+                context.stringResource(MR.strings.skipped_reason_not_started)
+            }
+            LibraryMangaUpdatePolicy.SkipReason.OUTSIDE_RELEASE_PERIOD -> {
+                context.stringResource(MR.strings.skipped_reason_not_in_release_period)
+            }
+        }
+    }
 
     /**
      * Defines what should be updated within a service execution.

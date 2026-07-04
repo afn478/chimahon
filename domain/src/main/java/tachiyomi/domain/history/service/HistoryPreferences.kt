@@ -3,29 +3,30 @@ package tachiyomi.domain.history.service
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
-import tachiyomi.domain.updates.service.USE_PANORAMA_COVER_PREF
+import tachiyomi.domain.updates.service.UpdatesHistoryPreferenceDefaults
+import tachiyomi.domain.updates.service.UpdatesHistoryPreferenceKeys
 
 class HistoryPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
 
     fun filterUnfinishedManga() = preferenceStore.getEnum(
-        "pref_filter_history_unfinished_manga",
+        UpdatesHistoryPreferenceKeys.FILTER_HISTORY_UNFINISHED_MANGA,
         TriState.DISABLED,
     )
 
     fun filterUnfinishedChapter() = preferenceStore.getEnum(
-        "pref_filter_history_unfinished_chapter",
+        UpdatesHistoryPreferenceKeys.FILTER_HISTORY_UNFINISHED_CHAPTER,
         TriState.DISABLED,
     )
 
     fun filterNonLibraryManga() = preferenceStore.getEnum(
-        "pref_filter_history_non_library_manga",
+        UpdatesHistoryPreferenceKeys.FILTER_HISTORY_NON_LIBRARY_MANGA,
         TriState.DISABLED,
     )
 
     fun usePanoramaCover() = preferenceStore.getBoolean(
-        USE_PANORAMA_COVER_PREF,
-        false,
+        UpdatesHistoryPreferenceKeys.USE_PANORAMA_COVER,
+        UpdatesHistoryPreferenceDefaults.USE_PANORAMA_COVER,
     )
 }

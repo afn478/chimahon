@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.serialization.json.Json
-import tachiyomi.domain.release.interactor.GetApplicationRelease
+import tachiyomi.domain.release.model.ApplicationReleaseArguments
 import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.ReleaseService
 
@@ -15,7 +15,7 @@ class ReleaseServiceImpl(
     private val json: Json,
 ) : ReleaseService {
 
-    override suspend fun latest(arguments: GetApplicationRelease.Arguments): Release? {
+    override suspend fun latest(arguments: ApplicationReleaseArguments): Release? {
         val release = with(json) {
             networkService.client
                 .newCall(GET("https://api.github.com/repos/${arguments.repository}/releases/latest"))
@@ -36,7 +36,7 @@ class ReleaseServiceImpl(
     }
 
     // KMK -->
-    override suspend fun releaseNotes(arguments: GetApplicationRelease.Arguments): List<Release> {
+    override suspend fun releaseNotes(arguments: ApplicationReleaseArguments): List<Release> {
         return with(json) {
             networkService.client
                 .newCall(GET("https://api.github.com/repos/${arguments.repository}/releases"))

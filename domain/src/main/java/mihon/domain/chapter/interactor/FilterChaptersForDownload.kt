@@ -1,6 +1,7 @@
 package mihon.domain.chapter.interactor
 
 import exh.source.MERGED_SOURCE_ID
+import mihon.domain.chapter.service.ChapterDownloadFilters
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.GetMergedChaptersByMangaId
@@ -48,14 +49,11 @@ class FilterChaptersForDownload(
             getChaptersByMangaId.await(manga.id, /* KMK --> */ applyFilter = true /* KMK <-- */)
         }
 
-        val readChapterNumbers = existingChapters
-            // SY <--
-            .asSequence()
-            .filter { it.read && it.isRecognizedNumber }
-            .map { it.chapterNumber }
-            .toSet()
-
-        return newChapters.filterNot { it.chapterNumber in readChapterNumbers }
+        // SY <--
+        return ChapterDownloadFilters.withoutAlreadyReadChapterNumbers(
+            newChapters = newChapters,
+            existingChapters = existingChapters,
+        )
     }
 
     /**
@@ -65,25 +63,15 @@ class FilterChaptersForDownload(
      * @return `true` if chapters of the manga should be downloaded
      */
     private suspend fun Manga.shouldDownloadNewChapters(): Boolean {
-        if (!favorite) return false
-
-        val categories = getCategories.await(id).map { it.id }.ifEmpty { listOf(DEFAULT_CATEGORY_ID) }
+        val categories = getCategories.await(id).map { it.id }
         val includedCategories = downloadPreferences.downloadNewChapterCategories().get().map { it.toLong() }
         val excludedCategories = downloadPreferences.downloadNewChapterCategoriesExclude().get().map { it.toLong() }
 
-        return when {
-            // Default Download from all categories
-            includedCategories.isEmpty() && excludedCategories.isEmpty() -> true
-            // In excluded category
-            categories.any { it in excludedCategories } -> false
-            // Included category not selected
-            includedCategories.isEmpty() -> true
-            // In included category
-            else -> categories.any { it in includedCategories }
-        }
-    }
-
-    companion object {
-        private const val DEFAULT_CATEGORY_ID = 0L
+        return ChapterDownloadFilters.shouldDownloadNewChapters(
+            favorite = favorite,
+            categoryIds = categories,
+            includedCategoryIds = includedCategories,
+            excludedCategoryIds = excludedCategories,
+        )
     }
 }

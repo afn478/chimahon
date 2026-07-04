@@ -7,14 +7,20 @@ class BackupPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
 
-    fun backupInterval() = preferenceStore.getInt("backup_interval", 12)
+    fun backupInterval() = preferenceStore.getInt(
+        BackupPreferenceKeys.BACKUP_INTERVAL,
+        BackupPreferenceDefaults.BACKUP_INTERVAL_HOURS,
+    )
 
-    fun lastAutoBackupTimestamp() = preferenceStore.getLong(Preference.appStateKey("last_auto_backup_timestamp"), 0L)
+    fun lastAutoBackupTimestamp() = preferenceStore.getLong(
+        Preference.appStateKey(BackupPreferenceKeys.LAST_AUTO_BACKUP_TIMESTAMP),
+        BackupPreferenceDefaults.LAST_AUTO_BACKUP_TIMESTAMP,
+    )
 
     // KMK -->
     fun showRestoringProgressBanner() = preferenceStore.getBoolean(
-        Preference.appStateKey("pref_show_restoring_progress_banner_key"),
-        true,
+        Preference.appStateKey(BackupPreferenceKeys.SHOW_RESTORING_PROGRESS_BANNER),
+        BackupPreferenceDefaults.SHOW_RESTORING_PROGRESS_BANNER,
     )
     // KMK <--
 }

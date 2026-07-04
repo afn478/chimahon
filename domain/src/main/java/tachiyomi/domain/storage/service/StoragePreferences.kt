@@ -10,5 +10,8 @@ class StoragePreferences(
 ) {
 
     // Storing URI of the directory (either file:/// or storage://
-    fun baseStorageDirectory() = preferenceStore.getString(Preference.appStateKey("storage_dir"), folderProvider.path())
+    fun baseStorageDirectory() = preferenceStore.getString(
+        Preference.appStateKey(StoragePreferenceKeys.BASE_STORAGE_DIRECTORY),
+        folderProvider.path(),
+    )
 }

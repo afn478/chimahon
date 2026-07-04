@@ -9,38 +9,38 @@ class UpdatesPreferences(
 ) {
 
     fun filterDownloaded() = preferenceStore.getEnum(
-        "pref_filter_updates_downloaded",
+        UpdatesHistoryPreferenceKeys.FILTER_UPDATES_DOWNLOADED,
         TriState.DISABLED,
     )
 
     fun filterUnread() = preferenceStore.getEnum(
-        "pref_filter_updates_unread",
+        UpdatesHistoryPreferenceKeys.FILTER_UPDATES_UNREAD,
         TriState.DISABLED,
     )
 
     fun filterStarted() = preferenceStore.getEnum(
-        "pref_filter_updates_started",
+        UpdatesHistoryPreferenceKeys.FILTER_UPDATES_STARTED,
         TriState.DISABLED,
     )
 
     fun filterBookmarked() = preferenceStore.getEnum(
-        "pref_filter_updates_bookmarked",
+        UpdatesHistoryPreferenceKeys.FILTER_UPDATES_BOOKMARKED,
         TriState.DISABLED,
     )
 
     fun filterExcludedScanlators() = preferenceStore.getBoolean(
-        "pref_filter_updates_hide_excluded_scanlators",
-        false,
+        UpdatesHistoryPreferenceKeys.FILTER_UPDATES_HIDE_EXCLUDED_SCANLATORS,
+        UpdatesHistoryPreferenceDefaults.FILTER_UPDATES_HIDE_EXCLUDED_SCANLATORS,
     )
 
     // KMK -->
     fun usePanoramaCover() = preferenceStore.getBoolean(
-        USE_PANORAMA_COVER_PREF,
-        false,
+        UpdatesHistoryPreferenceKeys.USE_PANORAMA_COVER,
+        UpdatesHistoryPreferenceDefaults.USE_PANORAMA_COVER,
     )
     // KMK <--
 }
 
 // KMK -->
-const val USE_PANORAMA_COVER_PREF = "pref_updates_history_screen_use_panorama_cover"
+const val USE_PANORAMA_COVER_PREF = UpdatesHistoryPreferenceKeys.USE_PANORAMA_COVER
 // KMK <--

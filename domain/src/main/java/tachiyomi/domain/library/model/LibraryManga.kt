@@ -19,16 +19,16 @@ data class LibraryManga(
     val id: Long = manga.id
 
     val unreadCount
-        get() = when {
-            // KMK -->
-            chapterFlags and Manga.CHAPTER_SHOW_NOT_BOOKMARKED != 0L -> totalChapters - bookmarkCount - (readCount - bookmarkReadCount)
-            chapterFlags and Manga.CHAPTER_SHOW_BOOKMARKED != 0L -> bookmarkCount - bookmarkReadCount
-            // KMK <--
-            else -> totalChapters - readCount
-        }
+        get() = LibraryMangaCounters.unreadCount(
+            totalChapters = totalChapters,
+            readCount = readCount,
+            bookmarkCount = bookmarkCount,
+            bookmarkReadCount = bookmarkReadCount,
+            chapterFlags = chapterFlags,
+        )
 
     val hasBookmarks
-        get() = bookmarkCount > 0
+        get() = LibraryMangaCounters.hasBookmarks(bookmarkCount)
 
-    val hasStarted = readCount > 0
+    val hasStarted = LibraryMangaCounters.hasStarted(readCount)
 }

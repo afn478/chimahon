@@ -81,7 +81,7 @@ class FetchInterval(
             else -> 7
         }
 
-        return interval.coerceIn(1, MAX_INTERVAL)
+        return FetchIntervalPolicy.coerceInterval(interval)
     }
 
     private fun calculateNextUpdate(
@@ -103,30 +103,18 @@ class FetchInterval(
         val timeSinceLatest = ChronoUnit.DAYS.between(latestDate, dateTime).toInt()
         val cycle = timeSinceLatest.floorDiv(
             interval.absoluteValue.takeIf { interval < 0 }
-                ?: increaseInterval(interval, timeSinceLatest, increaseWhenOver = 10),
+                ?: FetchIntervalPolicy.increaseIntervalWhenOverdue(interval, timeSinceLatest),
         )
         return latestDate.plusDays((cycle + 1) * interval.absoluteValue.toLong()).toEpochSecond(dateTime.offset) * 1000
     }
 
-    private fun increaseInterval(delta: Int, timeSinceLatest: Int, increaseWhenOver: Int): Int {
-        if (delta >= MAX_INTERVAL) return MAX_INTERVAL
-
-        // double delta again if missed more than 9 check in new delta
-        val cycle = timeSinceLatest.floorDiv(delta) + 1
-        return if (cycle > increaseWhenOver) {
-            increaseInterval(delta * 2, timeSinceLatest, increaseWhenOver)
-        } else {
-            delta
-        }
-    }
-
     companion object {
-        const val MAX_INTERVAL = 28
+        const val MAX_INTERVAL = FetchIntervalPolicy.MAX_INTERVAL_DAYS
 
         private const val GRACE_PERIOD = 1L
 
         // KMK -->
-        const val MANUAL_DISABLE = 99999 // 274 years in future
+        const val MANUAL_DISABLE = FetchIntervalPolicy.MANUAL_DISABLE // 274 years in future
         // KMK <--
     }
 }

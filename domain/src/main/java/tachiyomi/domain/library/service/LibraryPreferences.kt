@@ -4,10 +4,9 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
-import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.model.LibraryDisplayMode
-import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
+import tachiyomi.domain.library.model.LibraryUpdateMangaRestrictions
 import tachiyomi.domain.manga.model.Manga
 
 class LibraryPreferences(
@@ -15,127 +14,162 @@ class LibraryPreferences(
 ) {
 
     fun displayMode() = preferenceStore.getObjectFromString(
-        "pref_display_mode_library",
+        LibraryPreferenceKeys.DISPLAY_MODE,
         LibraryDisplayMode.default,
         LibraryDisplayMode.Serializer::serialize,
         LibraryDisplayMode.Serializer::deserialize,
     )
 
     fun sortingMode() = preferenceStore.getObjectFromString(
-        "library_sorting_mode",
+        LibraryPreferenceKeys.SORTING_MODE,
         LibrarySort.default,
         LibrarySort.Serializer::serialize,
         LibrarySort.Serializer::deserialize,
     )
 
-    fun randomSortSeed() = preferenceStore.getInt("library_random_sort_seed", 0)
+    fun randomSortSeed() = preferenceStore.getInt(
+        LibraryPreferenceKeys.RANDOM_SORT_SEED,
+        LibraryPreferenceDefaults.RANDOM_SORT_SEED,
+    )
 
-    fun portraitColumns() = preferenceStore.getInt("pref_library_columns_portrait_key", 0)
-    fun landscapeColumns() = preferenceStore.getInt("pref_library_columns_landscape_key", 0)
+    fun portraitColumns() = preferenceStore.getInt(
+        LibraryPreferenceKeys.PORTRAIT_COLUMNS,
+        LibraryPreferenceDefaults.PORTRAIT_COLUMNS,
+    )
+    fun landscapeColumns() = preferenceStore.getInt(
+        LibraryPreferenceKeys.LANDSCAPE_COLUMNS,
+        LibraryPreferenceDefaults.LANDSCAPE_COLUMNS,
+    )
 
-    fun novelPortraitColumns() = preferenceStore.getInt("pref_novel_library_columns_portrait_key", 2)
-    fun novelLandscapeColumns() = preferenceStore.getInt("pref_novel_library_columns_landscape_key", 2)
+    fun novelPortraitColumns() = preferenceStore.getInt(
+        LibraryPreferenceKeys.NOVEL_PORTRAIT_COLUMNS,
+        LibraryPreferenceDefaults.NOVEL_PORTRAIT_COLUMNS,
+    )
+    fun novelLandscapeColumns() = preferenceStore.getInt(
+        LibraryPreferenceKeys.NOVEL_LANDSCAPE_COLUMNS,
+        LibraryPreferenceDefaults.NOVEL_LANDSCAPE_COLUMNS,
+    )
 
-    fun lastUpdatedTimestamp() = preferenceStore.getLong(Preference.appStateKey("library_update_last_timestamp"), 0L)
-    fun autoUpdateInterval() = preferenceStore.getInt("pref_library_update_interval_key", 0)
+    fun lastUpdatedTimestamp() = preferenceStore.getLong(
+        Preference.appStateKey(LibraryPreferenceKeys.LAST_UPDATED_TIMESTAMP),
+        LibraryPreferenceDefaults.LAST_UPDATED_TIMESTAMP,
+    )
+    fun autoUpdateInterval() = preferenceStore.getInt(
+        LibraryPreferenceKeys.AUTO_UPDATE_INTERVAL,
+        LibraryPreferenceDefaults.AUTO_UPDATE_INTERVAL,
+    )
 
     // KMK -->
     fun showUpdatingProgressBanner() = preferenceStore.getBoolean(
-        Preference.appStateKey("pref_show_updating_progress_banner_key"),
-        true,
+        Preference.appStateKey(LibraryPreferenceKeys.SHOW_UPDATING_PROGRESS_BANNER),
+        LibraryPreferenceDefaults.SHOW_UPDATING_PROGRESS_BANNER,
     )
     // KMK <--
 
     fun coverRatios() = preferenceStore.getStringSet(
-        Preference.appStateKey("pref_library_cover_ratios_key"),
-        emptySet(),
+        Preference.appStateKey(LibraryPreferenceKeys.COVER_RATIOS),
+        LibraryPreferenceDefaults.COVER_RATIOS,
     )
 
     fun coverColors() = preferenceStore.getStringSet(
-        Preference.appStateKey("pref_library_cover_colors_key"),
-        emptySet(),
+        Preference.appStateKey(LibraryPreferenceKeys.COVER_COLORS),
+        LibraryPreferenceDefaults.COVER_COLORS,
     )
     // KMK <--
 
     fun autoUpdateDeviceRestrictions() = preferenceStore.getStringSet(
-        "library_update_restriction",
-        setOf(
-            DEVICE_ONLY_ON_WIFI,
-        ),
+        LibraryPreferenceKeys.AUTO_UPDATE_DEVICE_RESTRICTIONS,
+        LibraryPreferenceDefaults.AUTO_UPDATE_DEVICE_RESTRICTIONS,
     )
     fun autoUpdateMangaRestrictions() = preferenceStore.getStringSet(
-        "library_update_manga_restriction",
-        setOf(
-            MANGA_HAS_UNREAD,
-            MANGA_NON_COMPLETED,
-            MANGA_NON_READ,
-            MANGA_OUTSIDE_RELEASE_PERIOD,
-        ),
+        LibraryPreferenceKeys.AUTO_UPDATE_MANGA_RESTRICTIONS,
+        LibraryPreferenceDefaults.AUTO_UPDATE_MANGA_RESTRICTIONS,
     )
 
-    fun autoUpdateMetadata() = preferenceStore.getBoolean("auto_update_metadata", false)
+    fun autoUpdateMetadata() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.AUTO_UPDATE_METADATA,
+        LibraryPreferenceDefaults.AUTO_UPDATE_METADATA,
+    )
 
     // KMK -->
-    fun fetchMetadataOnAdd() = preferenceStore.getBoolean("fetch_metadata_on_add", false)
-    fun fetchChaptersOnAdd() = preferenceStore.getBoolean("fetch_chapters_on_add", false)
+    fun fetchMetadataOnAdd() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.FETCH_METADATA_ON_ADD,
+        LibraryPreferenceDefaults.FETCH_METADATA_ON_ADD,
+    )
+    fun fetchChaptersOnAdd() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.FETCH_CHAPTERS_ON_ADD,
+        LibraryPreferenceDefaults.FETCH_CHAPTERS_ON_ADD,
+    )
     // KMK <--
 
     fun showContinueReadingButton() = preferenceStore.getBoolean(
-        "display_continue_reading_button",
-        false,
+        LibraryPreferenceKeys.SHOW_CONTINUE_READING_BUTTON,
+        LibraryPreferenceDefaults.SHOW_CONTINUE_READING_BUTTON,
     )
 
-    fun markDuplicateReadChapterAsRead() = preferenceStore.getStringSet("mark_duplicate_read_chapter_read", emptySet())
+    fun markDuplicateReadChapterAsRead() = preferenceStore.getStringSet(
+        LibraryPreferenceKeys.MARK_DUPLICATE_READ_CHAPTER_AS_READ,
+        LibraryPreferenceDefaults.MARK_DUPLICATE_READ_CHAPTER_AS_READ,
+    )
 
     // region Filter
 
     fun filterDownloaded() = preferenceStore.getEnum(
-        "pref_filter_library_downloaded_v2",
+        LibraryPreferenceKeys.FILTER_DOWNLOADED,
         TriState.DISABLED,
     )
 
-    fun filterUnread() = preferenceStore.getEnum("pref_filter_library_unread_v2", TriState.DISABLED)
+    fun filterUnread() = preferenceStore.getEnum(
+        LibraryPreferenceKeys.FILTER_UNREAD,
+        TriState.DISABLED,
+    )
 
     fun filterStarted() = preferenceStore.getEnum(
-        "pref_filter_library_started_v2",
+        LibraryPreferenceKeys.FILTER_STARTED,
         TriState.DISABLED,
     )
 
     fun filterBookmarked() = preferenceStore.getEnum(
-        "pref_filter_library_bookmarked_v2",
+        LibraryPreferenceKeys.FILTER_BOOKMARKED,
         TriState.DISABLED,
     )
 
     fun filterCompleted() = preferenceStore.getEnum(
-        "pref_filter_library_completed_v2",
+        LibraryPreferenceKeys.FILTER_COMPLETED,
         TriState.DISABLED,
     )
 
     fun filterIntervalCustom() = preferenceStore.getEnum(
-        "pref_filter_library_interval_custom",
+        LibraryPreferenceKeys.FILTER_INTERVAL_CUSTOM,
         TriState.DISABLED,
     )
 
     // SY -->
     fun filterLewd() = preferenceStore.getEnum(
-        "pref_filter_library_lewd_v2",
+        LibraryPreferenceKeys.FILTER_LEWD,
         TriState.DISABLED,
     )
     // SY <--
 
     // KMK -->
     fun filterCategories() = preferenceStore.getBoolean(
-        "pref_filter_library_categories",
-        false,
+        LibraryPreferenceKeys.FILTER_CATEGORIES,
+        LibraryPreferenceDefaults.FILTER_CATEGORIES,
     )
 
-    fun filterCategoriesInclude() = preferenceStore.getStringSet(FILTER_LIBRARY_CATEGORIES_INCLUDE_PREF_KEY, emptySet())
+    fun filterCategoriesInclude() = preferenceStore.getStringSet(
+        LibraryPreferenceKeys.FILTER_LIBRARY_CATEGORIES_INCLUDE,
+        emptySet(),
+    )
 
-    fun filterCategoriesExclude() = preferenceStore.getStringSet(FILTER_LIBRARY_CATEGORIES_EXCLUDE_PREF_KEY, emptySet())
+    fun filterCategoriesExclude() = preferenceStore.getStringSet(
+        LibraryPreferenceKeys.FILTER_LIBRARY_CATEGORIES_EXCLUDE,
+        emptySet(),
+    )
     // KMK <--
 
     fun filterTracking(id: Int) = preferenceStore.getEnum(
-        "pref_filter_library_tracked_${id}_v2",
+        LibraryPreferenceKeys.filterTracking(id),
         TriState.DISABLED,
     )
 
@@ -143,80 +177,131 @@ class LibraryPreferences(
 
     // region Badges
 
-    fun downloadBadge() = preferenceStore.getBoolean("display_download_badge", false)
+    fun downloadBadge() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.DOWNLOAD_BADGE,
+        LibraryPreferenceDefaults.DOWNLOAD_BADGE,
+    )
 
-    fun unreadBadge() = preferenceStore.getBoolean("display_unread_badge", true)
+    fun unreadBadge() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.UNREAD_BADGE,
+        LibraryPreferenceDefaults.UNREAD_BADGE,
+    )
 
-    fun localBadge() = preferenceStore.getBoolean("display_local_badge", true)
+    fun localBadge() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.LOCAL_BADGE,
+        LibraryPreferenceDefaults.LOCAL_BADGE,
+    )
 
-    fun languageBadge() = preferenceStore.getBoolean("display_language_badge", true)
+    fun languageBadge() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.LANGUAGE_BADGE,
+        LibraryPreferenceDefaults.LANGUAGE_BADGE,
+    )
 
     // KMK -->
-    fun sourceBadge() = preferenceStore.getBoolean("display_source_badge", true)
+    fun sourceBadge() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.SOURCE_BADGE,
+        LibraryPreferenceDefaults.SOURCE_BADGE,
+    )
 
-    fun useLangIcon() = preferenceStore.getBoolean("display_language_text", true)
+    fun useLangIcon() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.USE_LANGUAGE_ICON,
+        LibraryPreferenceDefaults.USE_LANGUAGE_ICON,
+    )
     // KMK <--
 
-    fun newShowUpdatesCount() = preferenceStore.getBoolean("library_show_updates_count", true)
-    fun newUpdatesCount() = preferenceStore.getInt(Preference.appStateKey("library_unseen_updates_count"), 0)
+    fun newShowUpdatesCount() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.SHOW_UPDATES_COUNT,
+        LibraryPreferenceDefaults.SHOW_UPDATES_COUNT,
+    )
+    fun newUpdatesCount() = preferenceStore.getInt(
+        Preference.appStateKey(LibraryPreferenceKeys.NEW_UPDATES_COUNT),
+        LibraryPreferenceDefaults.NEW_UPDATES_COUNT,
+    )
 
     // endregion
 
     // region Category
 
-    fun defaultCategory() = preferenceStore.getInt(DEFAULT_CATEGORY_PREF_KEY, -1)
+    fun defaultCategory() = preferenceStore.getInt(
+        DEFAULT_CATEGORY_PREF_KEY,
+        LibraryPreferenceDefaults.DEFAULT_CATEGORY,
+    )
 
-    fun novelDefaultCategory() = preferenceStore.getString(NOVEL_DEFAULT_CATEGORY_PREF_KEY, "")
+    fun novelDefaultCategory() = preferenceStore.getString(
+        NOVEL_DEFAULT_CATEGORY_PREF_KEY,
+        LibraryPreferenceDefaults.NOVEL_DEFAULT_CATEGORY,
+    )
 
-    fun lastUsedCategory() = preferenceStore.getInt(Preference.appStateKey("last_used_category"), 0)
+    fun lastUsedCategory() = preferenceStore.getInt(
+        Preference.appStateKey(LibraryPreferenceKeys.LAST_USED_CATEGORY),
+        LibraryPreferenceDefaults.LAST_USED_CATEGORY,
+    )
 
-    fun categoryTabs() = preferenceStore.getBoolean("display_category_tabs", true)
+    fun categoryTabs() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.CATEGORY_TABS,
+        LibraryPreferenceDefaults.CATEGORY_TABS,
+    )
 
-    fun categoryNumberOfItems() = preferenceStore.getBoolean("display_number_of_items", false)
+    fun categoryNumberOfItems() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.CATEGORY_NUMBER_OF_ITEMS,
+        LibraryPreferenceDefaults.CATEGORY_NUMBER_OF_ITEMS,
+    )
 
-    fun categorizedDisplaySettings() = preferenceStore.getBoolean("categorized_display", false)
+    fun categorizedDisplaySettings() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.CATEGORIZED_DISPLAY_SETTINGS,
+        LibraryPreferenceDefaults.CATEGORIZED_DISPLAY_SETTINGS,
+    )
 
     // KMK -->
-    fun showHiddenCategories() = preferenceStore.getBoolean("hide_hidden_categories", false)
+    fun showHiddenCategories() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.SHOW_HIDDEN_CATEGORIES,
+        LibraryPreferenceDefaults.SHOW_HIDDEN_CATEGORIES,
+    )
     // KMK <--
 
-    fun updateCategories() = preferenceStore.getStringSet(LIBRARY_UPDATE_CATEGORIES_PREF_KEY, emptySet())
+    fun updateCategories() = preferenceStore.getStringSet(
+        LibraryPreferenceKeys.LIBRARY_UPDATE_CATEGORIES,
+        emptySet(),
+    )
 
-    fun updateCategoriesExclude() = preferenceStore.getStringSet(LIBRARY_UPDATE_CATEGORIES_EXCLUDE_PREF_KEY, emptySet())
+    fun updateCategoriesExclude() = preferenceStore.getStringSet(
+        LibraryPreferenceKeys.LIBRARY_UPDATE_CATEGORIES_EXCLUDE,
+        emptySet(),
+    )
 
     // endregion
 
     // region Chapter
 
     fun filterChapterByRead() = preferenceStore.getLong(
-        "default_chapter_filter_by_read",
-        Manga.SHOW_ALL,
+        LibraryPreferenceKeys.DEFAULT_CHAPTER_FILTER_BY_READ,
+        LibraryPreferenceDefaults.DEFAULT_CHAPTER_FILTER_BY_READ,
     )
 
     fun filterChapterByDownloaded() = preferenceStore.getLong(
-        "default_chapter_filter_by_downloaded",
-        Manga.SHOW_ALL,
+        LibraryPreferenceKeys.DEFAULT_CHAPTER_FILTER_BY_DOWNLOADED,
+        LibraryPreferenceDefaults.DEFAULT_CHAPTER_FILTER_BY_DOWNLOADED,
     )
 
     fun filterChapterByBookmarked() = preferenceStore.getLong(
-        "default_chapter_filter_by_bookmarked",
-        Manga.SHOW_ALL,
+        LibraryPreferenceKeys.DEFAULT_CHAPTER_FILTER_BY_BOOKMARKED,
+        LibraryPreferenceDefaults.DEFAULT_CHAPTER_FILTER_BY_BOOKMARKED,
     )
 
     // and upload date
     fun sortChapterBySourceOrNumber() = preferenceStore.getLong(
-        "default_chapter_sort_by_source_or_number",
-        Manga.CHAPTER_SORTING_SOURCE,
+        LibraryPreferenceKeys.DEFAULT_CHAPTER_SORT_BY_SOURCE_OR_NUMBER,
+        LibraryPreferenceDefaults.DEFAULT_CHAPTER_SORT_BY_SOURCE_OR_NUMBER,
     )
 
     fun displayChapterByNameOrNumber() = preferenceStore.getLong(
-        "default_chapter_display_by_name_or_number",
-        Manga.CHAPTER_DISPLAY_NAME,
+        LibraryPreferenceKeys.DEFAULT_CHAPTER_DISPLAY_BY_NAME_OR_NUMBER,
+        LibraryPreferenceDefaults.DEFAULT_CHAPTER_DISPLAY_BY_NAME_OR_NUMBER,
     )
 
     fun sortChapterByAscendingOrDescending() = preferenceStore.getLong(
-        "default_chapter_sort_by_ascending_or_descending",
-        Manga.CHAPTER_SORT_DESC,
+        LibraryPreferenceKeys.DEFAULT_CHAPTER_SORT_BY_ASCENDING_OR_DESCENDING,
+        LibraryPreferenceDefaults.DEFAULT_CHAPTER_SORT_BY_ASCENDING_OR_DESCENDING,
     )
 
     fun setChapterSettingsDefault(manga: Manga) {
@@ -230,30 +315,45 @@ class LibraryPreferences(
         )
     }
 
-    fun autoClearChapterCache() = preferenceStore.getBoolean("auto_clear_chapter_cache", false)
+    fun autoClearChapterCache() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.AUTO_CLEAR_CHAPTER_CACHE,
+        LibraryPreferenceDefaults.AUTO_CLEAR_CHAPTER_CACHE,
+    )
 
-    fun hideMissingChapters() = preferenceStore.getBoolean("pref_hide_missing_chapter_indicators", false)
+    fun hideMissingChapters() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.HIDE_MISSING_CHAPTERS,
+        LibraryPreferenceDefaults.HIDE_MISSING_CHAPTERS,
+    )
 
     // KMK -->
-    fun showEmptyCategoriesSearch() = preferenceStore.getBoolean("show_empty_categories_search", false)
+    fun showEmptyCategoriesSearch() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.SHOW_EMPTY_CATEGORIES_SEARCH,
+        LibraryPreferenceDefaults.SHOW_EMPTY_CATEGORIES_SEARCH,
+    )
     // KMK <--
     // endregion
 
     // region Swipe Actions
 
     fun swipeToStartAction() = preferenceStore.getEnum(
-        "pref_chapter_swipe_end_action",
+        LibraryPreferenceKeys.CHAPTER_SWIPE_END_ACTION,
         ChapterSwipeAction.ToggleBookmark,
     )
 
     fun swipeToEndAction() = preferenceStore.getEnum(
-        "pref_chapter_swipe_start_action",
+        LibraryPreferenceKeys.CHAPTER_SWIPE_START_ACTION,
         ChapterSwipeAction.ToggleRead,
     )
 
-    fun updateMangaTitles() = preferenceStore.getBoolean("pref_update_library_manga_titles", false)
+    fun updateMangaTitles() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.UPDATE_MANGA_TITLES,
+        LibraryPreferenceDefaults.UPDATE_MANGA_TITLES,
+    )
 
-    fun disallowNonAsciiFilenames() = preferenceStore.getBoolean("disallow_non_ascii_filenames", false)
+    fun disallowNonAsciiFilenames() = preferenceStore.getBoolean(
+        LibraryPreferenceKeys.DISALLOW_NON_ASCII_FILENAMES,
+        LibraryPreferenceDefaults.DISALLOW_NON_ASCII_FILENAMES,
+    )
 
     // endregion
 
@@ -266,45 +366,39 @@ class LibraryPreferences(
 
     // SY -->
 
-    fun sortTagsForLibrary() = preferenceStore.getStringSet("sort_tags_for_library", mutableSetOf())
+    fun sortTagsForLibrary() = preferenceStore.getStringSet(
+        LibraryPreferenceKeys.SORT_TAGS_FOR_LIBRARY,
+        LibraryPreferenceDefaults.SORT_TAGS_FOR_LIBRARY,
+    )
 
-    fun groupLibraryUpdateType() = preferenceStore.getEnum("group_library_update_type", GroupLibraryMode.GLOBAL)
+    fun groupLibraryUpdateType() = preferenceStore.getEnum(
+        LibraryPreferenceKeys.GROUP_LIBRARY_UPDATE_TYPE,
+        LibraryPreferenceDefaults.GROUP_LIBRARY_UPDATE_TYPE,
+    )
 
-    fun groupLibraryBy() = preferenceStore.getInt("group_library_by", LibraryGroup.BY_DEFAULT)
+    fun groupLibraryBy() = preferenceStore.getInt(
+        LibraryPreferenceKeys.GROUP_LIBRARY_BY,
+        LibraryPreferenceDefaults.GROUP_LIBRARY_BY,
+    )
 
     // SY <--
 
     companion object {
-        const val DEVICE_ONLY_ON_WIFI = "wifi"
-        const val DEVICE_NETWORK_NOT_METERED = "network_not_metered"
-        const val DEVICE_CHARGING = "ac"
+        const val DEVICE_ONLY_ON_WIFI = LibraryUpdateDeviceRestrictions.DEVICE_ONLY_ON_WIFI
+        const val DEVICE_NETWORK_NOT_METERED = LibraryUpdateDeviceRestrictions.DEVICE_NETWORK_NOT_METERED
+        const val DEVICE_CHARGING = LibraryUpdateDeviceRestrictions.DEVICE_CHARGING
 
-        const val MANGA_NON_COMPLETED = "manga_ongoing"
-        const val MANGA_HAS_UNREAD = "manga_fully_read"
-        const val MANGA_NON_READ = "manga_started"
-        const val MANGA_OUTSIDE_RELEASE_PERIOD = "manga_outside_release_period"
+        const val MANGA_NON_COMPLETED = LibraryUpdateMangaRestrictions.MANGA_NON_COMPLETED
+        const val MANGA_HAS_UNREAD = LibraryUpdateMangaRestrictions.MANGA_HAS_UNREAD
+        const val MANGA_NON_READ = LibraryUpdateMangaRestrictions.MANGA_NON_READ
+        const val MANGA_OUTSIDE_RELEASE_PERIOD = LibraryUpdateMangaRestrictions.MANGA_OUTSIDE_RELEASE_PERIOD
 
-        const val MARK_DUPLICATE_CHAPTER_READ_NEW = "new"
-        const val MARK_DUPLICATE_CHAPTER_READ_EXISTING = "existing"
+        const val MARK_DUPLICATE_CHAPTER_READ_NEW = LibraryDuplicateChapterReadPreference.NEW
+        const val MARK_DUPLICATE_CHAPTER_READ_EXISTING = LibraryDuplicateChapterReadPreference.EXISTING
 
-        const val DEFAULT_CATEGORY_PREF_KEY = "default_category"
-        const val NOVEL_DEFAULT_CATEGORY_PREF_KEY = "novel_default_category"
-        private const val LIBRARY_UPDATE_CATEGORIES_PREF_KEY = "library_update_categories"
-        private const val LIBRARY_UPDATE_CATEGORIES_EXCLUDE_PREF_KEY = "library_update_categories_exclude"
+        const val DEFAULT_CATEGORY_PREF_KEY = LibraryPreferenceKeys.DEFAULT_CATEGORY
+        const val NOVEL_DEFAULT_CATEGORY_PREF_KEY = LibraryPreferenceKeys.NOVEL_DEFAULT_CATEGORY
 
-        // KMK -->
-        private const val FILTER_LIBRARY_CATEGORIES_INCLUDE_PREF_KEY = "pref_filter_library_categories_include"
-        private const val FILTER_LIBRARY_CATEGORIES_EXCLUDE_PREF_KEY = "pref_filter_library_categories_exclude"
-        // KMK <--
-
-        val categoryPreferenceKeys = setOf(
-            DEFAULT_CATEGORY_PREF_KEY,
-            LIBRARY_UPDATE_CATEGORIES_PREF_KEY,
-            LIBRARY_UPDATE_CATEGORIES_EXCLUDE_PREF_KEY,
-            // KMK -->
-            FILTER_LIBRARY_CATEGORIES_INCLUDE_PREF_KEY,
-            FILTER_LIBRARY_CATEGORIES_EXCLUDE_PREF_KEY,
-            // KMK <--
-        )
+        val categoryPreferenceKeys = LibraryPreferenceKeys.categoryPreferenceKeys
     }
 }
