@@ -70,8 +70,8 @@ import com.canopus.chimareader.data.CustomReaderTheme
 import com.canopus.chimareader.data.FontManager
 import com.canopus.chimareader.data.Theme
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
+import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,38 +133,38 @@ fun AppearanceSheet(
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             Text(
-                "Appearance",
+                NovelReaderAppearanceSheetPolicy.TITLE,
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(top = 16.dp),
             )
 
             // Theme (moved to top)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Theme", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                val currentCustomTheme = viewModel.customThemes.find { it.backgroundColor == viewModel.customBackgroundColor && it.textColor == viewModel.customTextColor }
-                    ?: CustomReaderTheme(
-                        backgroundColor = viewModel.customBackgroundColor,
-                        textColor = viewModel.customTextColor,
-                    )
                 val customThemeChoices = remember(
                     viewModel.customThemes,
                     viewModel.theme,
                     viewModel.customBackgroundColor,
                     viewModel.customTextColor,
                 ) {
-                    if (viewModel.theme == Theme.CUSTOM && currentCustomTheme !in viewModel.customThemes) {
-                        listOf(currentCustomTheme) + viewModel.customThemes
-                    } else {
-                        viewModel.customThemes
-                    }
+                    NovelReaderAppearanceSheetPolicy.customThemeChoices(
+                        theme = viewModel.theme,
+                        customThemes = viewModel.customThemes,
+                        customBackgroundColor = viewModel.customBackgroundColor,
+                        customTextColor = viewModel.customTextColor,
+                    )
                 }
+                Text(
+                    NovelReaderAppearanceSheetPolicy.THEME_SECTION_TITLE,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    readerThemeOptions.forEach { option ->
+                    NovelReaderAppearanceSheetPolicy.fixedThemeOptions.forEach { option ->
                         ReaderThemeSwatchButton(
                             label = option.label,
                             backgroundColor = option.backgroundColor,
@@ -174,14 +174,13 @@ fun AppearanceSheet(
                             onClick = { viewModel.updateTheme(option.theme) },
                         )
                     }
-                    customThemeChoices.forEachIndexed { index, customTheme ->
+                    customThemeChoices.forEach { choice ->
+                        val customTheme = choice.theme
                         ReaderThemeSwatchButton(
-                            label = customTheme.name.ifBlank { "Custom ${index + 1}" },
+                            label = choice.label,
                             backgroundColor = customTheme.backgroundColor,
                             textColor = customTheme.textColor,
-                            selected = viewModel.theme == Theme.CUSTOM &&
-                                viewModel.customBackgroundColor == customTheme.backgroundColor &&
-                                viewModel.customTextColor == customTheme.textColor,
+                            selected = choice.selected,
                             onClick = { viewModel.applyCustomTheme(customTheme) },
                             onLongClick = {
                                 renameTarget = customTheme
@@ -212,7 +211,10 @@ fun AppearanceSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
-                        Text("System uses Sepia", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.SYSTEM_LIGHT_SEPIA_LABEL,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                         Switch(
                             checked = viewModel.systemLightSepia,
                             onCheckedChange = { viewModel.updateSystemLightSepia(it) },
@@ -223,28 +225,36 @@ fun AppearanceSheet(
 
             // Layout Mode
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Mode", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    NovelReaderAppearanceSheetPolicy.MODE_SECTION_TITLE,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     SegmentedButton(
                         selected = !viewModel.continuousMode,
                         onClick = { viewModel.updateContinuousMode(false) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     ) {
-                        Text("Paginated")
+                        Text(NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL)
                     }
                     SegmentedButton(
                         selected = viewModel.continuousMode,
                         onClick = { viewModel.updateContinuousMode(true) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     ) {
-                        Text("Continuous")
+                        Text(NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL)
                     }
                 }
             }
 
             // Typography
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Typography", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    NovelReaderAppearanceSheetPolicy.TYPOGRAPHY_SECTION_TITLE,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
 
                 // Font Family
                 var fontExpanded by remember { mutableStateOf(false) }
@@ -256,7 +266,7 @@ fun AppearanceSheet(
                         value = viewModel.selectedFont,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Font Family") },
+                        label = { Text(NovelReaderAppearanceSheetPolicy.FONT_FAMILY_LABEL) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fontExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
                     )
@@ -282,7 +292,16 @@ fun AppearanceSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OutlinedButton(
-                        onClick = { fontPickerLauncher.launch(arrayOf("application/font-ttf", "application/x-font-ttf", "font/ttf", "application/octet-stream")) },
+                        onClick = {
+                            fontPickerLauncher.launch(
+                                arrayOf(
+                                    "application/font-ttf",
+                                    "application/x-font-ttf",
+                                    "font/ttf",
+                                    "application/octet-stream",
+                                ),
+                            )
+                        },
                         modifier = Modifier.weight(1f),
                         enabled = !isImporting,
                     ) {
@@ -292,7 +311,7 @@ fun AppearanceSheet(
                                 strokeWidth = 2.dp,
                             )
                         } else {
-                            Text("Import Font")
+                            Text(NovelReaderAppearanceSheetPolicy.IMPORT_FONT_BUTTON_TEXT)
                         }
                     }
 
@@ -309,7 +328,7 @@ fun AppearanceSheet(
                                 contentColor = MaterialTheme.colorScheme.error,
                             ),
                         ) {
-                            Text("Delete Font")
+                            Text(NovelReaderAppearanceSheetPolicy.DELETE_FONT_BUTTON_TEXT)
                         }
                     }
                 }
@@ -320,12 +339,20 @@ fun AppearanceSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Font Size", style = MaterialTheme.typography.bodyMedium)
-                        Text("${if (viewModel.fontSize % 1.0 == 0.0) viewModel.fontSize.toInt() else viewModel.fontSize}px", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.FONT_SIZE_LABEL,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.fontSizeLabel(viewModel.fontSize),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Slider(
                         value = viewModel.fontSize.toFloat(),
-                        onValueChange = { viewModel.updateFontSize((it * 2f).roundToInt() / 2.0) },
+                        onValueChange = {
+                            viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
+                        },
                         valueRange = 12f..72f,
                         steps = 119,
                     )
@@ -337,12 +364,20 @@ fun AppearanceSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Line Height", style = MaterialTheme.typography.bodyMedium)
-                        Text("%.2f".format(viewModel.lineHeight), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.LINE_HEIGHT_LABEL,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.lineHeightLabel(viewModel.lineHeight),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Slider(
                         value = viewModel.lineHeight.toFloat(),
-                        onValueChange = { viewModel.updateLineHeight((it * 20f).roundToInt() / 20.0) },
+                        onValueChange = {
+                            viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
+                        },
                         valueRange = 1.0f..2.5f,
                         steps = 29,
                     )
@@ -354,7 +389,10 @@ fun AppearanceSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
-                    Text("Hide Furigana", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        NovelReaderAppearanceSheetPolicy.HIDE_FURIGANA_LABEL,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                     Switch(
                         checked = viewModel.hideFurigana,
                         onCheckedChange = { viewModel.updateHideFurigana(it) },
@@ -367,7 +405,10 @@ fun AppearanceSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
-                    Text("Keep screen on", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        NovelReaderAppearanceSheetPolicy.KEEP_SCREEN_ON_LABEL,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                     Switch(
                         checked = viewModel.keepScreenOn,
                         onCheckedChange = { viewModel.updateKeepScreenOn(it) },
@@ -377,19 +418,31 @@ fun AppearanceSheet(
 
             // Margins
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Margins", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    NovelReaderAppearanceSheetPolicy.MARGINS_SECTION_TITLE,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
 
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Horizontal Padding", style = MaterialTheme.typography.bodyMedium)
-                        Text("${if (viewModel.horizontalPadding % 1.0 == 0.0) viewModel.horizontalPadding.toInt() else viewModel.horizontalPadding}%", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.HORIZONTAL_PADDING_LABEL,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.paddingPercentLabel(viewModel.horizontalPadding),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Slider(
                         value = viewModel.horizontalPadding.toFloat(),
-                        onValueChange = { viewModel.updateHorizontalPadding((it * 2f).roundToInt() / 2.0) },
+                        onValueChange = {
+                            viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
+                        },
                         valueRange = 0f..50f,
                         steps = 99,
                     )
@@ -400,12 +453,20 @@ fun AppearanceSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Vertical Padding", style = MaterialTheme.typography.bodyMedium)
-                        Text("${if (viewModel.verticalPadding % 1.0 == 0.0) viewModel.verticalPadding.toInt() else viewModel.verticalPadding}%", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.VERTICAL_PADDING_LABEL,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.paddingPercentLabel(viewModel.verticalPadding),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Slider(
                         value = viewModel.verticalPadding.toFloat(),
-                        onValueChange = { viewModel.updateVerticalPadding((it * 2f).roundToInt() / 2.0) },
+                        onValueChange = {
+                            viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
+                        },
                         valueRange = 0f..50f,
                         steps = 99,
                     )
@@ -414,25 +475,32 @@ fun AppearanceSheet(
 
             // Layout Settings
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Layout", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    NovelReaderAppearanceSheetPolicy.LAYOUT_SECTION_TITLE,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
 
                 // Writing Mode
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Writing Mode", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        NovelReaderAppearanceSheetPolicy.WRITING_MODE_LABEL,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         SegmentedButton(
                             selected = viewModel.verticalWriting,
                             onClick = { viewModel.updateVerticalWriting(true) },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                         ) {
-                            Text("Vertical")
+                            Text(NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL)
                         }
                         SegmentedButton(
                             selected = !viewModel.verticalWriting,
                             onClick = { viewModel.updateVerticalWriting(false) },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                         ) {
-                            Text("Horizontal")
+                            Text(NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL)
                         }
                     }
                 }
@@ -443,12 +511,20 @@ fun AppearanceSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Tap Zone Size (Navigation)", style = MaterialTheme.typography.bodyMedium)
-                        Text("${viewModel.tapZonePercent}%", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.TAP_ZONE_SIZE_LABEL,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.tapZonePercentLabel(viewModel.tapZonePercent),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Slider(
                         value = viewModel.tapZonePercent.toFloat(),
-                        onValueChange = { viewModel.updateTapZonePercent(it.roundToInt()) },
+                        onValueChange = {
+                            viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it.toDouble()))
+                        },
                         valueRange = 0f..40f,
                         steps = 39,
                     )
@@ -463,10 +539,17 @@ fun AppearanceSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
-                    Text("Advanced", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        NovelReaderAppearanceSheetPolicy.ADVANCED_LABEL,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                     Icon(
                         imageVector = if (viewModel.layoutAdvanced) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (viewModel.layoutAdvanced) "Collapse" else "Expand",
+                        contentDescription = if (viewModel.layoutAdvanced) {
+                            NovelReaderAppearanceSheetPolicy.COLLAPSE_CONTENT_DESCRIPTION
+                        } else {
+                            NovelReaderAppearanceSheetPolicy.EXPAND_CONTENT_DESCRIPTION
+                        },
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -485,7 +568,10 @@ fun AppearanceSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
-                            Text("Avoid Page Break", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                NovelReaderAppearanceSheetPolicy.AVOID_PAGE_BREAK_LABEL,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                             Switch(
                                 checked = viewModel.avoidPageBreak,
                                 onCheckedChange = { viewModel.updateAvoidPageBreak(it) },
@@ -499,7 +585,10 @@ fun AppearanceSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
-                            Text("Justify Text", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                NovelReaderAppearanceSheetPolicy.JUSTIFY_TEXT_LABEL,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                             Switch(
                                 checked = viewModel.justifyText,
                                 onCheckedChange = { viewModel.updateJustifyText(it) },
@@ -513,12 +602,20 @@ fun AppearanceSheet(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text("Character Spacing", style = MaterialTheme.typography.bodySmall)
-                                Text("%.2f".format(viewModel.characterSpacing), style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    NovelReaderAppearanceSheetPolicy.CHARACTER_SPACING_LABEL,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    NovelReaderAppearanceSheetPolicy.characterSpacingLabel(viewModel.characterSpacing),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                             Slider(
                                 value = viewModel.characterSpacing.toFloat(),
-                                onValueChange = { viewModel.updateCharacterSpacing((it * 20f).roundToInt() / 20.0) },
+                                onValueChange = {
+                                    viewModel.updateCharacterSpacing(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
+                                },
                                 valueRange = 0f..0.5f,
                                 steps = 9,
                             )
@@ -530,12 +627,20 @@ fun AppearanceSheet(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text("Paragraph Spacing", style = MaterialTheme.typography.bodySmall)
-                                Text("%.2f em".format(viewModel.paragraphSpacing), style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    NovelReaderAppearanceSheetPolicy.PARAGRAPH_SPACING_LABEL,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    NovelReaderAppearanceSheetPolicy.paragraphSpacingLabel(viewModel.paragraphSpacing),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                             Slider(
                                 value = viewModel.paragraphSpacing.toFloat(),
-                                onValueChange = { viewModel.updateParagraphSpacing((it * 20f).roundToInt() / 20.0) },
+                                onValueChange = {
+                                    viewModel.updateParagraphSpacing(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
+                                },
                                 valueRange = 0f..2f,
                                 steps = 39,
                             )
@@ -582,15 +687,15 @@ fun AppearanceSheet(
     renameTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("Rename theme") },
+            title = { Text(NovelReaderAppearanceSheetPolicy.RENAME_THEME_TITLE) },
             text = {
                 OutlinedTextField(
                     value = renameInput,
                     onValueChange = { renameInput = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Theme name") },
-                    placeholder = { Text("Enter a name") },
+                    label = { Text(NovelReaderAppearanceSheetPolicy.THEME_NAME_LABEL) },
+                    placeholder = { Text(NovelReaderAppearanceSheetPolicy.THEME_NAME_PLACEHOLDER) },
                 )
             },
             confirmButton = {
@@ -600,10 +705,12 @@ fun AppearanceSheet(
                         renameTarget = null
                     },
                     enabled = renameInput.isNotBlank(),
-                ) { Text("Rename") }
+                ) { Text(NovelReaderAppearanceSheetPolicy.RENAME_BUTTON_TEXT) }
             },
             dismissButton = {
-                TextButton(onClick = { renameTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { renameTarget = null }) {
+                    Text(NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT)
+                }
             },
         )
     }
@@ -611,64 +718,29 @@ fun AppearanceSheet(
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete theme") },
-            text = { Text("Delete \"${target.name.ifBlank { "Custom theme" }}\"?") },
+            title = { Text(NovelReaderAppearanceSheetPolicy.DELETE_THEME_TITLE) },
+            text = { Text(NovelReaderAppearanceSheetPolicy.deleteThemeMessage(target)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.deleteCustomTheme(target)
                         deleteTarget = null
                     },
-                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                ) {
+                    Text(
+                        NovelReaderAppearanceSheetPolicy.DELETE_BUTTON_TEXT,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text(NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT)
+                }
             },
         )
     }
 }
-
-private data class ReaderThemeOption(
-    val theme: Theme,
-    val label: String,
-    val backgroundColor: Int,
-    val textColor: Int,
-    val splitBackgroundColor: Int? = null,
-)
-
-private val readerThemeOptions = listOf(
-    ReaderThemeOption(
-        theme = Theme.SYSTEM,
-        label = "System",
-        backgroundColor = 0xFFFFFFFF.toInt(),
-        textColor = 0xFF111111.toInt(),
-        splitBackgroundColor = 0xFF121212.toInt(),
-    ),
-    ReaderThemeOption(
-        theme = Theme.LIGHT,
-        label = "Light",
-        backgroundColor = 0xFFFFFFFF.toInt(),
-        textColor = 0xFF111111.toInt(),
-    ),
-    ReaderThemeOption(
-        theme = Theme.DARK,
-        label = "Dark",
-        backgroundColor = 0xFF121212.toInt(),
-        textColor = 0xFFE0E0E0.toInt(),
-    ),
-    ReaderThemeOption(
-        theme = Theme.SEPIA,
-        label = "Sepia",
-        backgroundColor = 0xFFF2E2C9.toInt(),
-        textColor = 0xFF3C2C1C.toInt(),
-    ),
-    ReaderThemeOption(
-        theme = Theme.PURE_BLACK,
-        label = "AMOLED",
-        backgroundColor = 0xFF000000.toInt(),
-        textColor = 0xFFE0E0E0.toInt(),
-    ),
-)
 
 @Composable
 private fun ReaderThemeSwatchButton(
@@ -712,7 +784,7 @@ private fun ReaderThemeSwatchButton(
             onDismissRequest = { showMenu = false },
         ) {
             DropdownMenuItem(
-                text = { Text("Rename") },
+                text = { Text(NovelReaderAppearanceSheetPolicy.RENAME_MENU_TEXT) },
                 onClick = {
                     showMenu = false
                     onLongClick?.invoke()
@@ -720,7 +792,12 @@ private fun ReaderThemeSwatchButton(
             )
             if (onDeleteClick != null) {
                 DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    text = {
+                        Text(
+                            NovelReaderAppearanceSheetPolicy.DELETE_MENU_TEXT,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    },
                     onClick = {
                         showMenu = false
                         onDeleteClick()
@@ -753,7 +830,7 @@ private fun ReaderThemeSwatchButton(
                     )
                 }
                 Text(
-                    text = "Aa",
+                    text = NovelReaderAppearanceSheetPolicy.CUSTOM_THEME_PREVIEW_TEXT,
                     modifier = Modifier.align(Alignment.Center),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color(textColor),
@@ -787,10 +864,13 @@ private fun AddThemeButton(onClick: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = "Add custom theme",
+                contentDescription = NovelReaderAppearanceSheetPolicy.ADD_CUSTOM_THEME_CONTENT_DESCRIPTION,
                 tint = MaterialTheme.colorScheme.primary,
             )
-            Text("New", style = MaterialTheme.typography.labelSmall)
+            Text(
+                NovelReaderAppearanceSheetPolicy.ADD_CUSTOM_THEME_LABEL,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
@@ -830,7 +910,8 @@ private fun ColorReviewChip(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = parsedColor?.let(NovelReaderAppearancePolicy::colorHex) ?: "Invalid",
+                    text = parsedColor?.let(NovelReaderAppearancePolicy::colorHex)
+                        ?: NovelReaderAppearanceSheetPolicy.INVALID_COLOR_LABEL,
                     style = MaterialTheme.typography.labelMedium,
                     color = if (parsedColor == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -853,22 +934,23 @@ private fun CustomThemeDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val parsedBackgroundColor = NovelReaderAppearancePolicy.parseColorInput(backgroundColorInput)
-    val parsedTextColor = NovelReaderAppearancePolicy.parseColorInput(textColorInput)
-    val backgroundColorValid = parsedBackgroundColor != null
-    val textColorValid = parsedTextColor != null
-    val previewBackgroundColor = parsedBackgroundColor ?: backgroundColor
-    val previewTextColor = parsedTextColor ?: textColor
+    val dialogState = NovelReaderAppearanceSheetPolicy.customThemeDialogState(
+        themeName = themeName,
+        backgroundColor = backgroundColor,
+        textColor = textColor,
+        backgroundColorInput = backgroundColorInput,
+        textColorInput = textColorInput,
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Save theme") },
+        title = { Text(dialogState.title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(previewBackgroundColor),
+                    color = Color(dialogState.background.previewColor),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Column(
@@ -876,14 +958,14 @@ private fun CustomThemeDialog(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            text = themeName.ifBlank { "Custom" },
+                            text = dialogState.sampleThemeName,
                             style = MaterialTheme.typography.titleSmall,
-                            color = Color(previewTextColor),
+                            color = Color(dialogState.text.previewColor),
                         )
                         Text(
-                            text = "Sample reader text",
+                            text = dialogState.sampleText,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(previewTextColor),
+                            color = Color(dialogState.text.previewColor),
                         )
                     }
                 }
@@ -893,8 +975,8 @@ private fun CustomThemeDialog(
                     onValueChange = onThemeNameChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Name") },
-                    placeholder = { Text("Theme name") },
+                    label = { Text(dialogState.nameLabel) },
+                    placeholder = { Text(dialogState.namePlaceholder) },
                 )
 
                 OutlinedTextField(
@@ -902,12 +984,12 @@ private fun CustomThemeDialog(
                     onValueChange = onBackgroundColorInputChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Background") },
-                    placeholder = { Text("Hex or RGB") },
-                    isError = !backgroundColorValid,
+                    label = { Text(dialogState.background.label) },
+                    placeholder = { Text(dialogState.background.placeholder) },
+                    isError = !dialogState.background.isValid,
                     supportingText = {
-                        if (!backgroundColorValid) {
-                            Text("Enter a hex or RGB color")
+                        if (!dialogState.background.isValid) {
+                            Text(dialogState.background.supportingText)
                         }
                     },
                 )
@@ -916,29 +998,29 @@ private fun CustomThemeDialog(
                     onValueChange = onTextColorInputChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Text") },
-                    placeholder = { Text("Hex or RGB") },
-                    isError = !textColorValid,
+                    label = { Text(dialogState.text.label) },
+                    placeholder = { Text(dialogState.text.placeholder) },
+                    isError = !dialogState.text.isValid,
                     supportingText = {
-                        if (!textColorValid) {
-                            Text("Enter a hex or RGB color")
+                        if (!dialogState.text.isValid) {
+                            Text(dialogState.text.supportingText)
                         }
                     },
                 )
 
-                Text("Review", style = MaterialTheme.typography.labelMedium)
+                Text(dialogState.reviewLabel, style = MaterialTheme.typography.labelMedium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     ColorReviewChip(
-                        label = "Background",
-                        parsedColor = parsedBackgroundColor,
+                        label = dialogState.background.reviewLabel,
+                        parsedColor = dialogState.background.parsedColor,
                         modifier = Modifier.weight(1f),
                     )
                     ColorReviewChip(
-                        label = "Text",
-                        parsedColor = parsedTextColor,
+                        label = dialogState.text.reviewLabel,
+                        parsedColor = dialogState.text.parsedColor,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -947,14 +1029,14 @@ private fun CustomThemeDialog(
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
-                enabled = backgroundColorValid && textColorValid,
+                enabled = dialogState.confirmEnabled,
             ) {
-                Text("Save")
+                Text(dialogState.confirmButtonText)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(dialogState.dismissButtonText)
             }
         },
     )
