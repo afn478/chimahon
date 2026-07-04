@@ -17,7 +17,6 @@ import com.canopus.chimareader.data.NovelReaderSettings
 import com.canopus.chimareader.data.Statistics
 import com.canopus.chimareader.data.Theme
 import com.canopus.chimareader.data.epub.EpubBook
-import com.canopus.chimareader.data.epub.SpineItemType
 import com.canopus.chimareader.data.epub.TocEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +34,7 @@ import tachiyomi.domain.reader.model.ReaderSettings
 import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
 import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
+import tachiyomi.domain.reader.service.NovelReaderSessionPolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsPolicy
 import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
@@ -107,8 +107,18 @@ class ReaderLoaderViewModel(
     private fun loadBook(book: BookMetadata, context: Context) {
         val root = rootUrl ?: return
         val doc = BookStorage.loadEpub(root)
-        val bookCopy = book.copy(lastAccess = nowMillis())
-        BookStorage.save(bookCopy, root, FileNames.metadata)
+        when (
+            val action = NovelReaderSessionPolicy.bookOpenAction(
+                book = book,
+                rootAvailable = true,
+                nowMillis = nowMillis(),
+            )
+        ) {
+            NovelReaderSessionPolicy.BookOpenAction.Ignore -> Unit
+            is NovelReaderSessionPolicy.BookOpenAction.PersistLastAccess -> {
+                BookStorage.save(action.metadata, root, FileNames.metadata)
+            }
+        }
         document = doc
     }
 }
@@ -182,7 +192,7 @@ class ReaderViewModel(
     val isCurrentChapterImageOnly: Boolean
         get() {
             val spineItem = document.linearSpineItems.getOrNull(index) ?: return false
-            return spineItem.type == SpineItemType.IMAGE_ONLY
+            return NovelReaderSessionPolicy.isImageOnlySpineItem(spineItem.type)
         }
 
     /**
@@ -214,9 +224,13 @@ class ReaderViewModel(
         }
 
         val bookmark = BookStorage.loadBookmark(rootUrl)
-        index = bookmark?.chapterIndex ?: 0
-        currentProgress = bookmark?.progress ?: 0.0
-        totalExploredCharCount = calculateExploredCharCount(currentProgress)
+        val restoredBookmark = NovelReaderSessionPolicy.restoredBookmarkState(
+            bookmark = bookmark,
+            chapterCharacterCount = document::getChapterCharacters,
+        )
+        index = restoredBookmark.chapterIndex
+        currentProgress = restoredBookmark.progress
+        totalExploredCharCount = restoredBookmark.characterCount
         lastSavedChapterIndex = index
         lastSavedProgress = currentProgress
         lastSavedCharacterCount = totalExploredCharCount
@@ -227,7 +241,7 @@ class ReaderViewModel(
         }
 
         statisticsTracker = ReaderStatisticsTracker(
-            title = document.title ?: "Unknown",
+            title = NovelReaderSessionPolicy.statisticsTitle(document.title),
             initialStatistics = fullStatistics,
             enabled = true,
             nowMillis = nowMillis,
@@ -237,7 +251,12 @@ class ReaderViewModel(
         scope.launch {
             while (true) {
                 delay(1000)
-                if (!trackingLocked && !appBackgrounded) {
+                if (
+                    NovelReaderSessionPolicy.shouldTickStatistics(
+                        trackingLocked = trackingLocked,
+                        appBackgrounded = appBackgrounded,
+                    )
+                ) {
                     statisticsTracker.update(totalExploredCharCount)
                 }
                 val now = nowMillis()
@@ -412,7 +431,13 @@ class ReaderViewModel(
         currentProgress = progress
         bridge.updateProgress(progress)
         persistBookmark(progress, force)
-        if (updateTracker && !trackingLocked && !appBackgrounded) {
+        if (
+            NovelReaderSessionPolicy.shouldUpdateStatistics(
+                updateTracker = updateTracker,
+                trackingLocked = trackingLocked,
+                appBackgrounded = appBackgrounded,
+            )
+        ) {
             statisticsTracker.update(totalExploredCharCount)
         }
         persistToDisk()
@@ -461,25 +486,45 @@ class ReaderViewModel(
         // change the index. persistBookmark() calls calculateExploredCharCount()
         // which uses the current index — if we change it first the delta is lost.
         persistBookmark(currentProgress)
-        if (!trackingLocked && !appBackgrounded) {
+        val change = NovelReaderSessionPolicy.chapterChangeState(
+            newIndex = newIndex,
+            progress = progress,
+            baselineCharacterCount = calculateExploredCharCount(
+                chapterIndex = newIndex,
+                progress = progress,
+            ),
+            trackingLocked = trackingLocked,
+            appBackgrounded = appBackgrounded,
+        )
+        if (change.updateStatisticsBeforeChange) {
             statisticsTracker.update(totalExploredCharCount)
         }
 
-        index = newIndex
+        index = change.index
         // Reset tracker baseline to the new position so neither the timer loop
         // nor the saveBookmark call below register a false delta from the jump.
-        statisticsTracker.resetBaseline(calculateExploredCharCount(progress))
-        saveBookmark(progress, updateTracker = false, force = true)
+        statisticsTracker.resetBaseline(change.baselineCharacterCount)
+        saveBookmark(change.progress, updateTracker = false, force = true)
         getCurrentChapter()?.let { file ->
             val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
-            bridge.loadChapter(fileUrl, progress, chapterTitle)
+            bridge.loadChapter(fileUrl, change.progress, chapterTitle)
         }
     }
 
     private fun calculateExploredCharCount(progress: Double): Int {
-        return NovelReaderProgressPolicy.exploredCharacterCount(
+        return calculateExploredCharCount(
             chapterIndex = index,
+            progress = progress,
+        )
+    }
+
+    private fun calculateExploredCharCount(
+        chapterIndex: Int,
+        progress: Double,
+    ): Int {
+        return NovelReaderProgressPolicy.exploredCharacterCount(
+            chapterIndex = chapterIndex,
             progress = progress,
             chapterCharacterCount = document::getChapterCharacters,
         )
@@ -497,7 +542,7 @@ class ReaderViewModel(
             lastChapterIndex = lastSavedChapterIndex,
             lastProgress = lastSavedProgress,
             lastCharacterCount = lastSavedCharacterCount,
-            progressEpsilon = BOOKMARK_PROGRESS_EPSILON,
+            progressEpsilon = NovelReaderSessionPolicy.BOOKMARK_PROGRESS_EPSILON,
         )
 
         if (!changed) return
@@ -518,15 +563,17 @@ class ReaderViewModel(
     }
 
     fun setTrackingLocked(locked: Boolean) {
-        if (locked) {
-            if (statisticsTracker.state.isTracking) {
-                statisticsTracker.update(totalExploredCharCount)
-            }
-            trackingLocked = true
-        } else {
-            statisticsTracker.resetBaseline(totalExploredCharCount)
-            trackingLocked = false
+        val transition = NovelReaderSessionPolicy.trackingLockTransition(
+            locked = locked,
+            currentlyTracking = statisticsTracker.state.isTracking,
+        )
+        if (transition.updateBeforeLock) {
+            statisticsTracker.update(totalExploredCharCount)
         }
+        if (transition.resetBaselineAfterUnlock) {
+            statisticsTracker.resetBaseline(totalExploredCharCount)
+        }
+        trackingLocked = transition.locked
     }
 
     fun togglePause() {
@@ -547,9 +594,6 @@ class ReaderViewModel(
         BookStorage.saveStatistics(stats, rootUrl)
     }
 
-    companion object {
-        private const val BOOKMARK_PROGRESS_EPSILON = 0.0001
-    }
 }
 
 private fun List<TocEntry>.toDomainTocEntries(): List<NovelReaderTocEntry> {
