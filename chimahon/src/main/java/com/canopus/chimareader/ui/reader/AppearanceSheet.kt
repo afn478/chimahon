@@ -3,7 +3,6 @@ package com.canopus.chimareader.ui.reader
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -14,12 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -31,9 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.chimahon.shared.reader.ReaderAddThemeButton
@@ -51,7 +45,9 @@ import app.chimahon.shared.reader.ReaderAppearanceBooleanSegmentedControl
 import app.chimahon.shared.reader.ReaderAppearanceSectionTitle
 import app.chimahon.shared.reader.ReaderAppearanceSlider
 import app.chimahon.shared.reader.ReaderAppearanceSwitchRow
-import app.chimahon.shared.reader.ReaderColorReviewChip
+import app.chimahon.shared.reader.ReaderCustomThemeDialog
+import app.chimahon.shared.reader.ReaderDeleteThemeDialog
+import app.chimahon.shared.reader.ReaderRenameThemeDialog
 import app.chimahon.shared.reader.ReaderThemeSwatchButton
 import com.canopus.chimareader.data.CustomReaderTheme
 import com.canopus.chimareader.data.FontManager
@@ -484,7 +480,7 @@ fun AppearanceSheet(
     }
 
     if (showCustomThemeDialog) {
-        CustomThemeDialog(
+        ReaderCustomThemeDialog(
             themeName = draftThemeName,
             backgroundColor = draftBackgroundColor,
             textColor = draftTextColor,
@@ -522,180 +518,25 @@ fun AppearanceSheet(
     }
 
     renameTarget?.let { target ->
-        val dialogState = NovelReaderAppearanceSheetPolicy.renameThemeDialogState(renameInput)
-        AlertDialog(
-            onDismissRequest = { renameTarget = null },
-            title = { Text(dialogState.title) },
-            text = {
-                OutlinedTextField(
-                    value = renameInput,
-                    onValueChange = { renameInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text(dialogState.nameLabel) },
-                    placeholder = { Text(dialogState.namePlaceholder) },
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.renameCustomTheme(target, renameInput)
-                        renameTarget = null
-                    },
-                    enabled = dialogState.confirmEnabled,
-                ) { Text(dialogState.confirmButtonText) }
-            },
-            dismissButton = {
-                TextButton(onClick = { renameTarget = null }) {
-                    Text(dialogState.dismissButtonText)
-                }
+        ReaderRenameThemeDialog(
+            renameInput = renameInput,
+            onRenameInputChange = { renameInput = it },
+            onDismiss = { renameTarget = null },
+            onConfirm = {
+                viewModel.renameCustomTheme(target, renameInput)
+                renameTarget = null
             },
         )
     }
 
     deleteTarget?.let { target ->
-        val dialogState = NovelReaderAppearanceSheetPolicy.deleteThemeDialogState(target)
-        AlertDialog(
-            onDismissRequest = { deleteTarget = null },
-            title = { Text(dialogState.title) },
-            text = { Text(dialogState.message) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteCustomTheme(target)
-                        deleteTarget = null
-                    },
-                ) {
-                    Text(
-                        dialogState.confirmButtonText,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) {
-                    Text(dialogState.dismissButtonText)
-                }
+        ReaderDeleteThemeDialog(
+            theme = target,
+            onDismiss = { deleteTarget = null },
+            onConfirm = {
+                viewModel.deleteCustomTheme(target)
+                deleteTarget = null
             },
         )
     }
-}
-
-@Composable
-private fun CustomThemeDialog(
-    themeName: String,
-    backgroundColor: Int,
-    textColor: Int,
-    backgroundColorInput: String,
-    textColorInput: String,
-    onThemeNameChange: (String) -> Unit,
-    onBackgroundColorInputChange: (String) -> Unit,
-    onTextColorInputChange: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    val dialogState = NovelReaderAppearanceSheetPolicy.customThemeDialogState(
-        themeName = themeName,
-        backgroundColor = backgroundColor,
-        textColor = textColor,
-        backgroundColorInput = backgroundColorInput,
-        textColorInput = textColorInput,
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(dialogState.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(dialogState.background.previewColor),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = dialogState.sampleThemeName,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Color(dialogState.text.previewColor),
-                        )
-                        Text(
-                            text = dialogState.sampleText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(dialogState.text.previewColor),
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = themeName,
-                    onValueChange = onThemeNameChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text(dialogState.nameLabel) },
-                    placeholder = { Text(dialogState.namePlaceholder) },
-                )
-
-                OutlinedTextField(
-                    value = backgroundColorInput,
-                    onValueChange = onBackgroundColorInputChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text(dialogState.background.label) },
-                    placeholder = { Text(dialogState.background.placeholder) },
-                    isError = !dialogState.background.isValid,
-                    supportingText = {
-                        if (!dialogState.background.isValid) {
-                            Text(dialogState.background.supportingText)
-                        }
-                    },
-                )
-                OutlinedTextField(
-                    value = textColorInput,
-                    onValueChange = onTextColorInputChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text(dialogState.text.label) },
-                    placeholder = { Text(dialogState.text.placeholder) },
-                    isError = !dialogState.text.isValid,
-                    supportingText = {
-                        if (!dialogState.text.isValid) {
-                            Text(dialogState.text.supportingText)
-                        }
-                    },
-                )
-
-                Text(dialogState.reviewLabel, style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    ReaderColorReviewChip(
-                        state = dialogState.background.review,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ReaderColorReviewChip(
-                        state = dialogState.text.review,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                enabled = dialogState.confirmEnabled,
-            ) {
-                Text(dialogState.confirmButtonText)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(dialogState.dismissButtonText)
-            }
-        },
-    )
 }
