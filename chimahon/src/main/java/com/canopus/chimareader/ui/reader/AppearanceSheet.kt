@@ -71,6 +71,7 @@ import com.canopus.chimareader.data.FontManager
 import com.canopus.chimareader.data.Theme
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,8 +93,12 @@ fun AppearanceSheet(
     var draftThemeName by remember { mutableStateOf("") }
     var draftBackgroundColor by remember { mutableIntStateOf(viewModel.customBackgroundColor) }
     var draftTextColor by remember { mutableIntStateOf(viewModel.customTextColor) }
-    var draftBackgroundInput by remember { mutableStateOf(colorToHex(viewModel.customBackgroundColor)) }
-    var draftTextInput by remember { mutableStateOf(colorToHex(viewModel.customTextColor)) }
+    var draftBackgroundInput by remember {
+        mutableStateOf(NovelReaderAppearancePolicy.colorHex(viewModel.customBackgroundColor))
+    }
+    var draftTextInput by remember {
+        mutableStateOf(NovelReaderAppearancePolicy.colorHex(viewModel.customTextColor))
+    }
     var renameTarget by remember { mutableStateOf<CustomReaderTheme?>(null) }
     var deleteTarget by remember { mutableStateOf<CustomReaderTheme?>(null) }
     var renameInput by remember { mutableStateOf("") }
@@ -190,8 +195,12 @@ fun AppearanceSheet(
                             draftThemeName = ""
                             draftBackgroundColor = viewModel.customBackgroundColor
                             draftTextColor = viewModel.customTextColor
-                            draftBackgroundInput = colorToHex(viewModel.customBackgroundColor)
-                            draftTextInput = colorToHex(viewModel.customTextColor)
+                            draftBackgroundInput = NovelReaderAppearancePolicy.colorHex(
+                                viewModel.customBackgroundColor,
+                            )
+                            draftTextInput = NovelReaderAppearancePolicy.colorHex(
+                                viewModel.customTextColor,
+                            )
                             showCustomThemeDialog = true
                         },
                     )
@@ -550,11 +559,11 @@ fun AppearanceSheet(
             onThemeNameChange = { draftThemeName = it },
             onBackgroundColorInputChange = { input ->
                 draftBackgroundInput = input
-                parseColorInput(input)?.let { draftBackgroundColor = it }
+                NovelReaderAppearancePolicy.parseColorInput(input)?.let { draftBackgroundColor = it }
             },
             onTextColorInputChange = { input ->
                 draftTextInput = input
-                parseColorInput(input)?.let { draftTextColor = it }
+                NovelReaderAppearancePolicy.parseColorInput(input)?.let { draftTextColor = it }
             },
             onDismiss = { showCustomThemeDialog = false },
             onConfirm = {
@@ -660,48 +669,6 @@ private val readerThemeOptions = listOf(
         textColor = 0xFFE0E0E0.toInt(),
     ),
 )
-
-private fun colorToHex(color: Int): String {
-    return "#%06X".format(color and 0x00FFFFFF)
-}
-
-private fun parseColorInput(value: String): Int? {
-    val input = value.trim()
-    if (input.isEmpty()) return null
-    return parseHexColor(input) ?: parseRgbColor(input)
-}
-
-private fun parseHexColor(input: String): Int? {
-    val rawHex = input.removePrefix("#")
-    val hex = when (rawHex.length) {
-        3 -> rawHex.map { "$it$it" }.joinToString("")
-        6, 8 -> rawHex
-        else -> return null
-    }
-    if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
-    val parsed = hex.toLongOrNull(radix = 16) ?: return null
-    return when (hex.length) {
-        6 -> (0xFF000000 or parsed).toInt()
-        8 -> parsed.toInt()
-        else -> null
-    }
-}
-
-private fun parseRgbColor(input: String): Int? {
-    val body = Regex("""rgba?\((.*)\)""", RegexOption.IGNORE_CASE)
-        .matchEntire(input)
-        ?.groupValues
-        ?.get(1)
-        ?: input
-    val channels = Regex("""\d{1,3}""")
-        .findAll(body)
-        .mapNotNull { it.value.toIntOrNull() }
-        .take(3)
-        .toList()
-    if (channels.size != 3 || channels.any { it !in 0..255 }) return null
-    val (red, green, blue) = channels
-    return 0xFF000000.toInt() or (red shl 16) or (green shl 8) or blue
-}
 
 @Composable
 private fun ReaderThemeSwatchButton(
@@ -863,7 +830,7 @@ private fun ColorReviewChip(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = parsedColor?.let(::colorToHex) ?: "Invalid",
+                    text = parsedColor?.let(NovelReaderAppearancePolicy::colorHex) ?: "Invalid",
                     style = MaterialTheme.typography.labelMedium,
                     color = if (parsedColor == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -886,8 +853,8 @@ private fun CustomThemeDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val parsedBackgroundColor = parseColorInput(backgroundColorInput)
-    val parsedTextColor = parseColorInput(textColorInput)
+    val parsedBackgroundColor = NovelReaderAppearancePolicy.parseColorInput(backgroundColorInput)
+    val parsedTextColor = NovelReaderAppearancePolicy.parseColorInput(textColorInput)
     val backgroundColorValid = parsedBackgroundColor != null
     val textColorValid = parsedTextColor != null
     val previewBackgroundColor = parsedBackgroundColor ?: backgroundColor

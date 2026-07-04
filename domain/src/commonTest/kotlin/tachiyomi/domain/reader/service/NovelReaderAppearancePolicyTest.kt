@@ -86,6 +86,37 @@ class NovelReaderAppearancePolicyTest {
         assertFalse(NovelReaderAppearancePolicy.shouldUseDarkSystemBarIcons(0xFF000000.toInt()))
     }
 
+    @Test
+    fun colorHexFormatsRgbChannelsWithLeadingHashAndIgnoresAlpha() {
+        assertEquals("#000000", NovelReaderAppearancePolicy.colorHex(0xFF000000.toInt()))
+        assertEquals("#ABCDEF", NovelReaderAppearancePolicy.colorHex(0x12ABCDEF))
+        assertEquals("#001020", NovelReaderAppearancePolicy.colorHex(0xFF001020.toInt()))
+    }
+
+    @Test
+    fun parseColorInputAcceptsHexForms() {
+        assertEquals(0xFFAABBCC.toInt(), NovelReaderAppearancePolicy.parseColorInput("#abc"))
+        assertEquals(0xFFABCDEF.toInt(), NovelReaderAppearancePolicy.parseColorInput("ABCDEF"))
+        assertEquals(0x80112233.toInt(), NovelReaderAppearancePolicy.parseColorInput("#80112233"))
+        assertEquals(0xFF010203.toInt(), NovelReaderAppearancePolicy.parseColorInput("  #010203  "))
+    }
+
+    @Test
+    fun parseColorInputAcceptsRgbForms() {
+        assertEquals(0xFF010203.toInt(), NovelReaderAppearancePolicy.parseColorInput("rgb(1, 2, 3)"))
+        assertEquals(0xFF040506.toInt(), NovelReaderAppearancePolicy.parseColorInput("rgba(4, 5, 6, 0.4)"))
+        assertEquals(0xFF0C2238.toInt(), NovelReaderAppearancePolicy.parseColorInput("12, 34, 56"))
+    }
+
+    @Test
+    fun parseColorInputRejectsMalformedColors() {
+        assertEquals(null, NovelReaderAppearancePolicy.parseColorInput(""))
+        assertEquals(null, NovelReaderAppearancePolicy.parseColorInput("#12"))
+        assertEquals(null, NovelReaderAppearancePolicy.parseColorInput("#xyz"))
+        assertEquals(null, NovelReaderAppearancePolicy.parseColorInput("rgb(1, 2)"))
+        assertEquals(null, NovelReaderAppearancePolicy.parseColorInput("rgb(1, 2, 300)"))
+    }
+
     private fun resolve(
         theme: NovelReaderTheme,
         systemDark: Boolean = false,
