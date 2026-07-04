@@ -120,6 +120,15 @@ object NovelReaderStatisticsPolicy {
         }
     }
 
+    fun dateKey(
+        year: Int,
+        monthNumber: Int,
+        dayOfMonth: Int,
+    ): String {
+        val paddedYear = year.toString().padStart(length = 4, padChar = '0')
+        return "$paddedYear-${twoDigit(monthNumber.toLong())}-${twoDigit(dayOfMonth.toLong())}"
+    }
+
     fun elapsedDurationLabel(totalSeconds: Long): String {
         val safeSeconds = totalSeconds.coerceAtLeast(0)
         val seconds = safeSeconds % 60

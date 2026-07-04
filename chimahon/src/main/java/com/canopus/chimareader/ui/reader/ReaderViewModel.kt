@@ -26,9 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.LocalDate
 import tachiyomi.domain.reader.model.NovelReaderSettingsSnapshot
 import tachiyomi.domain.reader.model.NovelReaderTocEntry
 import tachiyomi.domain.reader.model.NovelReaderTocItem
@@ -157,7 +155,7 @@ class ReaderViewModel(
     private var lastSavedProgress = 0.0
     private var lastSavedCharacterCount = 0
 
-    lateinit var statisticsTracker: ReaderStatisticsTracker
+    val statisticsTracker: ReaderStatisticsTracker
     private var trackingLocked = false
     private var appBackgrounded = false
 
@@ -219,6 +217,8 @@ class ReaderViewModel(
             title = document.title ?: "Unknown",
             initialStatistics = fullStatistics,
             enabled = true,
+            nowMillis = System::currentTimeMillis,
+            dateKeyProvider = ::currentReaderDateKey,
         )
 
         scope.launch {
@@ -550,4 +550,13 @@ private fun List<TocEntry>.toDomainTocEntries(): List<NovelReaderTocEntry> {
             children = entry.children.toDomainTocEntries(),
         )
     }
+}
+
+private fun currentReaderDateKey(): String {
+    val today = LocalDate.now()
+    return NovelReaderStatisticsPolicy.dateKey(
+        year = today.year,
+        monthNumber = today.monthValue,
+        dayOfMonth = today.dayOfMonth,
+    )
 }

@@ -3,9 +3,6 @@ package com.canopus.chimareader.ui.reader
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import tachiyomi.domain.reader.model.NovelReadingStatistic
 import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
 
@@ -20,19 +17,22 @@ class ReaderStatisticsTracker(
     private val title: String,
     initialStatistics: List<NovelReadingStatistic>,
     private val enabled: Boolean,
+    private val nowMillis: () -> Long,
+    private val dateKeyProvider: () -> String,
 ) {
     private var statistics = initialStatistics.toMutableList()
-    private var lastTimestampMillis: Long = System.currentTimeMillis()
+    private var lastTimestampMillis: Long = nowMillis()
     private var lastCharacterCount: Int = 0
     val frozenPosition: Int get() = lastCharacterCount
     private var hasUpdated = false
+    private val initialDateKey = dateKeyProvider()
 
     var state: ReaderStatisticsState by mutableStateOf(
         ReaderStatisticsState(
             isTracking = false,
-            session = defaultStatistic(),
-            today = statisticForDate(currentDateKey()),
-            allTime = allTimeStatistic(statistics),
+            session = defaultStatistic(initialDateKey),
+            today = statisticForDate(initialDateKey),
+            allTime = allTimeStatistic(statistics, initialDateKey),
         )
     )
         private set
@@ -71,7 +71,7 @@ class ReaderStatisticsTracker(
     fun update(currentCharacter: Int) {
         if (!enabled || !state.isTracking) return
         rollTodayIfNeeded()
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val timeDiff = (now - lastTimestampMillis).toDouble() / 1000.0
         if (timeDiff <= 0.0) return
 
@@ -92,7 +92,7 @@ class ReaderStatisticsTracker(
 
     fun resetBaseline(currentCharacter: Int) {
         lastCharacterCount = currentCharacter
-        lastTimestampMillis = System.currentTimeMillis()
+        lastTimestampMillis = nowMillis()
     }
 
     fun statisticsForPersistenceOrNull(): List<NovelReadingStatistic>? =
@@ -109,7 +109,7 @@ class ReaderStatisticsTracker(
     }
 
     private fun rollTodayIfNeeded() {
-        val key = currentDateKey()
+        val key = dateKeyProvider()
         if (state.today.dateKey == key) return
         statisticsForPersistence()
         state = state.copy(today = statisticForDate(key))
@@ -123,13 +123,16 @@ class ReaderStatisticsTracker(
         )
     }
 
-    private fun defaultStatistic(dateKey: String = currentDateKey()): NovelReadingStatistic =
+    private fun defaultStatistic(dateKey: String): NovelReadingStatistic =
         NovelReaderStatisticsPolicy.defaultStatistic(title = title, dateKey = dateKey)
 
-    private fun allTimeStatistic(statistics: List<NovelReadingStatistic>): NovelReadingStatistic {
+    private fun allTimeStatistic(
+        statistics: List<NovelReadingStatistic>,
+        dateKey: String,
+    ): NovelReadingStatistic {
         return NovelReaderStatisticsPolicy.allTimeStatistic(
             title = title,
-            dateKey = currentDateKey(),
+            dateKey = dateKey,
             statistics = statistics,
         )
     }
@@ -147,7 +150,4 @@ class ReaderStatisticsTracker(
             lastStatisticModified = modifiedAt,
         )
     }
-
-    private fun currentDateKey(): String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 }

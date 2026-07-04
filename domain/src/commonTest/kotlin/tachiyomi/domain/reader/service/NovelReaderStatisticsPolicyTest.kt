@@ -129,6 +129,26 @@ class NovelReaderStatisticsPolicyTest {
     }
 
     @Test
+    fun dateKeyUsesIsoLocalDatePadding() {
+        assertEquals(
+            "2026-07-04",
+            NovelReaderStatisticsPolicy.dateKey(
+                year = 2026,
+                monthNumber = 7,
+                dayOfMonth = 4,
+            ),
+        )
+        assertEquals(
+            "0099-12-31",
+            NovelReaderStatisticsPolicy.dateKey(
+                year = 99,
+                monthNumber = 12,
+                dayOfMonth = 31,
+            ),
+        )
+    }
+
+    @Test
     fun elapsedDurationLabelUsesClockStyleDurations() {
         assertEquals("00:00", NovelReaderStatisticsPolicy.elapsedDurationLabel(0))
         assertEquals("01:05", NovelReaderStatisticsPolicy.elapsedDurationLabel(65))
