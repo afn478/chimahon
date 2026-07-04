@@ -71,20 +71,37 @@ class SasayakiPlayer(
     }
 
     private fun restoreAudioIfNeeded() {
-        val uriStr = playback.audioBookmark ?: return
-        if (uriStr.isNotEmpty()) {
-            val file = File(uriStr)
-            if (file.exists()) {
-                setupPlayer(file)
+        val audioBookmark = playback.audioBookmark
+        val audioExists = audioBookmark
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it).exists() }
+            ?: false
+
+        when (
+            val action = NovelReaderSasayakiPlaybackPolicy.audioRestoreAction(
+                audioBookmark = audioBookmark,
+                audioExists = audioExists,
+            )
+        ) {
+            NovelReaderSasayakiPlaybackPolicy.AudioRestoreAction.Ignore -> Unit
+            is NovelReaderSasayakiPlaybackPolicy.AudioRestoreAction.Restore -> {
+                setupPlayer(File(action.audioPath))
             }
         }
     }
 
     fun importAudio(file: File) {
-        teardown()
-        playback.audioBookmark = file.absolutePath
-        savePlayback()
-        setupPlayer(file)
+        when (
+            val action = NovelReaderSasayakiPlaybackPolicy.audioImportAction(file.absolutePath)
+        ) {
+            NovelReaderSasayakiPlaybackPolicy.AudioImportAction.Ignore -> Unit
+            is NovelReaderSasayakiPlaybackPolicy.AudioImportAction.SaveAndLoad -> {
+                teardown()
+                playback.audioBookmark = action.audioPath
+                savePlayback()
+                setupPlayer(File(action.audioPath))
+            }
+        }
     }
 
     private fun setupPlayer(file: File) {
@@ -117,11 +134,16 @@ class SasayakiPlayer(
     }
 
     fun togglePlayback() {
-        val exoPlayer = player ?: return
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
-        } else {
-            exoPlayer.play()
+        val exoPlayer = player
+        when (
+            NovelReaderSasayakiPlaybackPolicy.playbackToggleAction(
+                hasAudio = exoPlayer != null,
+                isPlaying = exoPlayer?.isPlaying == true,
+            )
+        ) {
+            NovelReaderSasayakiPlaybackPolicy.PlaybackToggleAction.Ignore -> Unit
+            NovelReaderSasayakiPlaybackPolicy.PlaybackToggleAction.Pause -> exoPlayer?.pause()
+            NovelReaderSasayakiPlaybackPolicy.PlaybackToggleAction.Play -> exoPlayer?.play()
         }
     }
 
@@ -266,15 +288,39 @@ class SasayakiPlayer(
     }
 
     fun nextCue() {
-        val next = timeline.nextCue(currentCue?.startTime ?: (currentTime - delay))
-        if (next != null) {
-            seek(next + delay)
+        val lookupTime = NovelReaderSasayakiPlaybackPolicy.cueNavigationLookupTime(
+            currentCueStartTime = currentCue?.startTime,
+            currentPlaybackTime = currentTime,
+            delay = delay,
+            clampToZero = false,
+        )
+        when (
+            val action = NovelReaderSasayakiPlaybackPolicy.nextCueSeekAction(
+                nextCueStartTime = timeline.nextCue(lookupTime),
+                delay = delay,
+            )
+        ) {
+            NovelReaderSasayakiPlaybackPolicy.CueNavigationAction.Ignore -> Unit
+            is NovelReaderSasayakiPlaybackPolicy.CueNavigationAction.Seek -> seek(action.seconds)
         }
     }
 
     fun prevCue() {
-        val prev = timeline.prevCue(currentCue?.startTime ?: maxOf(0.0, currentTime - delay)) ?: 0.0
-        seek(prev + delay)
+        val lookupTime = NovelReaderSasayakiPlaybackPolicy.cueNavigationLookupTime(
+            currentCueStartTime = currentCue?.startTime,
+            currentPlaybackTime = currentTime,
+            delay = delay,
+            clampToZero = true,
+        )
+        when (
+            val action = NovelReaderSasayakiPlaybackPolicy.previousCueSeekAction(
+                previousCueStartTime = timeline.prevCue(lookupTime),
+                delay = delay,
+            )
+        ) {
+            NovelReaderSasayakiPlaybackPolicy.CueNavigationAction.Ignore -> Unit
+            is NovelReaderSasayakiPlaybackPolicy.CueNavigationAction.Seek -> seek(action.seconds)
+        }
     }
 
     private fun seek(seconds: Double) {

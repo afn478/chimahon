@@ -3,10 +3,150 @@ package tachiyomi.domain.reader.service
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import tachiyomi.domain.reader.model.NovelReaderSasayakiMatch
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.AudioImportAction
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.AudioRestoreAction
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.CueNavigationAction
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.CueUpdateAction
+import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.PlaybackToggleAction
 import tachiyomi.domain.reader.service.NovelReaderSasayakiPlaybackPolicy.RestoreCompletedAction
 
 class NovelReaderSasayakiPlaybackPolicyTest {
+    @Test
+    fun audioRestoreIgnoresMissingOrUnavailableBookmarks() {
+        assertEquals(
+            AudioRestoreAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.audioRestoreAction(
+                audioBookmark = null,
+                audioExists = true,
+            ),
+        )
+        assertEquals(
+            AudioRestoreAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.audioRestoreAction(
+                audioBookmark = "",
+                audioExists = true,
+            ),
+        )
+        assertEquals(
+            AudioRestoreAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.audioRestoreAction(
+                audioBookmark = "/audio/book.m4a",
+                audioExists = false,
+            ),
+        )
+    }
+
+    @Test
+    fun audioRestoreLoadsExistingBookmark() {
+        assertEquals(
+            AudioRestoreAction.Restore(audioPath = "/audio/book.m4a"),
+            NovelReaderSasayakiPlaybackPolicy.audioRestoreAction(
+                audioBookmark = "/audio/book.m4a",
+                audioExists = true,
+            ),
+        )
+    }
+
+    @Test
+    fun audioImportSavesOnlyNonBlankPaths() {
+        assertEquals(
+            AudioImportAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.audioImportAction(audioPath = " "),
+        )
+        assertEquals(
+            AudioImportAction.SaveAndLoad(audioPath = "/audio/imported.m4a"),
+            NovelReaderSasayakiPlaybackPolicy.audioImportAction(audioPath = "/audio/imported.m4a"),
+        )
+    }
+
+    @Test
+    fun playbackToggleMapsCurrentAudioStateToPlayerCommand() {
+        assertEquals(
+            PlaybackToggleAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.playbackToggleAction(
+                hasAudio = false,
+                isPlaying = false,
+            ),
+        )
+        assertEquals(
+            PlaybackToggleAction.Play,
+            NovelReaderSasayakiPlaybackPolicy.playbackToggleAction(
+                hasAudio = true,
+                isPlaying = false,
+            ),
+        )
+        assertEquals(
+            PlaybackToggleAction.Pause,
+            NovelReaderSasayakiPlaybackPolicy.playbackToggleAction(
+                hasAudio = true,
+                isPlaying = true,
+            ),
+        )
+    }
+
+    @Test
+    fun cueNavigationLookupUsesCurrentCueOrPlaybackTimeWithOptionalClamp() {
+        assertEquals(
+            12.0,
+            NovelReaderSasayakiPlaybackPolicy.cueNavigationLookupTime(
+                currentCueStartTime = 12.0,
+                currentPlaybackTime = 30.0,
+                delay = 2.5,
+                clampToZero = false,
+            ),
+        )
+        assertEquals(
+            27.5,
+            NovelReaderSasayakiPlaybackPolicy.cueNavigationLookupTime(
+                currentCueStartTime = null,
+                currentPlaybackTime = 30.0,
+                delay = 2.5,
+                clampToZero = false,
+            ),
+        )
+        assertEquals(
+            0.0,
+            NovelReaderSasayakiPlaybackPolicy.cueNavigationLookupTime(
+                currentCueStartTime = null,
+                currentPlaybackTime = 1.0,
+                delay = 2.5,
+                clampToZero = true,
+            ),
+        )
+    }
+
+    @Test
+    fun cueNavigationBuildsSeekActionsFromCueStartAndDelay() {
+        assertEquals(
+            CueNavigationAction.Ignore,
+            NovelReaderSasayakiPlaybackPolicy.nextCueSeekAction(
+                nextCueStartTime = null,
+                delay = 0.5,
+            ),
+        )
+        assertEquals(
+            CueNavigationAction.Seek(seconds = 10.5),
+            NovelReaderSasayakiPlaybackPolicy.nextCueSeekAction(
+                nextCueStartTime = 10.0,
+                delay = 0.5,
+            ),
+        )
+        assertEquals(
+            CueNavigationAction.Seek(seconds = 9.5),
+            NovelReaderSasayakiPlaybackPolicy.previousCueSeekAction(
+                previousCueStartTime = 10.0,
+                delay = -0.5,
+            ),
+        )
+        assertEquals(
+            CueNavigationAction.Seek(seconds = 0.5),
+            NovelReaderSasayakiPlaybackPolicy.previousCueSeekAction(
+                previousCueStartTime = null,
+                delay = 0.5,
+            ),
+        )
+    }
+
     @Test
     fun cueUpdateIgnoresWhenPlaybackIsUnavailableOrTransitioning() {
         assertEquals(CueUpdateAction.Ignore, cueUpdate(hasAudio = false))

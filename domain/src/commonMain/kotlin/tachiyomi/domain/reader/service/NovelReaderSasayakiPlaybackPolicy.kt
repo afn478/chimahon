@@ -3,6 +3,27 @@ package tachiyomi.domain.reader.service
 import tachiyomi.domain.reader.model.NovelReaderSasayakiMatch
 
 object NovelReaderSasayakiPlaybackPolicy {
+    sealed interface AudioRestoreAction {
+        data object Ignore : AudioRestoreAction
+        data class Restore(val audioPath: String) : AudioRestoreAction
+    }
+
+    sealed interface AudioImportAction {
+        data object Ignore : AudioImportAction
+        data class SaveAndLoad(val audioPath: String) : AudioImportAction
+    }
+
+    sealed interface PlaybackToggleAction {
+        data object Ignore : PlaybackToggleAction
+        data object Pause : PlaybackToggleAction
+        data object Play : PlaybackToggleAction
+    }
+
+    sealed interface CueNavigationAction {
+        data object Ignore : CueNavigationAction
+        data class Seek(val seconds: Double) : CueNavigationAction
+    }
+
     sealed interface CueUpdateAction {
         data object Ignore : CueUpdateAction
         data object ClearDisplayedCue : CueUpdateAction
@@ -23,6 +44,70 @@ object NovelReaderSasayakiPlaybackPolicy {
             val reveal: Boolean,
             val resume: Boolean,
         ) : RestoreCompletedAction
+    }
+
+    fun audioRestoreAction(
+        audioBookmark: String?,
+        audioExists: Boolean,
+    ): AudioRestoreAction {
+        val audioPath = audioBookmark?.takeIf { it.isNotBlank() } ?: return AudioRestoreAction.Ignore
+        return if (audioExists) {
+            AudioRestoreAction.Restore(audioPath)
+        } else {
+            AudioRestoreAction.Ignore
+        }
+    }
+
+    fun audioImportAction(audioPath: String): AudioImportAction {
+        return if (audioPath.isBlank()) {
+            AudioImportAction.Ignore
+        } else {
+            AudioImportAction.SaveAndLoad(audioPath)
+        }
+    }
+
+    fun playbackToggleAction(
+        hasAudio: Boolean,
+        isPlaying: Boolean,
+    ): PlaybackToggleAction {
+        if (!hasAudio) return PlaybackToggleAction.Ignore
+        return if (isPlaying) {
+            PlaybackToggleAction.Pause
+        } else {
+            PlaybackToggleAction.Play
+        }
+    }
+
+    fun cueNavigationLookupTime(
+        currentCueStartTime: Double?,
+        currentPlaybackTime: Double,
+        delay: Double,
+        clampToZero: Boolean,
+    ): Double {
+        val lookupTime = currentCueStartTime ?: (currentPlaybackTime - delay)
+        return if (clampToZero) {
+            maxOf(0.0, lookupTime)
+        } else {
+            lookupTime
+        }
+    }
+
+    fun nextCueSeekAction(
+        nextCueStartTime: Double?,
+        delay: Double,
+    ): CueNavigationAction {
+        return if (nextCueStartTime != null) {
+            CueNavigationAction.Seek(nextCueStartTime + delay)
+        } else {
+            CueNavigationAction.Ignore
+        }
+    }
+
+    fun previousCueSeekAction(
+        previousCueStartTime: Double?,
+        delay: Double,
+    ): CueNavigationAction {
+        return CueNavigationAction.Seek((previousCueStartTime ?: 0.0) + delay)
     }
 
     fun cueUpdateAction(
