@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,16 +38,26 @@ fun SasayakiSheet(
     val context = LocalContext.current
     val sheetContent = NovelReaderSasayakiSheetPolicy.sheetState(
         hasAudio = viewModel.sasayakiPlayer?.hasAudio == true,
+        isPlaying = viewModel.sasayakiPlayer?.isPlaying == true,
     )
 
     val audioPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        when (
+            NovelReaderSasayakiSheetPolicy.audioImportSelectionAction(
+                uriSelected = uri != null,
+            )
+        ) {
+            NovelReaderSasayakiSheetPolicy.AudioImportSelectionAction.Ignore -> {
+                return@rememberLauncherForActivityResult
+            }
+            NovelReaderSasayakiSheetPolicy.AudioImportSelectionAction.ImportSelectedAudio -> Unit
+        }
 
         // In a real app we'd copy this safely into BookStorage
         val tempFile = File(context.cacheDir, NovelReaderSasayakiSheetPolicy.IMPORTED_AUDIO_FILE_NAME)
-        context.contentResolver.openInputStream(uri)?.use { input ->
+        context.contentResolver.openInputStream(checkNotNull(uri))?.use { input ->
             FileOutputStream(tempFile).use { output -> input.copyTo(output) }
         }
         viewModel.sasayakiPlayer?.importAudio(tempFile)
@@ -70,28 +81,21 @@ fun SasayakiSheet(
             )
 
             if (sheetContent.showAudioControls) {
+                val playbackButton = sheetContent.playbackButton
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(sheetContent.audioSectionTitle, style = MaterialTheme.typography.titleMedium)
-                    IconButton(onClick = { viewModel.sasayakiPlayer?.togglePlayback() }) {
-                        val icon = if (viewModel.sasayakiPlayer?.isPlaying == true) {
-                            // Using a placeholder icon since pause icon requires extended material icons
-                            Icons.Default.PlayArrow
-                        } else {
-                            Icons.Default.PlayArrow
+                    if (playbackButton != null) {
+                        IconButton(onClick = { viewModel.sasayakiPlayer?.togglePlayback() }) {
+                            Icon(
+                                playbackButton.icon.toImageVector(),
+                                contentDescription = playbackButton.contentDescription,
+                            )
                         }
-                        Icon(icon, contentDescription = sheetContent.playbackButtonContentDescription)
                     }
-                }
-
-                Button(
-                    onClick = { audioPicker.launch("audio/*") },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(sheetContent.importButtonText)
                 }
             } else {
                 Text(
@@ -99,14 +103,21 @@ fun SasayakiSheet(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
 
-                Button(
-                    onClick = { audioPicker.launch("audio/*") },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(sheetContent.importButtonText)
-                }
+            Button(
+                onClick = {
+                    audioPicker.launch(NovelReaderSasayakiSheetPolicy.AUDIO_IMPORT_MIME_TYPE)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(sheetContent.importButtonText)
             }
         }
     }
+}
+
+private fun NovelReaderSasayakiSheetPolicy.PlaybackIcon.toImageVector() = when (this) {
+    NovelReaderSasayakiSheetPolicy.PlaybackIcon.PLAY -> Icons.Default.PlayArrow
+    NovelReaderSasayakiSheetPolicy.PlaybackIcon.PAUSE -> Icons.Default.Pause
 }
