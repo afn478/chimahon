@@ -171,6 +171,34 @@ class NovelReaderWebBridgePolicyTest {
     }
 
     @Test
+    fun selectionRectsActionDeliversScreenCoordinateJson() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.SelectionRectsAction.DeliverSelectionRects(
+                """[{"x":120.0,"y":240.0,"width":60.0,"height":80.0,"index":2}]""",
+            ),
+            NovelReaderWebBridgePolicy.selectionRectsAction(
+                json = """[{"x":10,"y":20,"width":30,"height":40,"index":2}]""",
+                viewportLeft = 100.0,
+                viewportTop = 200.0,
+                scale = 2.0,
+            ),
+        )
+    }
+
+    @Test
+    fun selectionRectsActionDeliversEmptyArrayForMissingJson() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.SelectionRectsAction.DeliverSelectionRects("[]"),
+            NovelReaderWebBridgePolicy.selectionRectsAction(
+                json = null,
+                viewportLeft = 100.0,
+                viewportTop = 200.0,
+                scale = 2.0,
+            ),
+        )
+    }
+
+    @Test
     fun nativeCallbackBridgeScriptInstallsReaderBridgeCallbacks() {
         val script = NovelReaderWebBridgePolicy.nativeCallbackBridgeScript(
             nativeBridgeName = "Native'Bridge",

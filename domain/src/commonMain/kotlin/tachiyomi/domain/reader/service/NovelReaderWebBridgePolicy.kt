@@ -25,6 +25,10 @@ object NovelReaderWebBridgePolicy {
         data class EvaluateScript(val script: String) : TouchTapAction
     }
 
+    sealed interface SelectionRectsAction {
+        data class DeliverSelectionRects(val json: String) : SelectionRectsAction
+    }
+
     fun backgroundTapAction(
         clientX: Double,
         clientY: Double,
@@ -116,6 +120,22 @@ object NovelReaderWebBridgePolicy {
             NovelReaderWebScriptPolicy.handleTapScript(
                 cssX = cssPoint.x.toFloat(),
                 cssY = cssPoint.y.toFloat(),
+            ),
+        )
+    }
+
+    fun selectionRectsAction(
+        json: String?,
+        viewportLeft: Double,
+        viewportTop: Double,
+        scale: Double,
+    ): SelectionRectsAction {
+        return SelectionRectsAction.DeliverSelectionRects(
+            NovelReaderWebGeometryPolicy.selectionRectsToScreenJson(
+                json = json,
+                viewportLeft = viewportLeft,
+                viewportTop = viewportTop,
+                scale = scale,
             ),
         )
     }

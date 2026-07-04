@@ -32,7 +32,6 @@ import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebBridgePolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandActionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
-import tachiyomi.domain.reader.service.NovelReaderWebGeometryPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebHostPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebInjectionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebLoadPolicy
@@ -285,13 +284,18 @@ fun ReaderWebView(
                         v.evaluateJavascript(action.script) { result ->
                             val loc = IntArray(2)
                             v.getLocationOnScreen(loc)
-                            val json = NovelReaderWebGeometryPolicy.selectionRectsToScreenJson(
-                                json = result,
-                                viewportLeft = loc[0].toDouble(),
-                                viewportTop = loc[1].toDouble(),
-                                scale = v.scale.toDouble(),
-                            )
-                            onSelectionRectsReceived?.invoke(json)
+                            when (
+                                val rectsAction = NovelReaderWebBridgePolicy.selectionRectsAction(
+                                    json = result,
+                                    viewportLeft = loc[0].toDouble(),
+                                    viewportTop = loc[1].toDouble(),
+                                    scale = v.scale.toDouble(),
+                                )
+                            ) {
+                                is NovelReaderWebBridgePolicy.SelectionRectsAction.DeliverSelectionRects -> {
+                                    onSelectionRectsReceived?.invoke(rectsAction.json)
+                                }
+                            }
                         }
                     }
                     NovelReaderWebCommandActionPolicy.CommandAction.Ignore -> Unit
