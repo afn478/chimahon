@@ -5,12 +5,11 @@ import android.util.Log
 import com.canopus.chimareader.data.BookMetadata
 import com.canopus.chimareader.data.BookStorage
 import com.canopus.chimareader.data.NovelCategory
-import com.canopus.chimareader.data.md5Hex
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupStatEntry
+import tachiyomi.domain.backup.service.NovelBackupMergePolicy
 import tachiyomi.domain.library.service.NovelBookIdentityPolicy
-import tachiyomi.domain.library.service.NovelBookMergePolicy
 import tachiyomi.domain.library.service.NovelCategoryPolicy
 import java.io.File
 import uy.kohesive.injekt.Injekt
@@ -18,14 +17,14 @@ import uy.kohesive.injekt.api.get
 
 class NovelBackupCreator(
     private val context: Context,
-    private val novelCategoryStorage: com.canopus.chimareader.data.NovelCategoryStorage = Injekt.get()
+    private val novelCategoryStorage: com.canopus.chimareader.data.NovelCategoryStorage = Injekt.get(),
 ) {
 
     private val TAG = "NovelBackupCreator"
 
     fun backupNovels(): List<BackupNovel> {
         val backupNovelsById = linkedMapOf<String, BackupNovel>()
-        val booksDir = BookStorage.getBooksDirectory(context) ?: return emptyList()
+        val booksDir = BookStorage.getBooksDirectory(context)
 
         val bookEntries = booksDir.listFiles()
             ?.filter { it.isDirectory }
@@ -65,7 +64,7 @@ class NovelBackupCreator(
                 id = it.id,
                 name = it.name,
                 order = it.order.toLong(),
-                flags = it.flags.toLong()
+                flags = it.flags,
             )
         }
     }
@@ -83,7 +82,6 @@ class NovelBackupCreator(
             author = metadata.author,
             storedHash = null,
             fallbackId = metadata.id,
-            hashIdentity = ::md5Hex,
         )
     }
 
@@ -123,33 +121,25 @@ class NovelBackupCreator(
     }
 
     private fun mergeBackupNovel(first: BackupNovel, second: BackupNovel): BackupNovel {
-        val latest = NovelBookMergePolicy.selectLatest(
-            current = first,
-            incoming = second,
-            lastModified = BackupNovel::lastModified,
-        )
-        val fallback = if (latest == first) second else first
-
-        return latest.copy(
-            id = first.id,
-            author = latest.author ?: fallback.author,
-            cover = latest.cover ?: fallback.cover,
-            stats = mergeBackupStats(first.stats + second.stats),
-            categoryIds = NovelBookMergePolicy.mergeCategoryIds(
-                currentCategoryIds = first.categoryIds,
-                incomingCategoryIds = second.categoryIds,
-                uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
-            ),
-            lang = latest.lang ?: fallback.lang,
+        return NovelBackupMergePolicy.mergeDuplicateRecord(
+            first = first,
+            second = second,
+            uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+            copyRecord = { base, id, author, cover, stats, categoryIds, lang ->
+                base.copy(
+                    id = id,
+                    author = author,
+                    cover = cover,
+                    stats = stats,
+                    categoryIds = categoryIds,
+                    lang = lang,
+                )
+            },
         )
     }
 
     private fun mergeBackupStats(stats: List<BackupStatEntry>): List<BackupStatEntry> {
-        return NovelBookMergePolicy.mergeLatestByKey(
-            items = stats,
-            itemKey = BackupStatEntry::dateKey,
-            lastModified = BackupStatEntry::lastStatisticModified,
-        )
+        return NovelBackupMergePolicy.mergeStats(stats)
     }
 
     private data class BookEntry(

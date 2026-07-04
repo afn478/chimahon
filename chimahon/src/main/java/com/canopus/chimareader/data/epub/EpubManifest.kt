@@ -1,6 +1,5 @@
 package com.canopus.chimareader.data.epub
 
-data class EpubManifest(
-    val id: String? = null,
-    val items: Map<String, ManifestItem> = emptyMap(),
-)
+import tachiyomi.domain.reader.model.NovelEpubManifest
+
+typealias EpubManifest = NovelEpubManifest

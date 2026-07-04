@@ -1,12 +1,8 @@
 package com.canopus.chimareader.data.epub
 
+import tachiyomi.domain.reader.service.NovelEpubBookPolicy
+import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
 import java.io.File
-
-private val nativeImageExtensions = listOf(".jpg", ".jpeg", ".png", ".webp")
-
-private fun isNativeImageHref(href: String?): Boolean {
-    return href != null && nativeImageExtensions.any { href.endsWith(it, ignoreCase = true) }
-}
 
 class EpubParser {
 
@@ -40,13 +36,15 @@ class EpubParser {
             val spineWithTypes = opfResult.spine.items.map { spineItem ->
                 val manifestItem = opfResult.manifest.items[spineItem.idref]
                 val href = manifestItem?.href
-                val isNativeImage = isNativeImageHref(href)
+                val isNativeImage = NovelEpubBookPolicy.isImageOnlySpineHref(href)
                 val isImageOnly = isNativeImage
 
                 val chapterHref = if (href != null) "$contentDir$href" else null
                 val imageUrl = if (isImageOnly && chapterHref != null) {
                     if (isDirectory) {
-                        "file://${File(epubFile, chapterHref).absolutePath}"
+                        NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(
+                            File(epubFile, chapterHref).absolutePath,
+                        )
                     } else {
                         val stream = extractor.getFileStream(chapterHref)
                         if (stream != null) {
@@ -55,7 +53,9 @@ class EpubParser {
                             val cached = File(cacheDir, chapterHref.substringAfterLast("/"))
                             cached.parentFile?.mkdirs()
                             stream.use { it.copyTo(cached.outputStream()) }
-                            "file://${cached.absolutePath}"
+                            NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(
+                                cached.absolutePath,
+                            )
                         } else {
                             null
                         }

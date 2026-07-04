@@ -1,5 +1,6 @@
 package com.canopus.chimareader.data.epub
 
+import tachiyomi.domain.reader.service.NovelEpubBookPolicy
 import tachiyomi.domain.reader.service.NovelReaderCharacterCountPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import java.io.File
@@ -18,29 +19,22 @@ data class EpubBook(
     val extractedDir: File? = null,
 ) {
     val coverHref: String?
-        get() {
-            val coverId = metadata.coverId ?: return null
-            val manifestItem = manifest.items[coverId] ?: return null
-            // Prepend content directory if present
-            return if (contentDirectory.isNotEmpty()) {
-                "$contentDirectory${manifestItem.href}"
-            } else {
-                manifestItem.href
-            }
-        }
+        get() = NovelEpubBookPolicy.coverHref(
+            metadata = metadata,
+            manifest = manifest,
+            contentDirectory = contentDirectory,
+        )
 
     val linearSpineItems: List<SpineItem>
-        get() = spine.items.filter { it.linear }
+        get() = NovelEpubBookPolicy.linearSpineItems(spine)
 
     fun getChapterHref(index: Int): String? {
-        val spineItem = linearSpineItems.getOrNull(index) ?: return null
-        val manifestItem = manifest.items[spineItem.idref] ?: return null
-        // Prepend content directory if present (e.g., "item/xhtml/p-001.xhtml")
-        return if (contentDirectory.isNotEmpty()) {
-            "$contentDirectory${manifestItem.href}"
-        } else {
-            manifestItem.href
-        }
+        return NovelEpubBookPolicy.chapterHref(
+            index = index,
+            spine = spine,
+            manifest = manifest,
+            contentDirectory = contentDirectory,
+        )
     }
 
     // Hoshi Shims
@@ -56,10 +50,12 @@ data class EpubBook(
      * Returns the cached image URL for an image-only spine item.
      * The URL was resolved once during book parsing and stored in [SpineItem.imageUrl].
      */
-    fun getImageUrl(index: Int): String? =
-        linearSpineItems.getOrNull(index)
-            ?.takeIf { it.type == SpineItemType.IMAGE_ONLY }
-            ?.imageUrl
+    fun getImageUrl(index: Int): String? {
+        return NovelEpubBookPolicy.imageUrl(
+            index = index,
+            spine = spine,
+        )
+    }
 
     // Cache to prevent recalculating Chapter Character length
     private val chapterLengthCache = mutableMapOf<Int, Int>()
@@ -69,7 +65,7 @@ data class EpubBook(
      */
     fun getChapterCharacters(index: Int): Int {
         if (chapterLengthCache.containsKey(index)) return chapterLengthCache[index]!!
-        
+
         val spineType = linearSpineItems.getOrNull(index)?.type
         if (spineType == SpineItemType.IMAGE_ONLY) {
             chapterLengthCache[index] = 0

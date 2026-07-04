@@ -113,7 +113,7 @@ class OpfParser {
         doc.select("spine > itemref").forEach { itemref ->
             val idref = itemref.attr("idref")
             if (idref.isNotBlank()) {
-                val linear = itemref.attr("linear")?.lowercase() != "no"
+                val linear = itemref.attr("linear").lowercase() != "no"
                 items.add(
                     SpineItem(
                         idref = idref,

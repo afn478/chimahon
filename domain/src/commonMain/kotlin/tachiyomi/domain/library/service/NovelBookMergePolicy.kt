@@ -1,5 +1,7 @@
 package tachiyomi.domain.library.service
 
+import tachiyomi.domain.library.model.NovelBookMetadata
+
 object NovelBookMergePolicy {
     fun <T> selectLatest(
         current: T,
@@ -55,6 +57,35 @@ object NovelBookMergePolicy {
         return NovelCategoryPolicy.normalizeCategoryIds(
             categoryIds = currentCategoryIds + incomingCategoryIds,
             uncategorizedCategoryId = uncategorizedCategoryId,
+        )
+    }
+
+    fun mergeMetadata(
+        sourceMetadata: NovelBookMetadata?,
+        targetMetadata: NovelBookMetadata?,
+        targetFolderName: String,
+        targetHasImportedContent: Boolean,
+        uncategorizedCategoryId: String,
+        identityKey: (NovelBookMetadata) -> String,
+    ): NovelBookMetadata? {
+        if (sourceMetadata == null && targetMetadata == null) return null
+
+        val base = targetMetadata ?: sourceMetadata ?: return null
+        val incoming = sourceMetadata
+
+        return base.copy(
+            id = targetFolderName,
+            folder = targetFolderName,
+            hash = identityKey(base),
+            author = base.author ?: incoming?.author,
+            cover = base.cover ?: incoming?.cover,
+            lang = base.lang ?: incoming?.lang,
+            isGhost = base.isGhost && !targetHasImportedContent,
+            categoryIds = mergeCategoryIds(
+                currentCategoryIds = base.categoryIds,
+                incomingCategoryIds = incoming?.categoryIds.orEmpty(),
+                uncategorizedCategoryId = uncategorizedCategoryId,
+            ),
         )
     }
 }

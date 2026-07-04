@@ -1,5 +1,6 @@
 package tachiyomi.domain.library.service
 
+import tachiyomi.domain.library.model.NovelBookMetadata
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -92,6 +93,111 @@ class NovelBookMergePolicyTest {
         assertEquals(listOf("sci-fi", "classics"), result)
     }
 
+    @Test
+    fun mergeMetadataReturnsNullWhenBothSidesAreMissing() {
+        assertNull(
+            NovelBookMergePolicy.mergeMetadata(
+                sourceMetadata = null,
+                targetMetadata = null,
+                targetFolderName = "target-folder",
+                targetHasImportedContent = true,
+                uncategorizedCategoryId = "default",
+                identityKey = { "identity" },
+            ),
+        )
+    }
+
+    @Test
+    fun mergeMetadataKeepsTargetValuesAndFillsMissingFieldsFromSource() {
+        val result = NovelBookMergePolicy.mergeMetadata(
+            sourceMetadata = metadata(
+                id = "source",
+                title = "Source title",
+                author = "Source author",
+                cover = "source-cover.jpg",
+                lang = "ja",
+                categoryIds = listOf("default", "classics"),
+            ),
+            targetMetadata = metadata(
+                id = "old-target",
+                title = "Target title",
+                author = null,
+                cover = "target-cover.jpg",
+                lang = null,
+                isGhost = true,
+                categoryIds = listOf("default", "reading"),
+            ),
+            targetFolderName = "target-folder",
+            targetHasImportedContent = true,
+            uncategorizedCategoryId = "default",
+            identityKey = { metadata -> "identity-for-${metadata.title}" },
+        )
+
+        assertEquals(
+            metadata(
+                id = "target-folder",
+                title = "Target title",
+                author = "Source author",
+                cover = "target-cover.jpg",
+                folder = "target-folder",
+                hash = "identity-for-Target title",
+                isGhost = false,
+                categoryIds = listOf("reading", "classics"),
+                lang = "ja",
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun mergeMetadataKeepsGhostTargetWhenNoImportedContentExists() {
+        val result = NovelBookMergePolicy.mergeMetadata(
+            sourceMetadata = metadata(isGhost = false),
+            targetMetadata = metadata(isGhost = true),
+            targetFolderName = "target-folder",
+            targetHasImportedContent = false,
+            uncategorizedCategoryId = "default",
+            identityKey = { "identity" },
+        )
+
+        assertEquals(true, result?.isGhost)
+    }
+
+    @Test
+    fun mergeMetadataUsesSourceAsBaseWhenTargetIsMissing() {
+        val result = NovelBookMergePolicy.mergeMetadata(
+            sourceMetadata = metadata(
+                id = "source",
+                title = "Source title",
+                author = "Source author",
+                cover = "source-cover.jpg",
+                folder = "source-folder",
+                hash = "old-hash",
+                categoryIds = listOf("default", "classics"),
+                lang = "en",
+            ),
+            targetMetadata = null,
+            targetFolderName = "target-folder",
+            targetHasImportedContent = false,
+            uncategorizedCategoryId = "default",
+            identityKey = { metadata -> "identity-for-${metadata.title}" },
+        )
+
+        assertEquals(
+            metadata(
+                id = "target-folder",
+                title = "Source title",
+                author = "Source author",
+                cover = "source-cover.jpg",
+                folder = "target-folder",
+                hash = "identity-for-Source title",
+                categoryIds = listOf("classics"),
+                lang = "en",
+            ),
+            result,
+        )
+    }
+
     private fun item(
         id: String,
         key: String = id,
@@ -109,4 +215,30 @@ class NovelBookMergePolicyTest {
         val key: String,
         val modified: Long,
     )
+
+    private fun metadata(
+        id: String = "book-id",
+        title: String? = "Title",
+        author: String? = null,
+        cover: String? = null,
+        folder: String? = null,
+        hash: String? = null,
+        isGhost: Boolean = false,
+        categoryIds: List<String> = emptyList(),
+        lang: String? = null,
+    ): NovelBookMetadata {
+        return NovelBookMetadata(
+            id = id,
+            title = title,
+            author = author,
+            cover = cover,
+            folder = folder,
+            lastAccess = 10,
+            dateAdded = 5,
+            hash = hash,
+            isGhost = isGhost,
+            categoryIds = categoryIds,
+            lang = lang,
+        )
+    }
 }

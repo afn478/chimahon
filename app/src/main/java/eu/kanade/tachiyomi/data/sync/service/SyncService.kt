@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.data.sync.service
 
 import android.content.Context
 import com.canopus.chimareader.data.NovelCategory
-import com.canopus.chimareader.data.md5Hex
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
@@ -648,7 +647,6 @@ abstract class SyncService(
             author = novel.author,
             storedHash = null,
             fallbackId = novel.id,
-            hashIdentity = ::md5Hex,
         )
     }
 

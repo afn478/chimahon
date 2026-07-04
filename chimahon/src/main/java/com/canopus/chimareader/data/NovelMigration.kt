@@ -3,6 +3,7 @@ package com.canopus.chimareader.data
 import android.content.Context
 import android.util.Log
 import tachiyomi.domain.library.service.NovelBookIdentityPolicy
+import tachiyomi.domain.library.service.NovelBookMigrationPolicy
 import tachiyomi.domain.library.service.NovelBookMergePolicy
 import java.io.File
 
@@ -54,19 +55,19 @@ object NovelMigration {
                 metadata != null && metadata.hash == null -> {
                     try {
                         val book = BookStorage.loadEpub(bookDir)
-                        val title = book.title ?: metadata.title ?: "Unknown"
-                        val author = book.author ?: ""
-
-                        val hash = stableTitleAuthorId(title = title, author = author)
-                        Log.d(TAG, "Migrating (has meta) ${bookDir.name} -> $hash ($title | $author)")
-
-                        val newMetadata = metadata.copy(
-                            hash = hash,
-                            id = hash,
-                            folder = hash,
-                            cover = metadata.cover?.replace(bookDir.name, hash),
+                        val migration = NovelBookMigrationPolicy.migrateExistingMetadataWithoutHash(
+                            existingMetadata = metadata,
+                            parsedTitle = book.title,
+                            parsedAuthor = book.author,
+                            currentFolderName = bookDir.name,
                         )
-                        BookStorage.saveMetadata(newMetadata, bookDir)
+                        val hash = migration.stableId
+                        Log.d(
+                            TAG,
+                            "Migrating (has meta) ${bookDir.name} -> $hash (${migration.title} | ${migration.author})",
+                        )
+
+                        BookStorage.saveMetadata(migration.metadata, bookDir)
 
                         val newBookDir = File(booksDir, hash)
                         if (!newBookDir.exists()) {
@@ -93,23 +94,20 @@ object NovelMigration {
                 metadata == null -> {
                     try {
                         val book = BookStorage.loadEpub(bookDir)
-                        val title = book.title ?: "Unknown"
-                        val author = book.author ?: ""
-
-                        val hash = stableTitleAuthorId(title = title, author = author)
-                        Log.d(TAG, "Migrating (no meta) ${bookDir.name} -> $hash ($title | $author)")
-
                         val coverAbsPath = book.coverPath?.let { File(bookDir, it).absolutePath }
-                        val newMetadata = BookMetadata(
-                            id = hash,
-                            title = title,
-                            cover = coverAbsPath,
-                            folder = hash,
-                            lastAccess = System.currentTimeMillis(),
-                            hash = hash,
-                            isGhost = false,
+                        val migration = NovelBookMigrationPolicy.migrateParsedBookWithoutExistingMetadata(
+                            parsedTitle = book.title,
+                            parsedAuthor = book.author,
+                            coverPath = coverAbsPath,
+                            migrationTimeMillis = System.currentTimeMillis(),
                         )
-                        BookStorage.saveMetadata(newMetadata, bookDir)
+                        val hash = migration.stableId
+                        Log.d(
+                            TAG,
+                            "Migrating (no meta) ${bookDir.name} -> $hash (${migration.title} | ${migration.author})",
+                        )
+
+                        BookStorage.saveMetadata(migration.metadata, bookDir)
 
                         val newBookDir = File(booksDir, hash)
                         if (!newBookDir.exists()) {
@@ -142,14 +140,18 @@ object NovelMigration {
 
         for (bookDir in folders) {
             val metadata = BookStorage.loadMetadata(bookDir) ?: continue
-            val title = metadata.title ?: continue
-            val author = metadata.author ?: ""
-
-            val correctId = stableTitleAuthorId(title = title, author = author)
+            val migration = NovelBookMigrationPolicy.correctStableDirectoryMetadata(
+                metadata = metadata,
+                currentFolderName = bookDir.name,
+            ) ?: continue
+            val correctId = migration.stableId
 
             if (bookDir.name == correctId) continue
 
-            Log.d(TAG, "v3: fixing old ghost dir ${bookDir.name} -> $correctId ($title | $author)")
+            Log.d(
+                TAG,
+                "v3: fixing old ghost dir ${bookDir.name} -> $correctId (${migration.title} | ${migration.author})",
+            )
             val newDir = File(booksDir, correctId)
 
             if (newDir.exists()) {
@@ -158,13 +160,7 @@ object NovelMigration {
                     Log.e(TAG, "v3: failed to delete old ghost dir ${bookDir.name}")
                 }
             } else {
-                val updatedMetadata = metadata.copy(
-                    id = correctId,
-                    folder = correctId,
-                    hash = correctId,
-                    cover = metadata.cover?.replace(bookDir.name, correctId),
-                )
-                BookStorage.saveMetadata(updatedMetadata, bookDir)
+                BookStorage.saveMetadata(migration.metadata, bookDir)
                 if (!bookDir.renameTo(newDir)) {
                     Log.e(TAG, "v3: failed to rename ${bookDir.name} to $correctId")
                 }
@@ -255,41 +251,13 @@ object NovelMigration {
         targetMetadata: BookMetadata?,
         targetDir: File,
     ): BookMetadata? {
-        if (sourceMetadata == null && targetMetadata == null) return null
-
-        val base = targetMetadata ?: sourceMetadata ?: return null
-        val incoming = sourceMetadata
-        val identity = BookStorage.bookIdentityKey(base)
-
-        return base.copy(
-            id = targetDir.name,
-            folder = targetDir.name,
-            hash = identity,
-            author = base.author ?: incoming?.author,
-            cover = base.cover ?: incoming?.cover,
-            lang = base.lang ?: incoming?.lang,
-            isGhost = base.isGhost && !BookStorage.hasImportedBookContent(targetDir),
-            categoryIds = normalizeCategoryIds(base.categoryIds + incoming?.categoryIds.orEmpty()),
-        )
-    }
-
-    private fun normalizeCategoryIds(categoryIds: List<String>): List<String> {
-        return NovelBookMergePolicy.mergeCategoryIds(
-            currentCategoryIds = categoryIds,
-            incomingCategoryIds = emptyList(),
+        return NovelBookMergePolicy.mergeMetadata(
+            sourceMetadata = sourceMetadata,
+            targetMetadata = targetMetadata,
+            targetFolderName = targetDir.name,
+            targetHasImportedContent = BookStorage.hasImportedBookContent(targetDir),
             uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
-        )
-    }
-
-    private fun stableTitleAuthorId(
-        title: String?,
-        author: String?,
-    ): String {
-        return md5Hex(
-            NovelBookIdentityPolicy.titleAuthorIdentityInput(
-                title = title,
-                author = author,
-            ) ?: "|",
+            identityKey = BookStorage::bookIdentityKey,
         )
     }
 

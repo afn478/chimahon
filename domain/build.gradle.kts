@@ -23,6 +23,7 @@ kotlin {
                 api(projects.sourceApi)
                 api(project.dependencies.platform(kotlinx.coroutines.bom))
                 api(kotlinx.coroutines.core)
+                implementation(libs.okio)
                 implementation(kotlinx.serialization.json)
             }
         }

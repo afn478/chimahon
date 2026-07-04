@@ -70,6 +70,55 @@ class NovelBookIdentityPolicyTest {
     }
 
     @Test
+    fun identityKeyOverloadUsesStableMd5Hashing() {
+        val result = NovelBookIdentityPolicy.identityKey(
+            title = " Mars ",
+            author = " Alice ",
+            storedHash = "stored",
+            fallbackId = "fallback",
+        )
+
+        assertEquals("6d1c8cd89bb2d2e186b71f71967342d4", result)
+    }
+
+    @Test
+    fun identityKeyOverloadFallsBackToStoredHashBeforeId() {
+        val storedHashResult = NovelBookIdentityPolicy.identityKey(
+            title = null,
+            author = null,
+            storedHash = "stored",
+            fallbackId = "fallback",
+        )
+        val fallbackResult = NovelBookIdentityPolicy.identityKey(
+            title = null,
+            author = null,
+            storedHash = " ",
+            fallbackId = "fallback",
+        )
+
+        assertEquals("stored", storedHashResult)
+        assertEquals("fallback", fallbackResult)
+    }
+
+    @Test
+    fun stableTitleAuthorIdUsesLegacyBlankFallbackInput() {
+        assertEquals(
+            "8a91ea2d2e067402ca83c2d29bb7f69f",
+            NovelBookIdentityPolicy.stableTitleAuthorId(
+                title = " Book ",
+                author = "Author",
+            ),
+        )
+        assertEquals(
+            "b99834bc19bbad24580b3adfa04fb947",
+            NovelBookIdentityPolicy.stableTitleAuthorId(
+                title = " ",
+                author = null,
+            ),
+        )
+    }
+
+    @Test
     fun selectPreferredDuplicatePrefersImportedNonGhostStableDirectoryThenRecentAccess() {
         val result = NovelBookIdentityPolicy.selectPreferredDuplicate(
             books = listOf(

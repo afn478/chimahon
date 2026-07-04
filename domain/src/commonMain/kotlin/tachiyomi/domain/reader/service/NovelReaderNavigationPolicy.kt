@@ -86,68 +86,14 @@ object NovelReaderNavigationPolicy {
     }
 
     private fun fragmentForHref(href: String?): String? {
-        return href
-            ?.substringAfter("#", missingDelimiterValue = "")
-            ?.takeIf { it.isNotEmpty() }
+        return NovelReaderFileUrlPolicy.fragmentForUrl(href)
     }
 
     private fun normalizedHrefPath(href: String): String {
-        return percentDecode(
-            href
-                .substringBefore("#")
-                .substringBefore("?")
-                .replace("\\", "/"),
-        )
+        return NovelReaderFileUrlPolicy.hrefPathForComparison(href)
     }
 
     private fun normalizedFilePath(pathOrUrl: String): String {
-        return percentDecode(
-            pathOrUrl
-                .substringBefore("#")
-                .substringBefore("?")
-                .removePrefix("file://")
-                .replace("\\", "/"),
-        )
-    }
-
-    private fun percentDecode(value: String): String {
-        if ('%' !in value) return value
-
-        val builder = StringBuilder()
-        val bytes = mutableListOf<Byte>()
-
-        fun flushBytes() {
-            if (bytes.isEmpty()) return
-            builder.append(ByteArray(bytes.size) { bytes[it] }.decodeToString())
-            bytes.clear()
-        }
-
-        var index = 0
-        while (index < value.length) {
-            val char = value[index]
-            val firstHex = value.getOrNull(index + 1)?.hexValue()
-            val secondHex = value.getOrNull(index + 2)?.hexValue()
-
-            if (char == '%' && firstHex != null && secondHex != null) {
-                bytes += ((firstHex shl 4) + secondHex).toByte()
-                index += 3
-            } else {
-                flushBytes()
-                builder.append(char)
-                index += 1
-            }
-        }
-
-        flushBytes()
-        return builder.toString()
-    }
-
-    private fun Char.hexValue(): Int? {
-        return when (this) {
-            in '0'..'9' -> this - '0'
-            in 'a'..'f' -> this - 'a' + 10
-            in 'A'..'F' -> this - 'A' + 10
-            else -> null
-        }
+        return NovelReaderFileUrlPolicy.localPathForFileUrlOrPath(pathOrUrl)
     }
 }

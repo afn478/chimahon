@@ -8,10 +8,10 @@ import android.util.Log
 import com.canopus.chimareader.data.epub.EpubParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import tachiyomi.domain.library.service.NovelBookIdentityPolicy
-import tachiyomi.domain.library.service.NovelCategoryPolicy
+import tachiyomi.domain.library.service.NovelBookImportPolicy
+import tachiyomi.domain.reader.service.NovelEpubContentPolicy
+import tachiyomi.domain.reader.service.NovelEpubImagePolicy
 import java.io.File
-import java.security.MessageDigest
 import java.util.zip.ZipFile
 
 data class ImportResult(
@@ -22,8 +22,6 @@ data class ImportResult(
 object BookImporter {
 
     private const val TAG = "BookImporter"
-    private const val MAX_DIM = 2048
-    private const val MAX_PIXELS = 4_000_000L
 
     suspend fun importEpub(
         context: Context,
@@ -76,14 +74,11 @@ object BookImporter {
             }
 
             val extractedBook = EpubParser.parse(tempExtractDir)
-            val title = extractedBook.title ?: "Unknown"
-            val author = extractedBook.author ?: ""
-
-            val stableId = md5Hex(
-                NovelBookIdentityPolicy.titleAuthorIdentityInput(
-                    title = title,
-                    author = author,
-                ) ?: "|",
+            val title = NovelBookImportPolicy.importedTitle(extractedBook.title)
+            val author = NovelBookImportPolicy.importedAuthor(extractedBook.author)
+            val stableId = NovelBookImportPolicy.stableIdForImport(
+                title = title,
+                author = author,
             )
             val bookDir = File(booksDir, stableId)
 
@@ -105,13 +100,13 @@ object BookImporter {
             // Re-run normalisation and pre-wrapping on the final directory
             bookDir.walkTopDown().forEach { file ->
                 val ext = file.extension.lowercase()
-                if (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "webp" || ext == "gif") {
+                if (NovelEpubContentPolicy.isImageExtension(ext)) {
                     normaliseImageInPlace(file)
                 }
-                if (ext == "html" || ext == "xhtml" || ext == "htm") {
+                if (NovelEpubContentPolicy.isMarkupExtension(ext)) {
                     preWrapBodyContent(file)
                 }
-                if (ext == "css") {
+                if (NovelEpubContentPolicy.isStylesheetExtension(ext)) {
                     cleanBookCss(file)
                 }
             }
@@ -129,25 +124,15 @@ object BookImporter {
 
             Log.d(TAG, "Parsed EPUB: title=$title, contentDir=${extractedBook.contentDirectory}, chapters=${extractedBook.spine.items.size}")
 
-            val existingCategoryIds = existingMetadata?.categoryIds.orEmpty()
-            val resolvedCategoryIds = NovelCategoryPolicy.resolveImportedCategoryIds(
-                existingCategoryIds = existingCategoryIds,
+            val metadata = NovelBookImportPolicy.metadataForImportedBook(
+                title = extractedBook.title,
+                author = extractedBook.author,
+                coverPath = coverAbsPath,
+                language = extractedBook.language,
+                existingMetadata = existingMetadata,
                 requestedCategoryIds = categoryIds,
+                importTimeMillis = System.currentTimeMillis(),
                 uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
-            )
-
-            val metadata = BookMetadata(
-                id = stableId,
-                title = title,
-                author = author,
-                cover = coverAbsPath,
-                folder = stableId,
-                lastAccess = existingMetadata?.lastAccess ?: System.currentTimeMillis(),
-                dateAdded = existingMetadata?.dateAdded ?: System.currentTimeMillis(),
-                hash = stableId,
-                isGhost = false,
-                lang = extractedBook.language,
-                categoryIds = resolvedCategoryIds,
             )
             BookStorage.saveMetadata(metadata, bookDir)
 
@@ -173,16 +158,19 @@ object BookImporter {
                 return
             }
 
-            val needsDownsample = w > MAX_DIM || h > MAX_DIM || (w.toLong() * h) > MAX_PIXELS
+            val needsDownsample = NovelEpubImagePolicy.shouldDownsample(
+                width = w,
+                height = h,
+            )
             if (!needsDownsample) return // small enough — leave it alone
 
-            val sampleSize = calculateInSampleSize(w, h)
+            val sampleSize = NovelEpubImagePolicy.sampleSize(
+                width = w,
+                height = h,
+            )
             Log.w(TAG, "normalise: ${file.name} ${w}x$h → 1:$sampleSize sample")
 
-            val mimeType = bounds.outMimeType ?: ""
-            val mightHaveAlpha = mimeType.contains("png", ignoreCase = true) ||
-                mimeType.contains("gif", ignoreCase = true) ||
-                mimeType.contains("webp", ignoreCase = true)
+            val mightHaveAlpha = NovelEpubImagePolicy.mimeMightHaveAlpha(bounds.outMimeType)
 
             val decodeOpts = BitmapFactory.Options().apply {
                 inJustDecodeBounds = false
@@ -249,39 +237,11 @@ object BookImporter {
         }
     }
 
-    private fun calculateInSampleSize(width: Int, height: Int): Int {
-        var inSampleSize = 1
-        var w = width
-        var h = height
-        while (w > MAX_DIM || h > MAX_DIM || (w.toLong() * h) > MAX_PIXELS) {
-            inSampleSize *= 2
-            w = width / inSampleSize
-            h = height / inSampleSize
-        }
-        return inSampleSize
-    }
-
     private fun preWrapBodyContent(file: File) {
         try {
             val text = file.readText(Charsets.UTF_8)
-
-            if (text.contains("hoshi-content-wrapper")) return
-
-            val bodyTagStart = text.indexOf("<body", ignoreCase = true)
-            if (bodyTagStart < 0) return // no <body> — skip (e.g. CSS-only file)
-            val bodyTagEnd = text.indexOf('>', bodyTagStart)
-            if (bodyTagEnd < 0) return
-
-            val bodyClose = text.lastIndexOf("</body", ignoreCase = true)
-            if (bodyClose < 0 || bodyClose <= bodyTagEnd) return
-
-            val result = StringBuilder(text.length + 70)
-                .append(text, 0, bodyTagEnd + 1)
-                .append("<div id=\"hoshi-content-wrapper\">")
-                .append(text, bodyTagEnd + 1, bodyClose)
-                .append("</div>")
-                .append(text, bodyClose, text.length)
-                .toString()
+            val result = NovelEpubContentPolicy.wrapBodyContent(text)
+            if (result == text) return
 
             file.writeText(result, Charsets.UTF_8)
             Log.d(TAG, "preWrap: wrapped ${file.name} (${text.length} → ${result.length} bytes)")
@@ -292,66 +252,16 @@ object BookImporter {
 
     private fun cleanBookCss(file: File) {
         try {
-            var text = file.readText(Charsets.UTF_8)
+            val text = file.readText(Charsets.UTF_8)
             if (text.isBlank()) return
 
-            // @page blocks
-            text = text.replace(Regex("""(?is)@page\s*\{[^}]*\}\s*"""), "")
-            // -epub-* property declarations
-            text = text.replace(Regex("""[ \t]*-epub-[\w-]+\s*:[^;]+;[ \t]*\n?"""), "")
-            // writing-mode / -webkit-writing-mode
-            text = text.replace(Regex("""(?i)[ \t]*(?:-webkit-)?writing-mode\s*:[^;]+;[ \t]*\n?"""), "")
-            // column-* (column-width, column-count, column-gap, column-fill, etc.)
-            text = text.replace(Regex("""(?i)[ \t]*column-[\w-]+\s*:[^;]+;[ \t]*\n?"""), "")
-            // overflow / overflow-x / overflow-y
-            text = text.replace(Regex("""(?i)[ \t]*overflow(?:-[xy])?\s*:[^;]+;[ \t]*\n?"""), "")
+            val cleanedText = NovelEpubContentPolicy.cleanCss(text)
 
-            // Remove entire rules targeting html/body selectors
-            text = removeHtmlBodyRules(text)
-            // Strip line-height and text-indent from all remaining rules
-            text = stripLineHeightAndTextIndent(text)
-
-            file.writeText(text, Charsets.UTF_8)
+            file.writeText(cleanedText, Charsets.UTF_8)
             Log.d(TAG, "cleanCss: cleaned ${file.name}")
         } catch (e: Exception) {
             Log.e(TAG, "cleanCss: failed for ${file.name} — skipping", e)
         }
     }
 
-    private fun removeHtmlBodyRules(css: String): String {
-        // Matches a CSS selector + single-level { declarations } block.
-        // Leading '@' guard prevents mismatching inside @media bodies.
-        val blockRe = Regex("""([^{}@]+)\{([^{}]*)\}""")
-
-        // Detects the words html or body as standalone identifiers.
-        val targetSelectorRe = Regex(
-            """(?<![.\w#-])(html|body)(?![.\w-])""",
-            RegexOption.IGNORE_CASE,
-        )
-
-        return blockRe.replace(css) { match ->
-            val selector = match.groupValues[1]
-            if (targetSelectorRe.containsMatchIn(selector)) {
-                "" // remove entire rule
-            } else {
-                match.value // leave unchanged
-            }
-        }
-    }
-
-    private fun stripLineHeightAndTextIndent(css: String): String {
-        return css.replace(Regex("""(?i)[ \t]*(?:line-height|text-indent)\s*:[^;]+;[ \t]*\n?|[ \t]*text-align\s*:\s*justify\s*;[ \t]*\n?"""), "")
-    }
-
-    private fun md5Hex(file: File): String {
-        val digest = MessageDigest.getInstance("MD5")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
 }

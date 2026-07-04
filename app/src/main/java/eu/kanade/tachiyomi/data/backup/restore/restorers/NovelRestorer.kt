@@ -6,10 +6,10 @@ import com.canopus.chimareader.data.BookStorage
 import com.canopus.chimareader.data.Bookmark
 import com.canopus.chimareader.data.NovelCategory
 import com.canopus.chimareader.data.Statistics
-import com.canopus.chimareader.data.md5Hex
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupStatEntry
+import tachiyomi.domain.backup.service.NovelBackupMergePolicy
 import tachiyomi.domain.library.service.NovelBookIdentityPolicy
 import tachiyomi.domain.library.service.NovelBookMergePolicy
 import tachiyomi.domain.library.service.NovelCategoryPolicy
@@ -43,12 +43,14 @@ class NovelRestorer(
             val localMetadata = BookStorage.loadMetadata(bookDir)
             if (localMetadata != null) {
                 val hasImportedContent = BookStorage.hasImportedBookContent(bookDir)
-                val updatedMetadata = localMetadata.copy(
-                    author = backupNovel.author ?: localMetadata.author,
-                    cover = backupNovel.cover ?: localMetadata.cover,
-                    lang = backupNovel.lang ?: localMetadata.lang,
-                    isGhost = if (hasImportedContent) false else localMetadata.isGhost,
-                    categoryIds = mergeCategoryIds(localMetadata.categoryIds, backupCategoryIds)
+                val updatedMetadata = NovelBackupMergePolicy.mergeRestoredMetadata(
+                    localMetadata = localMetadata,
+                    backupAuthor = backupNovel.author,
+                    backupCover = backupNovel.cover,
+                    backupLang = backupNovel.lang,
+                    backupCategoryIds = backupCategoryIds,
+                    hasImportedContent = hasImportedContent,
+                    uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
                 )
                 BookStorage.saveMetadata(updatedMetadata, bookDir)
             }
@@ -140,14 +142,6 @@ class NovelRestorer(
         return result.categoryIdMap
     }
 
-    private fun mergeCategoryIds(localIds: List<String>, backupIds: List<String>): List<String> {
-        return NovelBookMergePolicy.mergeCategoryIds(
-            currentCategoryIds = localIds,
-            incomingCategoryIds = backupIds,
-            uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
-        )
-    }
-
     private fun normalizeCategoryIds(categoryIds: List<String>): List<String> {
         return NovelCategoryPolicy.normalizeCategoryIds(
             categoryIds = categoryIds,
@@ -161,7 +155,6 @@ class NovelRestorer(
             author = backupNovel.author,
             storedHash = null,
             fallbackId = backupNovel.id,
-            hashIdentity = ::md5Hex,
         )
     }
 

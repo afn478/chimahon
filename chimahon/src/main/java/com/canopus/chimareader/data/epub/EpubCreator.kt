@@ -1,7 +1,5 @@
 package com.canopus.chimareader.data.epub
 
-data class EpubCreator(
-    val name: String? = null,
-    val role: String? = null,
-    val fileAs: String? = null,
-)
+import tachiyomi.domain.reader.model.NovelEpubCreator
+
+typealias EpubCreator = NovelEpubCreator

@@ -33,6 +33,7 @@ import tachiyomi.domain.reader.model.NovelReaderSettingsSnapshot
 import tachiyomi.domain.reader.model.NovelReaderTocEntry
 import tachiyomi.domain.reader.model.NovelReaderTocItem
 import tachiyomi.domain.reader.model.ReaderSettings
+import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
 import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsPolicy
@@ -262,7 +263,7 @@ class ReaderViewModel(
         }
 
         getCurrentChapter()?.let { file ->
-            val fileUrl = "file://${file.absolutePath.replace("\\", "/")}"
+            val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
             bridge.updateState(fileUrl, currentProgress, chapterTitle)
             bridge.send(WebViewCommand.LoadChapter(fileUrl, currentProgress))
@@ -480,8 +481,7 @@ class ReaderViewModel(
         statisticsTracker.resetBaseline(calculateExploredCharCount(progress))
         saveBookmark(progress, updateTracker = false, force = true)
         getCurrentChapter()?.let { file ->
-            // Create proper file URL with encoded path
-            val fileUrl = "file://${file.absolutePath.replace("\\", "/")}"
+            val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
             bridge.updateState(fileUrl, progress, chapterTitle)
             bridge.send(WebViewCommand.LoadChapter(fileUrl, progress))

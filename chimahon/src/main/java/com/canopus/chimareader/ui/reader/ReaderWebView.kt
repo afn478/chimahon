@@ -29,6 +29,8 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
 import tachiyomi.domain.reader.model.ReaderSettings
+import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
+import tachiyomi.domain.reader.service.NovelReaderFontPolicy
 
 @Composable
 fun ReaderWebView(
@@ -141,12 +143,9 @@ fun ReaderWebView(
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
                         val currentFile = currentUrl
-                            ?.removePrefix("file://")
-                            ?.substringBefore("#")
-                        val targetFile = url
-                            .removePrefix("file://")
-                            .substringBefore("#")
-                        val fragment = url.substringAfter("#", missingDelimiterValue = "")
+                            ?.let(NovelReaderFileUrlPolicy::localPathForFileUrlOrPath)
+                        val targetFile = NovelReaderFileUrlPolicy.localPathForFileUrlOrPath(url)
+                        val fragment = NovelReaderFileUrlPolicy.fragmentForUrl(url).orEmpty()
 
                         Log.d("ReaderWebView", "shouldOverrideUrlLoading: url=$url currentFile=$currentFile targetFile=$targetFile fragment=$fragment")
 
@@ -492,8 +491,8 @@ private class ReaderAndroidWebView(
         visibility = View.INVISIBLE
 
         try {
-            if (url.startsWith("file://") || !url.contains("://")) {
-                val file = File(url.removePrefix("file://"))
+            if (url.startsWith(NovelReaderFileUrlPolicy.FILE_URL_PREFIX) || !url.contains("://")) {
+                val file = File(NovelReaderFileUrlPolicy.localPathForFileUrlOrPath(url))
                 if (file.exists()) {
                     loadUrl(url)
                 } else {
@@ -1327,12 +1326,7 @@ private fun fontJS(settings: ReaderSettings, wrapperVar: String): String = build
             """.trimIndent(),
         )
     } else {
-        var ff = settings.selectedFont
-        if (ff == "System Serif") {
-            ff = "serif"
-        } else if (ff == "System Sans-Serif") {
-            ff = "sans-serif"
-        }
+        val ff = NovelReaderFontPolicy.cssFontFamily(settings.selectedFont)
         appendLine("$wrapperVar.style.setProperty('font-family', '${jsEscape(ff)}', 'important');")
     }
 }

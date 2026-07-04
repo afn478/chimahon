@@ -4,22 +4,26 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.reader.service.NovelReaderFontPolicy
 import java.io.File
 
 object FontManager {
-    val defaultFonts = listOf("System Serif", "System Sans-Serif")
+    val defaultFonts = NovelReaderFontPolicy.defaultFonts
 
     fun isCustomFont(context: Context, fontName: String): Boolean {
-        return !defaultFonts.contains(fontName) && getFontFile(context, fontName) != null
+        return NovelReaderFontPolicy.isCustomFont(
+            fontName = fontName,
+            importedFontNames = getImportedFonts(context),
+        )
     }
 
     fun getFontUri(context: Context, fontName: String): String? {
         val file = getFontFile(context, fontName) ?: return null
-        return "file://${file.absolutePath}"
+        return NovelReaderFontPolicy.fontFileUri(file.absolutePath)
     }
 
     private fun getFontsDir(context: Context): File {
-        val dir = File(context.filesDir, "fonts")
+        val dir = File(context.filesDir, NovelReaderFontPolicy.FONTS_DIRECTORY)
         if (!dir.exists()) {
             dir.mkdirs()
         }
@@ -28,7 +32,8 @@ object FontManager {
 
     suspend fun importFont(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
-            val fileName = getFileName(context, uri) ?: "imported_font_${System.currentTimeMillis()}.ttf"
+            val fileName = getFileName(context, uri)
+                ?: NovelReaderFontPolicy.importedFontFileName(System.currentTimeMillis())
             val targetFile = File(getFontsDir(context), fileName)
 
             context.contentResolver.openInputStream(uri)?.use { input ->
@@ -45,12 +50,17 @@ object FontManager {
 
     fun getImportedFonts(context: Context): List<String> {
         val dir = getFontsDir(context)
-        return dir.listFiles()?.map { it.nameWithoutExtension } ?: emptyList()
+        return dir.listFiles()
+            ?.let { files -> NovelReaderFontPolicy.customFontNames(files.map { it.name }) }
+            ?: emptyList()
     }
 
     fun getFontFile(context: Context, fontName: String): File? {
+        if (NovelReaderFontPolicy.isDefaultFont(fontName)) return null
+
         val dir = getFontsDir(context)
-        return dir.listFiles()?.find { it.nameWithoutExtension == fontName }
+        return dir.listFiles()
+            ?.find { NovelReaderFontPolicy.matchesImportedFontFile(fileName = it.name, fontName = fontName) }
     }
 
     fun deleteFont(context: Context, fontName: String) {

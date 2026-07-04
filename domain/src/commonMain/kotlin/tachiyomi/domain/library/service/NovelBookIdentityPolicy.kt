@@ -30,6 +30,33 @@ object NovelBookIdentityPolicy {
             ?: fallbackId
     }
 
+    fun identityKey(
+        title: String?,
+        author: String?,
+        storedHash: String?,
+        fallbackId: String,
+    ): String {
+        return identityKey(
+            title = title,
+            author = author,
+            storedHash = storedHash,
+            fallbackId = fallbackId,
+            hashIdentity = NovelBookHash::md5Hex,
+        )
+    }
+
+    fun stableTitleAuthorId(
+        title: String?,
+        author: String?,
+    ): String {
+        return NovelBookHash.md5Hex(
+            titleAuthorIdentityInput(
+                title = title,
+                author = author,
+            ) ?: "|",
+        )
+    }
+
     fun <T> deduplicateByIdentity(
         books: List<T>,
         identityKey: (T) -> String,

@@ -2,6 +2,7 @@ package com.canopus.chimareader.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import tachiyomi.domain.reader.service.NovelReaderFontPolicy
 
 class UserConfig(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("ChimaReaderPrefs", Context.MODE_PRIVATE)
@@ -31,6 +32,7 @@ class UserConfig(context: Context) {
         set(value) = prefs.edit().putBoolean("enableSasayaki", value).apply()
 
     var selectedFont: String
-        get() = prefs.getString("selectedFont", "System Serif") ?: "System Serif"
+        get() = prefs.getString("selectedFont", NovelReaderFontPolicy.SYSTEM_SERIF)
+            ?: NovelReaderFontPolicy.SYSTEM_SERIF
         set(value) = prefs.edit().putString("selectedFont", value).apply()
 }

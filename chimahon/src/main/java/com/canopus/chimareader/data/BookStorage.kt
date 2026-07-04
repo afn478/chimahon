@@ -1,16 +1,16 @@
 package com.canopus.chimareader.data
 
 import com.canopus.chimareader.data.epub.EpubBook
-import com.canopus.chimareader.data.epub.EpubParseException
 import com.canopus.chimareader.data.epub.EpubParser
-import kotlinx.serialization.json.Json
 import tachiyomi.domain.library.service.NovelBookIdentityPolicy
+import tachiyomi.domain.storage.service.NovelBookStorageEntry
+import tachiyomi.domain.storage.service.NovelBookStoragePolicy
 import java.io.File
 
 object BookStorage {
 
     fun getBooksDirectory(context: android.content.Context): File {
-        return File(context.filesDir, "novels")
+        return File(context.filesDir, NovelBookStoragePolicy.BOOKS_DIRECTORY)
     }
 
     fun loadEpub(directory: File): EpubBook {
@@ -39,7 +39,6 @@ object BookStorage {
     inline fun <reified T> save(`object`: T, directory: File, fileName: String) where T : Any {
         val targetFile = File(directory, fileName)
         directory.mkdirs()
-        val json = kotlinx.serialization.json.Json { prettyPrint = true }
         val data = kotlinx.serialization.json.Json.encodeToString(
             kotlinx.serialization.serializer<T>(),
             `object`,
@@ -51,7 +50,6 @@ object BookStorage {
         val file = File(directory, fileName)
         if (!file.exists()) return null
         return try {
-            val json = kotlinx.serialization.json.Json
             val content = file.readText()
             kotlinx.serialization.json.Json.decodeFromString<T>(content)
         } catch (e: Exception) {
@@ -126,15 +124,18 @@ object BookStorage {
             author = metadata.author,
             storedHash = metadata.hash,
             fallbackId = metadata.id,
-            hashIdentity = ::md5Hex,
         )
     }
 
     fun hasImportedBookContent(directory: File): Boolean {
-        val contentExtensions = setOf("opf", "xhtml", "html", "htm", "ncx")
-        return directory.walkTopDown().any { file ->
-            file.isFile && file.extension.lowercase() in contentExtensions
-        }
+        return NovelBookStoragePolicy.containsImportedContent(
+            entries = directory.walkTopDown().map { file ->
+                NovelBookStorageEntry(
+                    isFile = file.isFile,
+                    extension = file.extension,
+                )
+            }.asIterable(),
+        )
     }
 
     fun deleteBook(context: android.content.Context, bookId: String): Boolean {
@@ -182,7 +183,7 @@ object BookStorage {
     )
 
     private fun deleteObsoleteSpineCache(directory: File) {
-        File(directory, "spine_cache.json")
+        File(directory, NovelBookStoragePolicy.OBSOLETE_SPINE_CACHE_FILE)
             .takeIf { it.exists() }
             ?.delete()
     }
