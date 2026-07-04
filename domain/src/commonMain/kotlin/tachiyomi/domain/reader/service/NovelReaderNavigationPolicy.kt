@@ -10,6 +10,12 @@ object NovelReaderNavigationPolicy {
         data class NavigateToUrl(val url: String) : WebLinkAction
     }
 
+    sealed interface WebLinkHostAction {
+        data object Ignore : WebLinkHostAction
+        data class EvaluateScript(val script: String) : WebLinkHostAction
+        data class NavigateToUrl(val url: String) : WebLinkHostAction
+    }
+
     fun chapterTitle(
         chapterHref: String?,
         tableOfContents: List<NovelReaderTocEntry>,
@@ -81,6 +87,22 @@ object NovelReaderNavigationPolicy {
             WebLinkAction.SameChapter(fragment = fragmentForHref(targetUrl))
         } else {
             WebLinkAction.NavigateToUrl(url = targetUrl)
+        }
+    }
+
+    fun webLinkHostAction(
+        currentUrl: String?,
+        targetUrl: String,
+    ): WebLinkHostAction {
+        return when (val action = webLinkAction(currentUrl, targetUrl)) {
+            is WebLinkAction.SameChapter -> {
+                action.fragment?.let { fragment ->
+                    WebLinkHostAction.EvaluateScript(
+                        NovelReaderWebScriptPolicy.scrollToFragmentScript(fragment),
+                    )
+                } ?: WebLinkHostAction.Ignore
+            }
+            is WebLinkAction.NavigateToUrl -> WebLinkHostAction.NavigateToUrl(action.url)
         }
     }
 

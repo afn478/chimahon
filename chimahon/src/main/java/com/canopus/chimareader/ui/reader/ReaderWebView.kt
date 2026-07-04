@@ -147,7 +147,7 @@ fun ReaderWebView(
                 }
                 webViewClient = object : WebViewClient() {
                     private fun handleUrlLoading(url: String): Boolean {
-                        val action = NovelReaderNavigationPolicy.webLinkAction(
+                        val action = NovelReaderNavigationPolicy.webLinkHostAction(
                             currentUrl = currentUrl,
                             targetUrl = url,
                         )
@@ -155,13 +155,11 @@ fun ReaderWebView(
                         Log.d("ReaderWebView", "shouldOverrideUrlLoading: url=$url action=$action")
 
                         when (action) {
-                            is NovelReaderNavigationPolicy.WebLinkAction.SameChapter -> {
-                                action.fragment?.let { fragment ->
-                                    val js = NovelReaderWebScriptPolicy.scrollToFragmentScript(fragment)
-                                    post { evaluateJavascript(js, null) }
-                                }
+                            NovelReaderNavigationPolicy.WebLinkHostAction.Ignore -> Unit
+                            is NovelReaderNavigationPolicy.WebLinkHostAction.EvaluateScript -> {
+                                post { evaluateJavascript(action.script, null) }
                             }
-                            is NovelReaderNavigationPolicy.WebLinkAction.NavigateToUrl -> {
+                            is NovelReaderNavigationPolicy.WebLinkHostAction.NavigateToUrl -> {
                                 post { onInternalLinkClicked(action.url) }
                             }
                         }

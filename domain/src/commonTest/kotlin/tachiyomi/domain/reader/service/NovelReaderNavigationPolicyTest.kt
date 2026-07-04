@@ -151,6 +151,43 @@ class NovelReaderNavigationPolicyTest {
         )
     }
 
+    @Test
+    fun webLinkHostActionScrollsSameChapterFragmentsWithScript() {
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkHostAction.EvaluateScript(
+                NovelReaderWebScriptPolicy.scrollToFragmentScript("paragraph-4"),
+            ),
+            NovelReaderNavigationPolicy.webLinkHostAction(
+                currentUrl = "file:///books/Book/Text/Chapter%202.xhtml",
+                targetUrl = "file:///books/Book/Text/Chapter 2.xhtml#paragraph-4",
+            ),
+        )
+    }
+
+    @Test
+    fun webLinkHostActionIgnoresSameChapterLinksWithoutFragment() {
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkHostAction.Ignore,
+            NovelReaderNavigationPolicy.webLinkHostAction(
+                currentUrl = "file:///books/Book/Text/Chapter%202.xhtml",
+                targetUrl = "file:///books/Book/Text/Chapter 2.xhtml",
+            ),
+        )
+    }
+
+    @Test
+    fun webLinkHostActionNavigatesDifferentChapterUrls() {
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkHostAction.NavigateToUrl(
+                url = "file:///books/Book/Text/Chapter%203.xhtml#start",
+            ),
+            NovelReaderNavigationPolicy.webLinkHostAction(
+                currentUrl = "file:///books/Book/Text/Chapter%202.xhtml",
+                targetUrl = "file:///books/Book/Text/Chapter%203.xhtml#start",
+            ),
+        )
+    }
+
     private fun tocEntry(
         label: String,
         href: String?,
