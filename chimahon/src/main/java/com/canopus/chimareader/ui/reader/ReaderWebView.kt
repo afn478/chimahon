@@ -193,14 +193,12 @@ fun ReaderWebView(
                         view: WebView?,
                         detail: android.webkit.RenderProcessGoneDetail?,
                     ): Boolean {
-                        val reason = if (detail?.didCrash() == true) {
-                            "WebView crashed"
-                        } else {
-                            "WebView killed by system (OOM)"
-                        }
-                        Log.e("ReaderWebView", "onRenderProcessGone: $reason")
+                        val failure = NovelReaderWebLoadPolicy.rendererGoneFailure(
+                            crashed = detail?.didCrash() == true,
+                        )
+                        Log.e("ReaderWebView", "onRenderProcessGone: ${failure.reason}")
                         post {
-                            onLoadFailed("Renderer died ($reason). Try disabling hardware acceleration or 'Avoid page breaks'.")
+                            onLoadFailed(failure.message)
                         }
                         return true
                     }
@@ -489,8 +487,8 @@ private class ReaderAndroidWebView(
                 lastLoadedKey = lastLoadedChapterKey,
             )
         ) {
-            NovelReaderWebLoadPolicy.ChapterLoadAction.Defer -> {
-                postDelayed({ loadChapter(url) }, 100L)
+            is NovelReaderWebLoadPolicy.ChapterLoadAction.Defer -> {
+                postDelayed({ loadChapter(url) }, action.delayMillis)
                 return
             }
             NovelReaderWebLoadPolicy.ChapterLoadAction.SkipDuplicate -> {
@@ -512,8 +510,9 @@ private class ReaderAndroidWebView(
                     if (file.exists()) {
                         loadUrl(target.url)
                     } else {
-                        Log.e("ReaderWebView", "File not found: ${target.url}")
-                        onLoadFailed("File not found: ${target.url}")
+                        val message = NovelReaderWebLoadPolicy.localFileMissingMessage(target.url)
+                        Log.e("ReaderWebView", message)
+                        onLoadFailed(message)
                     }
                 }
             }

@@ -37,7 +37,9 @@ class NovelReaderWebLoadPolicyTest {
     @Test
     fun chapterLoadActionDefersUntilViewportHasSize() {
         assertEquals(
-            NovelReaderWebLoadPolicy.ChapterLoadAction.Defer,
+            NovelReaderWebLoadPolicy.ChapterLoadAction.Defer(
+                delayMillis = NovelReaderWebLoadPolicy.CHAPTER_LOAD_DEFER_DELAY_MS,
+            ),
             NovelReaderWebLoadPolicy.chapterLoadAction(
                 url = "file:///book/chapter.xhtml",
                 width = 0,
@@ -47,7 +49,9 @@ class NovelReaderWebLoadPolicyTest {
             ),
         )
         assertEquals(
-            NovelReaderWebLoadPolicy.ChapterLoadAction.Defer,
+            NovelReaderWebLoadPolicy.ChapterLoadAction.Defer(
+                delayMillis = NovelReaderWebLoadPolicy.CHAPTER_LOAD_DEFER_DELAY_MS,
+            ),
             NovelReaderWebLoadPolicy.chapterLoadAction(
                 url = "file:///book/chapter.xhtml",
                 width = 480,
@@ -55,6 +59,28 @@ class NovelReaderWebLoadPolicyTest {
                 verticalWriting = false,
                 lastLoadedKey = null,
             ),
+        )
+    }
+
+    @Test
+    fun loadFailureMessagesKeepReaderHostCopyStable() {
+        assertEquals(
+            "File not found: file:///book/missing.xhtml",
+            NovelReaderWebLoadPolicy.localFileMissingMessage("file:///book/missing.xhtml"),
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.RendererGoneFailure(
+                reason = "WebView crashed",
+                message = "Renderer died (WebView crashed). Try disabling hardware acceleration or 'Avoid page breaks'.",
+            ),
+            NovelReaderWebLoadPolicy.rendererGoneFailure(crashed = true),
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.RendererGoneFailure(
+                reason = "WebView killed by system (OOM)",
+                message = "Renderer died (WebView killed by system (OOM)). Try disabling hardware acceleration or 'Avoid page breaks'.",
+            ),
+            NovelReaderWebLoadPolicy.rendererGoneFailure(crashed = false),
         )
     }
 

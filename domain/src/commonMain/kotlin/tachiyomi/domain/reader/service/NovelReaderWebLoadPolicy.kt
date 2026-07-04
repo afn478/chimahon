@@ -1,6 +1,8 @@
 package tachiyomi.domain.reader.service
 
 object NovelReaderWebLoadPolicy {
+    const val CHAPTER_LOAD_DEFER_DELAY_MS = 100L
+
     data class ChapterLoadKey(
         val url: String,
         val width: Int,
@@ -14,10 +16,15 @@ object NovelReaderWebLoadPolicy {
     }
 
     sealed interface ChapterLoadAction {
-        data object Defer : ChapterLoadAction
+        data class Defer(val delayMillis: Long = CHAPTER_LOAD_DEFER_DELAY_MS) : ChapterLoadAction
         data object SkipDuplicate : ChapterLoadAction
         data class Load(val key: ChapterLoadKey) : ChapterLoadAction
     }
+
+    data class RendererGoneFailure(
+        val reason: String,
+        val message: String,
+    )
 
     fun urlLoadTarget(url: String): UrlLoadTarget {
         return if (NovelReaderFileUrlPolicy.isLocalFileUrlOrPath(url)) {
@@ -37,7 +44,7 @@ object NovelReaderWebLoadPolicy {
         verticalWriting: Boolean,
         lastLoadedKey: ChapterLoadKey?,
     ): ChapterLoadAction {
-        if (width <= 0 || height <= 0) return ChapterLoadAction.Defer
+        if (width <= 0 || height <= 0) return ChapterLoadAction.Defer()
 
         val nextKey = ChapterLoadKey(
             url = url,
@@ -51,5 +58,22 @@ object NovelReaderWebLoadPolicy {
         } else {
             ChapterLoadAction.Load(nextKey)
         }
+    }
+
+    fun localFileMissingMessage(url: String): String {
+        return "File not found: $url"
+    }
+
+    fun rendererGoneFailure(crashed: Boolean): RendererGoneFailure {
+        val reason = if (crashed) {
+            "WebView crashed"
+        } else {
+            "WebView killed by system (OOM)"
+        }
+
+        return RendererGoneFailure(
+            reason = reason,
+            message = "Renderer died ($reason). Try disabling hardware acceleration or 'Avoid page breaks'.",
+        )
     }
 }
