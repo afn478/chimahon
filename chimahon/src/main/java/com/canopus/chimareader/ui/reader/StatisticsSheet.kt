@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import java.util.Locale
+import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +72,10 @@ fun StatisticsSheet(
             Section(title = "Session") {
                 StatRow("Characters Read", session.charactersRead.toString())
                 StatRow("Reading Speed", "${session.lastReadingSpeed} / h")
-                StatRow("Reading Time", formatDuration(session.readingTime.toLong()))
+                StatRow(
+                    "Reading Time",
+                    NovelReaderStatisticsPolicy.elapsedDurationLabel(session.readingTime.toLong()),
+                )
 
                 // Use frozen position for projections when tracking is paused
                 // so page flips during pause don't shift the ETA
@@ -82,33 +85,45 @@ fun StatisticsSheet(
                     viewModel.statisticsTracker.frozenPosition
                 }
 
-                val bookTimeRemaining = secondsRemaining(
+                val bookTimeRemaining = NovelReaderStatisticsPolicy.secondsRemaining(
                     viewModel.totalCharacters - projectionChar,
-                    session.lastReadingSpeed
+                    session.lastReadingSpeed,
                 )
                 if (bookTimeRemaining > 0.0) {
-                    StatRow("Time to finish Book", formatDurationSeconds(bookTimeRemaining))
+                    StatRow(
+                        "Time to finish Book",
+                        NovelReaderStatisticsPolicy.remainingDurationLabel(bookTimeRemaining),
+                    )
                 }
 
-                val chapterTimeRemaining = secondsRemaining(
+                val chapterTimeRemaining = NovelReaderStatisticsPolicy.secondsRemaining(
                     viewModel.currentChapterEndCharacter - projectionChar,
-                    session.lastReadingSpeed
+                    session.lastReadingSpeed,
                 )
                 if (chapterTimeRemaining > 0.0) {
-                    StatRow("Time to finish Chapter", formatDurationSeconds(chapterTimeRemaining))
+                    StatRow(
+                        "Time to finish Chapter",
+                        NovelReaderStatisticsPolicy.remainingDurationLabel(chapterTimeRemaining),
+                    )
                 }
             }
 
             Section(title = "Today") {
                 StatRow("Characters Read", today.charactersRead.toString())
                 StatRow("Reading Speed", "${today.lastReadingSpeed} / h")
-                StatRow("Reading Time", formatDuration(today.readingTime.toLong()))
+                StatRow(
+                    "Reading Time",
+                    NovelReaderStatisticsPolicy.elapsedDurationLabel(today.readingTime.toLong()),
+                )
             }
 
             Section(title = "All Time") {
                 StatRow("Characters Read", allTime.charactersRead.toString())
                 StatRow("Reading Speed", "${allTime.lastReadingSpeed} / h")
-                StatRow("Reading Time", formatDuration(allTime.readingTime.toLong()))
+                StatRow(
+                    "Reading Time",
+                    NovelReaderStatisticsPolicy.elapsedDurationLabel(allTime.readingTime.toLong()),
+                )
             }
         }
     }
@@ -148,33 +163,4 @@ private fun StatRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
-}
-
-private fun formatDuration(totalSeconds: Long): String {
-    val seconds = totalSeconds % 60
-    val minutes = (totalSeconds / 60) % 60
-    val hours = totalSeconds / (60 * 60)
-
-    return if (hours > 0) {
-        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(Locale.US, "%02d:%02d", minutes, seconds)
-    }
-}
-
-private fun formatDurationSeconds(seconds: Double): String {
-    val totalSeconds = maxOf(seconds.toLong(), 0L)
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val remainingSeconds = totalSeconds % 60
-    return when {
-        hours > 0 -> "${hours}h ${minutes}m ${remainingSeconds}s"
-        minutes > 0 -> "${minutes}m ${remainingSeconds}s"
-        else -> "${remainingSeconds}s"
-    }
-}
-
-private fun secondsRemaining(remainingCharacters: Int, speed: Int): Double {
-    if (speed <= 0) return 0.0
-    return maxOf(remainingCharacters, 0).toDouble() / (speed.toDouble() / 3600.0)
 }

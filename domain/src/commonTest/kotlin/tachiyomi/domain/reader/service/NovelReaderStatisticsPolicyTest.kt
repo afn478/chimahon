@@ -128,6 +128,48 @@ class NovelReaderStatisticsPolicyTest {
         assertEquals(36_000, result.lastReadingSpeed)
     }
 
+    @Test
+    fun elapsedDurationLabelUsesClockStyleDurations() {
+        assertEquals("00:00", NovelReaderStatisticsPolicy.elapsedDurationLabel(0))
+        assertEquals("01:05", NovelReaderStatisticsPolicy.elapsedDurationLabel(65))
+        assertEquals("1:00:00", NovelReaderStatisticsPolicy.elapsedDurationLabel(3_600))
+        assertEquals("27:46:40", NovelReaderStatisticsPolicy.elapsedDurationLabel(100_000))
+        assertEquals("00:00", NovelReaderStatisticsPolicy.elapsedDurationLabel(-1))
+    }
+
+    @Test
+    fun remainingDurationLabelUsesCompactUnits() {
+        assertEquals("0s", NovelReaderStatisticsPolicy.remainingDurationLabel(-1.0))
+        assertEquals("59s", NovelReaderStatisticsPolicy.remainingDurationLabel(59.9))
+        assertEquals("1m 0s", NovelReaderStatisticsPolicy.remainingDurationLabel(60.0))
+        assertEquals("1h 1m 1s", NovelReaderStatisticsPolicy.remainingDurationLabel(3_661.8))
+    }
+
+    @Test
+    fun secondsRemainingUsesReadingSpeedPerHour() {
+        assertEquals(
+            1_800.0,
+            NovelReaderStatisticsPolicy.secondsRemaining(
+                remainingCharacters = 1_000,
+                readingSpeedPerHour = 2_000,
+            ),
+        )
+        assertEquals(
+            0.0,
+            NovelReaderStatisticsPolicy.secondsRemaining(
+                remainingCharacters = -100,
+                readingSpeedPerHour = 2_000,
+            ),
+        )
+        assertEquals(
+            0.0,
+            NovelReaderStatisticsPolicy.secondsRemaining(
+                remainingCharacters = 100,
+                readingSpeedPerHour = 0,
+            ),
+        )
+    }
+
     private fun statistic(
         title: String = "Book",
         dateKey: String = "2026-07-04",

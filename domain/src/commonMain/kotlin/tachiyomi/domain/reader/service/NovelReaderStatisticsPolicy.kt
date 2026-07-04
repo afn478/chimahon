@@ -120,6 +120,39 @@ object NovelReaderStatisticsPolicy {
         }
     }
 
+    fun elapsedDurationLabel(totalSeconds: Long): String {
+        val safeSeconds = totalSeconds.coerceAtLeast(0)
+        val seconds = safeSeconds % 60
+        val minutes = (safeSeconds / 60) % 60
+        val hours = safeSeconds / 3600
+
+        return if (hours > 0) {
+            "$hours:${twoDigit(minutes)}:${twoDigit(seconds)}"
+        } else {
+            "${twoDigit(minutes)}:${twoDigit(seconds)}"
+        }
+    }
+
+    fun remainingDurationLabel(seconds: Double): String {
+        val totalSeconds = seconds.toLong().coerceAtLeast(0)
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val remainingSeconds = totalSeconds % 60
+        return when {
+            hours > 0 -> "${hours}h ${minutes}m ${remainingSeconds}s"
+            minutes > 0 -> "${minutes}m ${remainingSeconds}s"
+            else -> "${remainingSeconds}s"
+        }
+    }
+
+    fun secondsRemaining(
+        remainingCharacters: Int,
+        readingSpeedPerHour: Int,
+    ): Double {
+        if (readingSpeedPerHour <= 0) return 0.0
+        return maxOf(remainingCharacters, 0).toDouble() / (readingSpeedPerHour.toDouble() / SECONDS_PER_HOUR)
+    }
+
     private fun readingSpeed(
         charactersRead: Int,
         readingTime: Double,
@@ -129,5 +162,9 @@ object NovelReaderStatisticsPolicy {
         } else {
             0
         }
+    }
+
+    private fun twoDigit(value: Long): String {
+        return value.toString().padStart(length = 2, padChar = '0')
     }
 }
