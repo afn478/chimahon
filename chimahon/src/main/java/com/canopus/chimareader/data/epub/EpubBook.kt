@@ -1,7 +1,7 @@
 package com.canopus.chimareader.data.epub
 
-import android.util.Log
-import org.jsoup.Jsoup
+import tachiyomi.domain.reader.service.NovelReaderCharacterCountPolicy
+import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import java.io.File
 
 data class EpubBook(
@@ -78,37 +78,11 @@ data class EpubBook(
 
         return try {
             val content = EpubParser().parseChapter(this, index) ?: return 0
-            
-            // Use the same approach as Hoshi Reader's characterCount():
-            // 1. Extract <body>...</body>
-            // 2. Strip <rt> (furigana), <script>, <style>, then ALL tags
-            // 3. Decode HTML entities
-            // 4. Apply TTSU character filter regex
-            var text = content
-            val bodyMatch = Regex("(?s)<body.*?</body>").find(text)
-            if (bodyMatch != null) {
-                text = bodyMatch.value
-            }
-            // Strip <rt>...</rt> (furigana annotations)
-            text = text.replace(Regex("(?s)<rt>.*?</rt>"), "")
-            // Strip <script>...</script> and <style>...</style>
-            text = text.replace(Regex("(?s)<(script|style)[^>]*>.*?</\\1>"), "")
-            // Strip all HTML tags
-            text = text.replace(Regex("<[^>]+>"), "")
-            // Decode common HTML entities
-            text = text.replace("&nbsp;", " ")
-            text = text.replace("&amp;", "&")
-            text = text.replace("&lt;", "<")
-            text = text.replace("&gt;", ">")
 
-            // TTSU character filter (matching Hoshi's regex with \p{Unified_Ideograph} and \p{IsHangul})
-            val ttsuRegex = Regex("[^0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\\p{IsHan}\\p{IsHangul}]")
-            val filteredText = text.replace(ttsuRegex, "")
-            
-            val charCount = filteredText.codePointCount(0, filteredText.length)
+            val charCount = NovelReaderCharacterCountPolicy.countChapterCharacters(content)
             chapterLengthCache[index] = charCount
             charCount
-        } catch(e: Exception) {
+        } catch (e: Exception) {
             0
         }
     }
@@ -118,17 +92,10 @@ data class EpubBook(
      * specific chapter index and decimal progress (0.0 to 1.0) for that chapter.
      */
     fun convertCharsToProgress(totalExploredChars: Int): Pair<Int, Double> {
-        var unallocatedChars = totalExploredChars
-        for (i in 0 until linearSpineItems.size) {
-            val chapterChars = getChapterCharacters(i)
-            if (unallocatedChars <= chapterChars) {
-                // If chapter has 0 chars (e.g. image), prevent NaN/Infinity
-                val progress = if (chapterChars == 0) 0.0 else unallocatedChars.toDouble() / chapterChars.toDouble()
-                return Pair(i, progress.coerceIn(0.0, 1.0))
-            }
-            unallocatedChars -= chapterChars
-        }
-        // If chars exceed total book size, clamp to the last chapter at 100%
-        return Pair(maxOf(0, linearSpineItems.size - 1), 1.0)
+        val position = NovelReaderProgressPolicy.chapterProgressForCharacterCount(
+            totalExploredCharacters = totalExploredChars,
+            chapterCharacterCounts = linearSpineItems.indices.map { getChapterCharacters(it) },
+        )
+        return Pair(position.chapterIndex, position.progress)
     }
 }

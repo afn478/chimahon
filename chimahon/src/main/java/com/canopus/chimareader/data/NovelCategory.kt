@@ -1,18 +1,5 @@
 package com.canopus.chimareader.data
 
-import kotlinx.serialization.Serializable
+import tachiyomi.domain.library.model.NovelCategory as DomainNovelCategory
 
-@Serializable
-data class NovelCategory(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val name: String,
-    val order: Int = 0,
-    val flags: Long = 0,
-) {
-    val isSystemCategory: Boolean
-        get() = id == UNCATEGORIZED_ID
-
-    companion object {
-        const val UNCATEGORIZED_ID = "default"
-    }
-}
+typealias NovelCategory = DomainNovelCategory

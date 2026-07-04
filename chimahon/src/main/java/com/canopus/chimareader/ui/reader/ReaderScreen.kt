@@ -22,10 +22,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.canopus.chimareader.data.BookMetadata
+import com.canopus.chimareader.data.NovelReaderSettings
 import com.canopus.chimareader.data.Statistics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.reader.model.ReaderSettings
+import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
+import tachiyomi.domain.reader.service.NovelReaderSettingsDefaults
 
 private sealed interface ReaderLoadState {
     data object Loading : ReaderLoadState
@@ -58,35 +62,33 @@ fun ReaderScreen(
     var focusMode by remember { mutableStateOf(false) }
     var activeSheet by remember { mutableStateOf<ActiveSheet?>(null) }
     val scope = rememberCoroutineScope()
-    val settings = remember(settingsNamespace) { com.canopus.chimareader.data.NovelReaderSettings(context, settingsNamespace) }
+    val settings = remember(settingsNamespace) { NovelReaderSettings(context, settingsNamespace) }
 
     // Collect swipe and tap settings
-    val chapterSwipeDistance by settings.chapterSwipeDistance.collectAsState(initial = 96)
+    val chapterSwipeDistance by settings.chapterSwipeDistance.collectAsState(
+        initial = NovelReaderSettingsDefaults.chapterSwipeDistance,
+    )
 
-    val currentTheme by settings.theme.collectAsState(initial = com.canopus.chimareader.data.Theme.SYSTEM)
-    val systemLightSepia by settings.systemLightSepia.collectAsState(initial = false)
-    val customBg by settings.customBackgroundColor.collectAsState(initial = 0xFFF2E2C9.toInt())
-    val customTxt by settings.customTextColor.collectAsState(initial = 0xFF000000.toInt())
+    val currentTheme by settings.theme.collectAsState(initial = NovelReaderSettingsDefaults.theme)
+    val systemLightSepia by settings.systemLightSepia.collectAsState(
+        initial = NovelReaderSettingsDefaults.systemLightSepia,
+    )
+    val customBg by settings.customBackgroundColor.collectAsState(
+        initial = NovelReaderSettingsDefaults.customBackgroundColor,
+    )
+    val customTxt by settings.customTextColor.collectAsState(
+        initial = NovelReaderSettingsDefaults.customTextColor,
+    )
 
     val initialSettings = remember(currentTheme, systemLightSepia, customBg, customTxt) {
-        val (bg, txt) = when (currentTheme) {
-            com.canopus.chimareader.data.Theme.LIGHT -> 0xFFFFFFFF.toInt() to 0xFF000000.toInt()
-            com.canopus.chimareader.data.Theme.DARK -> 0xFF121212.toInt() to 0xFFE0E0E0.toInt()
-            com.canopus.chimareader.data.Theme.SEPIA -> 0xFFF2E2C9.toInt() to 0xFF3C2C1C.toInt()
-            com.canopus.chimareader.data.Theme.PURE_BLACK -> 0xFF000000.toInt() to 0xFFE0E0E0.toInt()
-            com.canopus.chimareader.data.Theme.CUSTOM -> customBg to customTxt
-            com.canopus.chimareader.data.Theme.SYSTEM -> {
-                val isDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-                if (isDark) {
-                    if (systemLightSepia) 0xFF1C140C.toInt() to 0xFFF2E2C9.toInt()
-                    else 0xFF121212.toInt() to 0xFFE0E0E0.toInt()
-                } else {
-                    if (systemLightSepia) 0xFFF2E2C9.toInt() to 0xFF3C2C1C.toInt()
-                    else 0xFFFFFFFF.toInt() to 0xFF000000.toInt()
-                }
-            }
-        }
-        ReaderSettings(backgroundColor = bg, textColor = txt)
+        val colors = NovelReaderAppearancePolicy.resolveThemeColors(
+            theme = currentTheme,
+            systemDark = context.isReaderSystemDark(),
+            systemLightSepia = systemLightSepia,
+            customBackgroundColor = customBg,
+            customTextColor = customTxt,
+        )
+        ReaderSettings(backgroundColor = colors.backgroundColor, textColor = colors.textColor)
     }
 
     val loadState by produceState<ReaderLoadState>(initialValue = ReaderLoadState.Loading, key1 = book.id) {

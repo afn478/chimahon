@@ -25,7 +25,10 @@ import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.NovelLibrarySortMode
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.service.NovelCategoryPolicy
+import tachiyomi.domain.library.service.NovelLibraryDisplayPolicy
 import tachiyomi.domain.selection.service.SelectedItemPolicy
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -197,19 +200,17 @@ class NovelLibraryScreenModel(
                 val removeIds = removeCategories.mapNotNull { id ->
                     s.categories.find { it.id.hashCode().toLong() == id }?.id
                 }
-                var newIds = MangaCategorySelectionPolicy
+                val newIds = MangaCategorySelectionPolicy
                     .updatedCategoryIds(
                         currentCategoryIds = currentIds,
                         addCategoryIds = addIds,
                         removeCategoryIds = removeIds,
                     )
-                    .toSet()
-                newIds = if (newIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
-                    newIds - setOf(NovelCategory.UNCATEGORIZED_ID)
-                } else {
-                    setOf(NovelCategory.UNCATEGORIZED_ID)
-                }
-                BookStorage.saveMetadata(book.copy(categoryIds = newIds.toList()), bookDir)
+                val normalizedIds = NovelCategoryPolicy.normalizeCategoryIdsOrDefault(
+                    categoryIds = newIds,
+                    uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+                )
+                BookStorage.saveMetadata(book.copy(categoryIds = normalizedIds), bookDir)
             }
             loadLibrary()
         }
@@ -253,10 +254,6 @@ class NovelLibraryScreenModel(
         mutableState.update { it.copy(dialog = null) }
     }
 
-    enum class SortMode {
-        Alphabetical, DateAdded, LastRead
-    }
-
     sealed interface Dialog {
         data class ChangeCategory(
             val books: ImmutableList<BookMetadata>,
@@ -278,7 +275,7 @@ class NovelLibraryScreenModel(
         val selection: ImmutableList<String> = persistentListOf(),
         val activeCategoryIndex: Int = 0,
         val dialog: Dialog? = null,
-        val sortMode: SortMode = SortMode.DateAdded,
+        val sortMode: NovelLibrarySortMode = NovelLibrarySortMode.DATE_ADDED,
         val sortDescending: Boolean = true,
         val isImporting: Boolean = false,
         val importResult: Pair<Int, Int>? = null,
@@ -297,46 +294,21 @@ class NovelLibraryScreenModel(
             get() = displayedCategories.getOrNull(coercedActiveCategoryIndex)
 
         fun getBooksForCategory(category: NovelCategory): List<BookMetadata> {
-            val filteredBooks = if (searchQuery.isNullOrBlank()) {
-                books
-            } else {
-                books.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
-            }
-            
-            val knownCategoryIds = categories.map { it.id }.toSet()
-            val categoryBooks = filteredBooks.filter {
-                val bookCategoryIds = it.normalizedCategoryIds(knownCategoryIds)
-                if (category.isSystemCategory) {
-                    bookCategoryIds.isEmpty() || bookCategoryIds.contains(NovelCategory.UNCATEGORIZED_ID)
-                } else {
-                    bookCategoryIds.contains(category.id)
-                }
-            }
-            
-            val comparator = when (sortMode) {
-                SortMode.Alphabetical -> compareBy<BookMetadata>({ it.title?.lowercase() ?: "" }, { it.id })
-                SortMode.DateAdded -> compareBy<BookMetadata>({ it.dateAdded }, { it.title?.lowercase() ?: "" }, { it.id })
-                SortMode.LastRead -> compareBy<BookMetadata>({ it.lastAccess }, { it.title?.lowercase() ?: "" }, { it.id })
-            }
-
-            return if (sortDescending) {
-                categoryBooks.sortedWith(comparator.reversed())
-            } else {
-                categoryBooks.sortedWith(comparator)
-            }
-        }
-
-        private fun BookMetadata.normalizedCategoryIds(knownCategoryIds: Set<String>): List<String> {
-            val distinctIds = categoryIds
-                .filter { it.isNotBlank() }
-                .distinct()
-
-            val nonDefaultIds = distinctIds.filterNot { it == NovelCategory.UNCATEGORIZED_ID }
-            return if (nonDefaultIds.isNotEmpty()) {
-                nonDefaultIds.filter { it in knownCategoryIds }
-            } else {
-                distinctIds
-            }
+            return NovelLibraryDisplayPolicy.selectBooksForCategory(
+                books = books,
+                categoryId = category.id,
+                categoryIsSystem = category.isSystemCategory,
+                knownCategoryIds = categories.mapTo(mutableSetOf()) { it.id },
+                uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+                searchQuery = searchQuery,
+                sortMode = sortMode,
+                sortDescending = sortDescending,
+                bookId = BookMetadata::id,
+                bookTitle = BookMetadata::title,
+                bookDateAdded = BookMetadata::dateAdded,
+                bookLastRead = BookMetadata::lastAccess,
+                bookCategoryIds = BookMetadata::categoryIds,
+            )
         }
 
         fun getItemCountForCategory(category: NovelCategory): Int {
@@ -365,7 +337,7 @@ class NovelLibraryScreenModel(
         }
     }
     
-    fun setSort(mode: SortMode, descending: Boolean) {
+    fun setSort(mode: NovelLibrarySortMode, descending: Boolean) {
         mutableState.update { it.copy(sortMode = mode, sortDescending = descending) }
     }
     

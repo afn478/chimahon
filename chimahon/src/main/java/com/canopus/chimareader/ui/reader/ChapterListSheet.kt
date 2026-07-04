@@ -55,16 +55,20 @@ fun ChapterListSheet(
                         val spineIndex = entry.href?.let { viewModel.getSpineIndexForHref(it) } ?: 0
                         val isCurrent = spineIndex == viewModel.index
                         val title = entry.label
-                        val fragment = entry.href?.substringAfter('#', "")?.takeIf { it.isNotEmpty() }
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    viewModel.jumpToChapter(spineIndex, fragment)
+                                    viewModel.jumpToChapter(spineIndex, entry.fragment)
                                     onDismiss()
                                 }
-                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                                .padding(
+                                    start = 24.dp + (entry.depth * 12).dp,
+                                    top = 16.dp,
+                                    end = 24.dp,
+                                    bottom = 16.dp,
+                                ),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

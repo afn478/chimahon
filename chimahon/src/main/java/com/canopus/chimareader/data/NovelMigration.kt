@@ -2,6 +2,8 @@ package com.canopus.chimareader.data
 
 import android.content.Context
 import android.util.Log
+import tachiyomi.domain.library.service.NovelBookIdentityPolicy
+import tachiyomi.domain.library.service.NovelBookMergePolicy
 import java.io.File
 
 object NovelMigration {
@@ -55,7 +57,7 @@ object NovelMigration {
                         val title = book.title ?: metadata.title ?: "Unknown"
                         val author = book.author ?: ""
 
-                        val hash = md5Hex("${title.trim().lowercase()}|${author.trim().lowercase()}")
+                        val hash = stableTitleAuthorId(title = title, author = author)
                         Log.d(TAG, "Migrating (has meta) ${bookDir.name} -> $hash ($title | $author)")
 
                         val newMetadata = metadata.copy(
@@ -94,7 +96,7 @@ object NovelMigration {
                         val title = book.title ?: "Unknown"
                         val author = book.author ?: ""
 
-                        val hash = md5Hex("${title.trim().lowercase()}|${author.trim().lowercase()}")
+                        val hash = stableTitleAuthorId(title = title, author = author)
                         Log.d(TAG, "Migrating (no meta) ${bookDir.name} -> $hash ($title | $author)")
 
                         val coverAbsPath = book.coverPath?.let { File(bookDir, it).absolutePath }
@@ -143,7 +145,7 @@ object NovelMigration {
             val title = metadata.title ?: continue
             val author = metadata.author ?: ""
 
-            val correctId = md5Hex("${title.trim().lowercase()}|${author.trim().lowercase()}")
+            val correctId = stableTitleAuthorId(title = title, author = author)
 
             if (bookDir.name == correctId) continue
 
@@ -180,14 +182,14 @@ object NovelMigration {
         books.groupBy { BookStorage.bookIdentityKey(it.metadata) }
             .filterValues { it.size > 1 }
             .forEach { (identity, duplicates) ->
-                val target = duplicates.minWith(
-                    compareBy<MigrationBookDir>(
-                        { it.metadata.isGhost },
-                        { !BookStorage.hasImportedBookContent(it.directory) },
-                        { it.directory.name != identity },
-                        { -it.metadata.lastAccess },
-                    ),
-                )
+                val target = NovelBookIdentityPolicy.selectPreferredDuplicate(
+                    books = duplicates,
+                    identityKey = identity,
+                    isGhost = { it.metadata.isGhost },
+                    hasImportedContent = { BookStorage.hasImportedBookContent(it.directory) },
+                    folderName = { it.directory.name },
+                    lastAccess = { it.metadata.lastAccess },
+                ) ?: return@forEach
 
                 duplicates
                     .filterNot { it.directory == target.directory }
@@ -211,25 +213,20 @@ object NovelMigration {
         val sourceBookmark = BookStorage.loadBookmark(sourceDir)
         val targetBookmark = BookStorage.loadBookmark(targetDir)
 
-        val mergedBookmark = when {
-            sourceBookmark == null -> targetBookmark
-            targetBookmark == null -> sourceBookmark
-            (sourceBookmark.lastModified ?: 0L) > (targetBookmark.lastModified ?: 0L) -> sourceBookmark
-            else -> targetBookmark
-        }
+        val mergedBookmark = NovelBookMergePolicy.selectLatestOrNull(
+            current = targetBookmark,
+            incoming = sourceBookmark,
+            lastModified = { it.lastModified ?: 0L },
+        )
 
         val sourceStats = BookStorage.loadStatistics(sourceDir) ?: emptyList()
-        val targetStatsMap = (BookStorage.loadStatistics(targetDir) ?: emptyList())
-            .associateBy { it.dateKey }
-            .toMutableMap()
-        var statsChanged = false
-        for (stat in sourceStats) {
-            val existing = targetStatsMap[stat.dateKey]
-            if (existing == null || stat.lastStatisticModified > existing.lastStatisticModified) {
-                targetStatsMap[stat.dateKey] = stat
-                statsChanged = true
-            }
-        }
+        val targetStats = BookStorage.loadStatistics(targetDir) ?: emptyList()
+        val mergedStats = NovelBookMergePolicy.mergeLatestByKey(
+            items = targetStats + sourceStats,
+            itemKey = Statistics::dateKey,
+            lastModified = Statistics::lastStatisticModified,
+        )
+        val statsChanged = mergedStats != targetStats
 
         val sourceHasContent = BookStorage.hasImportedBookContent(sourceDir)
         val targetHasContent = BookStorage.hasImportedBookContent(targetDir)
@@ -248,7 +245,7 @@ object NovelMigration {
             Log.d(TAG, "mergeIntoTarget: saved merged bookmark")
         }
         if (statsChanged || contentCopied) {
-            BookStorage.saveStatistics(targetStatsMap.values.toList(), targetDir)
+            BookStorage.saveStatistics(mergedStats, targetDir)
             Log.d(TAG, "mergeIntoTarget: merged ${sourceStats.size} source stat entries")
         }
     }
@@ -277,15 +274,23 @@ object NovelMigration {
     }
 
     private fun normalizeCategoryIds(categoryIds: List<String>): List<String> {
-        val distinctIds = categoryIds
-            .filter { it.isNotBlank() }
-            .distinct()
+        return NovelBookMergePolicy.mergeCategoryIds(
+            currentCategoryIds = categoryIds,
+            incomingCategoryIds = emptyList(),
+            uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+        )
+    }
 
-        return if (distinctIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
-            distinctIds.filterNot { it == NovelCategory.UNCATEGORIZED_ID }
-        } else {
-            distinctIds
-        }
+    private fun stableTitleAuthorId(
+        title: String?,
+        author: String?,
+    ): String {
+        return md5Hex(
+            NovelBookIdentityPolicy.titleAuthorIdentityInput(
+                title = title,
+                author = author,
+            ) ?: "|",
+        )
     }
 
     private data class MigrationBookDir(

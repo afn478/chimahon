@@ -8,6 +8,8 @@ import android.util.Log
 import com.canopus.chimareader.data.epub.EpubParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.library.service.NovelBookIdentityPolicy
+import tachiyomi.domain.library.service.NovelCategoryPolicy
 import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipFile
@@ -77,7 +79,12 @@ object BookImporter {
             val title = extractedBook.title ?: "Unknown"
             val author = extractedBook.author ?: ""
 
-            val stableId = md5Hex("${title.trim().lowercase()}|${author.trim().lowercase()}")
+            val stableId = md5Hex(
+                NovelBookIdentityPolicy.titleAuthorIdentityInput(
+                    title = title,
+                    author = author,
+                ) ?: "|",
+            )
             val bookDir = File(booksDir, stableId)
 
             Log.d(TAG, "Stable ID (Title+Author): $stableId ($title | $author)")
@@ -123,21 +130,11 @@ object BookImporter {
             Log.d(TAG, "Parsed EPUB: title=$title, contentDir=${extractedBook.contentDirectory}, chapters=${extractedBook.spine.items.size}")
 
             val existingCategoryIds = existingMetadata?.categoryIds.orEmpty()
-            val resolvedCategoryIds = when {
-                categoryIds != null -> (existingCategoryIds + categoryIds).distinct()
-                existingCategoryIds.isNotEmpty() -> existingCategoryIds
-                else -> emptyList()
-            }.let { ids ->
-                val distinctIds = ids
-                    .filter { it.isNotBlank() }
-                    .distinct()
-
-                if (distinctIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
-                    distinctIds.filterNot { it == NovelCategory.UNCATEGORIZED_ID }
-                } else {
-                    distinctIds
-                }
-            }
+            val resolvedCategoryIds = NovelCategoryPolicy.resolveImportedCategoryIds(
+                existingCategoryIds = existingCategoryIds,
+                requestedCategoryIds = categoryIds,
+                uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+            )
 
             val metadata = BookMetadata(
                 id = stableId,

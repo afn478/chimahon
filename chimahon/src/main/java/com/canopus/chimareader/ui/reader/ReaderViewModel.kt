@@ -1,7 +1,6 @@
 package com.canopus.chimareader.ui.reader
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -19,6 +18,7 @@ import com.canopus.chimareader.data.Statistics
 import com.canopus.chimareader.data.Theme
 import com.canopus.chimareader.data.epub.EpubBook
 import com.canopus.chimareader.data.epub.SpineItemType
+import com.canopus.chimareader.data.epub.TocEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -29,7 +29,14 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
+import tachiyomi.domain.reader.model.NovelReaderSettingsSnapshot
+import tachiyomi.domain.reader.model.NovelReaderTocEntry
+import tachiyomi.domain.reader.model.NovelReaderTocItem
+import tachiyomi.domain.reader.model.ReaderSettings
+import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
+import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
+import tachiyomi.domain.reader.service.NovelReaderSettingsPolicy
+import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
@@ -52,27 +59,6 @@ sealed interface WebViewCommand {
     data class HighlightSelection(val charCount: Int) : WebViewCommand
     data class GetSelectionRects(val charCount: Int, val startOffset: Int = 0) : WebViewCommand
 }
-
-data class ReaderSettings(
-    val fontSize: Double = 18.0,
-    val lineHeight: Double = 1.6,
-    val characterSpacing: Double = 0.0,
-    val paragraphSpacing: Double = 0.0,
-    val horizontalPadding: Double = 10.0,
-    val verticalPadding: Double = 10.0,
-    val selectedFont: String = "System Serif",
-    val fontUrl: String? = null, // Custom font file URL for @font-face
-    val theme: String = "system", // "light", "dark", "sepia", "system"
-    val backgroundColor: Int = 0xFFFFFFFF.toInt(),
-    val textColor: Int = 0xFF000000.toInt(),
-    val verticalWriting: Boolean = true,
-    val justifyText: Boolean = false,
-    val avoidPageBreak: Boolean = true,
-    val hideFurigana: Boolean = false,
-    val layoutAdvanced: Boolean = false,
-    val tapZonePercent: Int = 20,
-    val continuousMode: Boolean = false,
-)
 
 // ─── Bridge ───────────────────────────────────────────────────────────────────
 
@@ -197,6 +183,7 @@ class ReaderViewModel(
 
     val bridge = WebViewBridge()
     val chapterCount = document.spine().items.size
+    private val domainTableOfContents = document.tableOfContents.toDomainTocEntries()
 
     /**
      * Returns true if the current chapter is an image-only page
@@ -245,24 +232,7 @@ class ReaderViewModel(
 
         val stats = BookStorage.loadStatistics(rootUrl)
         if (stats != null) {
-            fullStatistics.addAll(stats)
-
-            // Migration: Heuristic to detect milliseconds stored as seconds
-            val migrated = fullStatistics.map {
-                val speed = if (it.readingTime > 0) (it.charactersRead / it.readingTime * 3600) else 10000.0
-                if (speed < 500.0 && it.readingTime > 0) {
-                    Log.i("ReaderViewModel", "TTSU-STATS: Migrating entry '${it.dateKey}' from MS to Seconds (Speed: $speed)")
-                    it.copy(readingTime = it.readingTime / 1000.0)
-                } else {
-                    it
-                }
-            }
-            fullStatistics.clear()
-            // Deduplicate: keep the entry with the latest lastStatisticModified per dateKey
-            val deduplicated = migrated.groupBy { it.dateKey }.mapValues { (_, entries) ->
-                entries.maxBy { it.lastStatisticModified }
-            }.values.toList()
-            fullStatistics.addAll(deduplicated)
+            fullStatistics.addAll(NovelReaderStatisticsPolicy.normalizeLoadedStatistics(stats))
         }
 
         statisticsTracker = ReaderStatisticsTracker(
@@ -285,12 +255,10 @@ class ReaderViewModel(
         }
 
         scope.launch(Dispatchers.IO) {
-            var runningTotal = 0
-            for (i in 0 until document.linearSpineItems.size) {
-                accumulatedCharCounts[i] = runningTotal
-                runningTotal += document.getChapterCharacters(i)
+            val chapterCharacterCounts = document.linearSpineItems.indices.map { document.getChapterCharacters(it) }
+            NovelReaderProgressPolicy.accumulatedCharacterCounts(chapterCharacterCounts).forEachIndexed { index, count ->
+                accumulatedCharCounts[index] = count
             }
-            accumulatedCharCounts[document.linearSpineItems.size] = runningTotal
         }
 
         getCurrentChapter()?.let { file ->
@@ -394,49 +362,29 @@ class ReaderViewModel(
             null
         }
 
-        val (bg, txt) = when (theme) {
-            Theme.LIGHT -> 0xFFFFFFFF.toInt() to 0xFF000000.toInt()
-            Theme.DARK -> 0xFF121212.toInt() to 0xFFE0E0E0.toInt()
-            Theme.SEPIA -> 0xFFF2E2C9.toInt() to 0xFF3C2C1C.toInt()
-            Theme.PURE_BLACK -> 0xFF000000.toInt() to 0xFFE0E0E0.toInt()
-            Theme.CUSTOM -> customBackgroundColor to customTextColor
-            Theme.SYSTEM -> {
-                val isDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-                if (isDark) {
-                    if (systemLightSepia) {
-                        0xFF1C140C.toInt() to 0xFFF2E2C9.toInt() // Inverted Sepia
-                    } else {
-                        0xFF121212.toInt() to 0xFFE0E0E0.toInt()
-                    }
-                } else {
-                    if (systemLightSepia) {
-                        0xFFF2E2C9.toInt() to 0xFF3C2C1C.toInt() // Sepia
-                    } else {
-                        0xFFFFFFFF.toInt() to 0xFF000000.toInt()
-                    }
-                }
-            }
-        }
-
-        return ReaderSettings(
-            fontSize = fontSize,
-            lineHeight = lineHeight,
-            characterSpacing = characterSpacing,
-            paragraphSpacing = paragraphSpacing,
-            horizontalPadding = horizontalPadding,
-            verticalPadding = verticalPadding,
-            selectedFont = selectedFont,
-            fontUrl = fontUrl?.toString(),
-            theme = theme.name.lowercase(),
-            backgroundColor = bg,
-            textColor = txt,
-            verticalWriting = verticalWriting,
-            justifyText = justifyText,
-            avoidPageBreak = avoidPageBreak,
-            hideFurigana = hideFurigana,
-            layoutAdvanced = layoutAdvanced,
-            tapZonePercent = tapZonePercent,
-            continuousMode = continuousMode,
+        return NovelReaderSettingsPolicy.buildReaderSettings(
+            snapshot = NovelReaderSettingsSnapshot(
+                theme = theme,
+                fontSize = fontSize,
+                lineHeight = lineHeight,
+                characterSpacing = characterSpacing,
+                paragraphSpacing = paragraphSpacing,
+                horizontalPadding = horizontalPadding,
+                verticalPadding = verticalPadding,
+                selectedFont = selectedFont,
+                customBackgroundColor = customBackgroundColor,
+                customTextColor = customTextColor,
+                verticalWriting = verticalWriting,
+                justifyText = justifyText,
+                avoidPageBreak = avoidPageBreak,
+                hideFurigana = hideFurigana,
+                layoutAdvanced = layoutAdvanced,
+                tapZonePercent = tapZonePercent,
+                continuousMode = continuousMode,
+                systemLightSepia = systemLightSepia,
+            ),
+            systemDark = context.isReaderSystemDark(),
+            fontUrl = fontUrl,
         )
     }
 
@@ -450,55 +398,21 @@ class ReaderViewModel(
     }
 
     fun getChapterTitle(chapterIndex: Int): String? {
-        val href = document.getChapterHref(chapterIndex) ?: return null
-        // Try TOC lookup first
-        val tocLabel = findTocLabel(document.tableOfContents, href)
-        if (tocLabel != null) return tocLabel
-        // Fallback to file name without path
-        return href.substringAfterLast("/").substringBefore(".")
+        return NovelReaderNavigationPolicy.chapterTitle(
+            chapterHref = document.getChapterHref(chapterIndex),
+            tableOfContents = domainTableOfContents,
+        )
     }
 
-    private fun findTocLabel(toc: List<com.canopus.chimareader.data.epub.TocEntry>, href: String): String? {
-        val fileName = href.substringAfterLast("/")
-        for (entry in toc) {
-            val entryHref = entry.href ?: continue
-            // Check if the href ends with the same file name
-            if (entryHref.endsWith(fileName) || entryHref.contains(fileName.substringBefore("."))) {
-                return entry.label
-            }
-            val found = findTocLabel(entry.children, href)
-            if (found != null) return found
-        }
-        return null
-    }
-
-    fun getFlattenedToc(): List<com.canopus.chimareader.data.epub.TocEntry> {
-        val flat = mutableListOf<com.canopus.chimareader.data.epub.TocEntry>()
-        fun flatten(entries: List<com.canopus.chimareader.data.epub.TocEntry>, depth: Int = 0) {
-            for (e in entries) {
-                // Add depth indentation to label if it's nested
-                val indent = "  ".repeat(depth)
-                flat.add(e.copy(label = "$indent${e.label}"))
-                flatten(e.children, depth + 1)
-            }
-        }
-        flatten(document.tableOfContents)
-        return flat
+    fun getFlattenedToc(): List<NovelReaderTocItem> {
+        return NovelReaderNavigationPolicy.flattenToc(domainTableOfContents)
     }
 
     fun getSpineIndexForHref(href: String): Int? {
-        val decodedHref = java.net.URLDecoder.decode(href.substringBefore('#').substringBefore('?'), "UTF-8")
-        val fileName = decodedHref.substringAfterLast("/")
-
-        for (i in 0 until document.linearSpineItems.size) {
-            val chapterHref = document.getChapterHref(i) ?: continue
-            val chapterFileName = chapterHref.substringAfterLast("/")
-
-            if (chapterHref.endsWith(decodedHref) || chapterFileName == fileName) {
-                return i
-            }
-        }
-        return null
+        return NovelReaderNavigationPolicy.spineIndexForHref(
+            href = href,
+            chapterHrefs = document.linearSpineItems.indices.map { document.getChapterHref(it) },
+        )
     }
 
     fun saveBookmark(progress: Double, updateTracker: Boolean = true, force: Boolean = false) {
@@ -539,21 +453,14 @@ class ReaderViewModel(
      * silently ignored – the WebView already blocked the navigation via shouldOverrideUrlLoading.
      */
     fun jumpToUrl(url: String) {
-        val fragment = url.substringAfter("#", missingDelimiterValue = "")
-        val targetPath = url.substringBefore("#")
-            .removePrefix("file://")
-            .replace("\\", "/")
-
-        val spineCount = document.linearSpineItems.size
-        for (i in 0 until spineCount) {
-            val chapterPath = document.chapterAbsolutePath(i.toUInt())
-                ?.replace("\\", "/") ?: continue
-            if (chapterPath == targetPath) {
-                // Save progress before jumping so stats are consistent
-                saveBookmark(currentProgress)
-                jumpToChapter(i, fragment.ifEmpty { null })
-                return
-            }
+        val target = NovelReaderNavigationPolicy.resolveInternalFileLink(
+            url = url,
+            chapterPaths = document.linearSpineItems.indices.map { document.chapterAbsolutePath(it.toUInt()) },
+        )
+        if (target != null) {
+            saveBookmark(currentProgress)
+            jumpToChapter(target.spineIndex, target.fragment)
+            return
         }
         android.util.Log.w("ReaderViewModel", "jumpToUrl: no spine match for $url")
     }
@@ -582,23 +489,27 @@ class ReaderViewModel(
     }
 
     private fun calculateExploredCharCount(progress: Double): Int {
-        var count = 0
-        for (i in 0 until index) {
-            count += document.getChapterCharacters(i)
-        }
-        val currentChapterChars = document.getChapterCharacters(index)
-        count += (currentChapterChars * progress).toInt()
-        return count
+        return NovelReaderProgressPolicy.exploredCharacterCount(
+            chapterIndex = index,
+            progress = progress,
+            chapterCharacterCount = document::getChapterCharacters,
+        )
     }
 
     private fun persistBookmark(progress: Double, force: Boolean = false) {
         val characterCount = calculateExploredCharCount(progress)
         totalExploredCharCount = characterCount
 
-        val changed = force ||
-            index != lastSavedChapterIndex ||
-            characterCount != lastSavedCharacterCount ||
-            abs(progress - lastSavedProgress) > BOOKMARK_PROGRESS_EPSILON
+        val changed = NovelReaderProgressPolicy.shouldPersistBookmark(
+            force = force,
+            chapterIndex = index,
+            progress = progress,
+            characterCount = characterCount,
+            lastChapterIndex = lastSavedChapterIndex,
+            lastProgress = lastSavedProgress,
+            lastCharacterCount = lastSavedCharacterCount,
+            progressEpsilon = BOOKMARK_PROGRESS_EPSILON,
+        )
 
         if (!changed) return
 
@@ -649,5 +560,15 @@ class ReaderViewModel(
 
     companion object {
         private const val BOOKMARK_PROGRESS_EPSILON = 0.0001
+    }
+}
+
+private fun List<TocEntry>.toDomainTocEntries(): List<NovelReaderTocEntry> {
+    return map { entry ->
+        NovelReaderTocEntry(
+            label = entry.label,
+            href = entry.href,
+            children = entry.children.toDomainTocEntries(),
+        )
     }
 }

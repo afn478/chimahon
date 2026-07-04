@@ -55,4 +55,5 @@ dependencies {
     
     // Mihon core
     implementation(projects.core.common)
+    implementation(projects.domain)
 }

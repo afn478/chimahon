@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.service.NovelCategoryPolicy
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -114,13 +115,17 @@ object ImportHandler {
                 ?: categories.firstOrNull() // Should always have a system category now
             
             if (defaultCategory != null) {
-                val existingCategoryIds = bookMetadata.categoryIds
-                    .filter { it.isNotBlank() }
-                    .distinct()
+                val existingCategoryIds = NovelCategoryPolicy.normalizeCategoryIds(
+                    categoryIds = bookMetadata.categoryIds,
+                    uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+                )
                 val updatedCategoryIds = if (existingCategoryIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
-                    existingCategoryIds.filterNot { it == NovelCategory.UNCATEGORIZED_ID }
+                    existingCategoryIds
                 } else {
-                    (existingCategoryIds + defaultCategory.id).distinct()
+                    NovelCategoryPolicy.normalizeCategoryIdsOrDefault(
+                        categoryIds = existingCategoryIds + defaultCategory.id,
+                        uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+                    )
                 }
                 val updatedMetadata = bookMetadata.copy(
                     categoryIds = updatedCategoryIds

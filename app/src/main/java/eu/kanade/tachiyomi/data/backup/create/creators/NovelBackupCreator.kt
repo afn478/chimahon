@@ -9,6 +9,9 @@ import com.canopus.chimareader.data.md5Hex
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupStatEntry
+import tachiyomi.domain.library.service.NovelBookIdentityPolicy
+import tachiyomi.domain.library.service.NovelBookMergePolicy
+import tachiyomi.domain.library.service.NovelCategoryPolicy
 import java.io.File
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -68,25 +71,20 @@ class NovelBackupCreator(
     }
 
     private fun normalizeCategoryIds(categoryIds: List<String>): List<String> {
-        val distinctIds = categoryIds
-            .filter { it.isNotBlank() }
-            .distinct()
-
-        return if (distinctIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
-            distinctIds.filterNot { it == NovelCategory.UNCATEGORIZED_ID }
-        } else {
-            distinctIds
-        }
+        return NovelCategoryPolicy.normalizeCategoryIds(
+            categoryIds = categoryIds,
+            uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+        )
     }
 
     private fun stableIdFor(metadata: BookMetadata): String {
-        val title = (metadata.title ?: "").trim().lowercase()
-        val author = (metadata.author ?: "").trim().lowercase()
-        return if (title.isNotEmpty() || author.isNotEmpty()) {
-            md5Hex("$title|$author")
-        } else {
-            metadata.id
-        }
+        return NovelBookIdentityPolicy.identityKey(
+            title = metadata.title,
+            author = metadata.author,
+            storedHash = null,
+            fallbackId = metadata.id,
+            hashIdentity = ::md5Hex,
+        )
     }
 
     private fun createBackupNovel(entry: BookEntry): BackupNovel {
@@ -125,7 +123,11 @@ class NovelBackupCreator(
     }
 
     private fun mergeBackupNovel(first: BackupNovel, second: BackupNovel): BackupNovel {
-        val latest = if (first.lastModified >= second.lastModified) first else second
+        val latest = NovelBookMergePolicy.selectLatest(
+            current = first,
+            incoming = second,
+            lastModified = BackupNovel::lastModified,
+        )
         val fallback = if (latest == first) second else first
 
         return latest.copy(
@@ -133,19 +135,21 @@ class NovelBackupCreator(
             author = latest.author ?: fallback.author,
             cover = latest.cover ?: fallback.cover,
             stats = mergeBackupStats(first.stats + second.stats),
-            categoryIds = normalizeCategoryIds(first.categoryIds + second.categoryIds),
+            categoryIds = NovelBookMergePolicy.mergeCategoryIds(
+                currentCategoryIds = first.categoryIds,
+                incomingCategoryIds = second.categoryIds,
+                uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+            ),
             lang = latest.lang ?: fallback.lang,
         )
     }
 
     private fun mergeBackupStats(stats: List<BackupStatEntry>): List<BackupStatEntry> {
-        return stats
-            .groupBy { it.dateKey }
-            .map { (_, entries) ->
-                entries.reduce { latest, candidate ->
-                    if (candidate.lastStatisticModified > latest.lastStatisticModified) candidate else latest
-                }
-            }
+        return NovelBookMergePolicy.mergeLatestByKey(
+            items = stats,
+            itemKey = BackupStatEntry::dateKey,
+            lastModified = BackupStatEntry::lastStatisticModified,
+        )
     }
 
     private data class BookEntry(

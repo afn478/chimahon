@@ -28,6 +28,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
+import tachiyomi.domain.reader.model.ReaderSettings
 
 @Composable
 fun ReaderWebView(

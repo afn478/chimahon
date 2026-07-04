@@ -1,11 +1,5 @@
 package com.canopus.chimareader.data
 
-import kotlinx.serialization.Serializable
+import tachiyomi.domain.reader.model.NovelReaderBookmark
 
-@Serializable
-data class Bookmark(
-    val chapterIndex: Int,
-    val progress: Double,
-    val characterCount: Int,
-    val lastModified: Long? = null,
-)
+typealias Bookmark = NovelReaderBookmark

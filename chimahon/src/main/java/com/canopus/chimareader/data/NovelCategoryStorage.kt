@@ -3,6 +3,7 @@ package com.canopus.chimareader.data
 import android.content.Context
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import tachiyomi.domain.library.service.NovelCategoryPolicy
 import java.io.File
 
 class NovelCategoryStorage(private val context: Context) {
@@ -21,19 +22,21 @@ class NovelCategoryStorage(private val context: Context) {
             }
         }
 
-        val categoriesWithDefault = if (categories.none { it.id == NovelCategory.UNCATEGORIZED_ID }) {
-            listOf(createDefaultCategory()) + categories
-        } else {
-            categories
-        }
-
-        return categoriesWithDefault.sortedWith(
-            compareBy<NovelCategory> { if (it.isSystemCategory) Int.MIN_VALUE else it.order }
-                .thenBy { it.name },
+        val categoriesWithDefault = NovelCategoryPolicy.ensureDefaultCategory(
+            categories = categories,
+            defaultCategory = createDefaultCategory(),
+            categoryId = NovelCategory::id,
+            uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
         )
+
+        return sortCategories(categoriesWithDefault)
     }
 
-    private fun createDefaultCategory() = NovelCategory(id = NovelCategory.UNCATEGORIZED_ID, name = "Default", order = -1)
+    private fun createDefaultCategory() = NovelCategory(
+        id = NovelCategory.UNCATEGORIZED_ID,
+        name = "Default",
+        order = NovelCategoryPolicy.SYSTEM_CATEGORY_ORDER,
+    )
 
     fun saveCategories(categories: List<NovelCategory>) {
         categoriesFile.writeText(json.encodeToString(categories))
@@ -41,11 +44,11 @@ class NovelCategoryStorage(private val context: Context) {
 
     fun createCategory(name: String): NovelCategory {
         val categories = loadAllCategories().toMutableList()
-        val nextOrder = categories
-            .filterNot { it.isSystemCategory }
-            .maxOfOrNull { it.order }
-            ?.plus(1)
-            ?: 0
+        val nextOrder = NovelCategoryPolicy.nextUserCategoryOrder(
+            categories = categories,
+            isSystemCategory = NovelCategory::isSystemCategory,
+            categoryOrder = NovelCategory::order,
+        )
         val newCategory = NovelCategory(name = name, order = nextOrder)
         categories.add(newCategory)
         saveCategories(categories)
@@ -65,5 +68,14 @@ class NovelCategoryStorage(private val context: Context) {
             categories[index] = category
             saveCategories(categories)
         }
+    }
+
+    private fun sortCategories(categories: List<NovelCategory>): List<NovelCategory> {
+        return NovelCategoryPolicy.sortCategories(
+            categories = categories,
+            isSystemCategory = NovelCategory::isSystemCategory,
+            categoryOrder = NovelCategory::order,
+            categoryName = NovelCategory::name,
+        )
     }
 }

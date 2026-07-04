@@ -3,22 +3,22 @@ package com.canopus.chimareader.ui.reader
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.canopus.chimareader.data.Statistics
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
+import tachiyomi.domain.reader.model.NovelReadingStatistic
+import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
 
 data class ReaderStatisticsState(
     val isTracking: Boolean,
-    val session: Statistics,
-    val today: Statistics,
-    val allTime: Statistics,
+    val session: NovelReadingStatistic,
+    val today: NovelReadingStatistic,
+    val allTime: NovelReadingStatistic,
 )
 
 class ReaderStatisticsTracker(
     private val title: String,
-    initialStatistics: List<Statistics>,
+    initialStatistics: List<NovelReadingStatistic>,
     private val enabled: Boolean,
 ) {
     private var statistics = initialStatistics.toMutableList()
@@ -76,16 +76,14 @@ class ReaderStatisticsTracker(
         if (timeDiff <= 0.0) return
 
         val charDiff = currentCharacter - lastCharacterCount
-        val finalCharDiff = if (charDiff < 0 && abs(charDiff) > state.session.charactersRead) {
-            -state.session.charactersRead
-        } else {
-            charDiff
-        }
-        val modified = System.currentTimeMillis()
+        val finalCharDiff = NovelReaderStatisticsPolicy.clampBackwardCharacterDiff(
+            characterDiff = charDiff,
+            sessionCharactersRead = state.session.charactersRead,
+        )
         state = state.copy(
-            session = state.session.updated(timeDiff, finalCharDiff, modified),
-            today = state.today.updated(timeDiff, finalCharDiff, modified),
-            allTime = state.allTime.updated(timeDiff, finalCharDiff, modified),
+            session = updateStatistic(state.session, timeDiff, finalCharDiff, now),
+            today = updateStatistic(state.today, timeDiff, finalCharDiff, now),
+            allTime = updateStatistic(state.allTime, timeDiff, finalCharDiff, now),
         )
         hasUpdated = true
         lastTimestampMillis = now
@@ -97,16 +95,15 @@ class ReaderStatisticsTracker(
         lastTimestampMillis = System.currentTimeMillis()
     }
 
-    fun statisticsForPersistenceOrNull(): List<Statistics>? =
+    fun statisticsForPersistenceOrNull(): List<NovelReadingStatistic>? =
         if (enabled && (hasUpdated || statistics.isNotEmpty())) statisticsForPersistence() else null
 
-    fun statisticsForPersistence(): List<Statistics> {
+    fun statisticsForPersistence(): List<NovelReadingStatistic> {
         val today = state.today
-        val grouped = statistics.groupBy { it.dateKey }.mapValues { (_, entries) ->
-            entries.maxBy { it.lastStatisticModified }
-        }.toMutableMap()
-        grouped[today.dateKey] = today
-        val next = grouped.values.toList()
+        val next = NovelReaderStatisticsPolicy.statisticsForPersistence(
+            existing = statistics,
+            today = today,
+        )
         statistics = next.toMutableList()
         return next
     }
@@ -118,56 +115,39 @@ class ReaderStatisticsTracker(
         state = state.copy(today = statisticForDate(key))
     }
 
-    private fun statisticForDate(dateKey: String): Statistics =
-        statistics.firstOrNull { it.dateKey == dateKey } ?: defaultStatistic(dateKey)
+    private fun statisticForDate(dateKey: String): NovelReadingStatistic {
+        return NovelReaderStatisticsPolicy.statisticForDate(
+            statistics = statistics,
+            title = title,
+            dateKey = dateKey,
+        )
+    }
 
-    private fun defaultStatistic(dateKey: String = currentDateKey()): Statistics =
-        Statistics(title = title, dateKey = dateKey)
+    private fun defaultStatistic(dateKey: String = currentDateKey()): NovelReadingStatistic =
+        NovelReaderStatisticsPolicy.defaultStatistic(title = title, dateKey = dateKey)
 
-    private fun allTimeStatistic(statistics: List<Statistics>): Statistics {
-        val base = defaultStatistic()
-        return statistics.fold(base) { total, statistic ->
-            val readingTime = total.readingTime + statistic.readingTime
-            val charactersRead = total.charactersRead + statistic.charactersRead
-            total.copy(
-                readingTime = readingTime,
-                charactersRead = charactersRead,
-                lastReadingSpeed = if (readingTime > 0.0) {
-                    (charactersRead.toDouble() / readingTime * 3600.0).toInt()
-                } else {
-                    0
-                },
-            )
-        }
+    private fun allTimeStatistic(statistics: List<NovelReadingStatistic>): NovelReadingStatistic {
+        return NovelReaderStatisticsPolicy.allTimeStatistic(
+            title = title,
+            dateKey = currentDateKey(),
+            statistics = statistics,
+        )
+    }
+
+    private fun updateStatistic(
+        statistic: NovelReadingStatistic,
+        timeDiff: Double,
+        characterDiff: Int,
+        modifiedAt: Long,
+    ): NovelReadingStatistic {
+        return NovelReaderStatisticsPolicy.updateStatistic(
+            statistic = statistic,
+            timeDiffSeconds = timeDiff,
+            characterDiff = characterDiff,
+            lastStatisticModified = modifiedAt,
+        )
     }
 
     private fun currentDateKey(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-}
-
-private fun Statistics.updated(
-    timeDiff: Double,
-    characterDiff: Int,
-    lastStatisticModified: Long,
-): Statistics {
-    val nextReadingTime = readingTime + timeDiff
-    val nextCharactersRead = (charactersRead + characterDiff).coerceAtLeast(0)
-    val nextReadingSpeed = if (nextReadingTime > 0.0) {
-        (nextCharactersRead.toDouble() / nextReadingTime * 3600.0).toInt()
-    } else {
-        0
-    }
-    return copy(
-        readingTime = nextReadingTime,
-        charactersRead = nextCharactersRead,
-        lastReadingSpeed = nextReadingSpeed,
-        maxReadingSpeed = maxOf(maxReadingSpeed, nextReadingSpeed),
-        minReadingSpeed = if (minReadingSpeed != 0) minOf(minReadingSpeed, nextReadingSpeed) else nextReadingSpeed,
-        altMinReadingSpeed = if (characterDiff != 0) {
-            if (altMinReadingSpeed != 0) minOf(altMinReadingSpeed, nextReadingSpeed) else nextReadingSpeed
-        } else {
-            altMinReadingSpeed
-        },
-        lastStatisticModified = lastStatisticModified,
-    )
 }

@@ -93,6 +93,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.NovelLibrarySortMode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.components.CheckboxItem
@@ -478,9 +479,9 @@ fun Screen.NovelLibraryScreen(
                     when (page) {
                         0 -> { // Sort Tab
                             val options = listOf(
-                                MR.strings.action_sort_alpha to NovelLibraryScreenModel.SortMode.Alphabetical,
-                                MR.strings.action_sort_date_added to NovelLibraryScreenModel.SortMode.DateAdded,
-                                MR.strings.action_sort_last_read to NovelLibraryScreenModel.SortMode.LastRead,
+                                MR.strings.action_sort_alpha to NovelLibrarySortMode.ALPHABETICAL,
+                                MR.strings.action_sort_date_added to NovelLibrarySortMode.DATE_ADDED,
+                                MR.strings.action_sort_last_read to NovelLibrarySortMode.LAST_READ,
                             )
 
                             options.map { (titleRes, mode) ->

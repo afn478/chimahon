@@ -1,7 +1,6 @@
 package com.canopus.chimareader.data
 
 import android.content.Context
-import android.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -12,42 +11,26 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import tachiyomi.domain.reader.service.NovelReaderPreferenceKeys
+import tachiyomi.domain.reader.service.NovelReaderSettingsDefaults
+import tachiyomi.domain.reader.service.NovelReaderSettingsPolicy
 
 val Context.novelReaderDataStore: DataStore<Preferences> by preferencesDataStore(name = "novel_reader_settings")
 
-enum class Theme {
-    SYSTEM,
-    LIGHT,
-    DARK,
-    SEPIA,
-    CUSTOM,
-    PURE_BLACK,
-}
-
-data class CustomReaderTheme(
-    val name: String = "",
-    val backgroundColor: Int,
-    val textColor: Int,
-)
-
-enum class StatisticsAutostartMode {
-    OFF,
-    ON,
-    PAGETURN,
-}
+typealias Theme = tachiyomi.domain.reader.model.NovelReaderTheme
+typealias CustomReaderTheme = tachiyomi.domain.reader.model.CustomReaderTheme
+typealias StatisticsAutostartMode = tachiyomi.domain.reader.model.StatisticsAutostartMode
 
 class NovelReaderSettings(private val context: Context, private val namespace: String? = null) {
 
     companion object {
-        private const val MAX_CUSTOM_THEMES = 24
-
         fun default(): NovelReaderSettings {
             throw IllegalStateException("NovelReaderSettings requires a Context. Pass context from Activity.")
         }
     }
 
     private fun prefName(name: String): String {
-        return if (namespace.isNullOrEmpty()) name else "${namespace}_$name"
+        return NovelReaderSettingsPolicy.preferenceName(name = name, namespace = namespace)
     }
 
     private fun stringKey(name: String): androidx.datastore.preferences.core.Preferences.Key<String> {
@@ -69,21 +52,11 @@ class NovelReaderSettings(private val context: Context, private val namespace: S
     private val dataStore = context.novelReaderDataStore
 
     private fun encodeCustomThemes(themes: List<CustomReaderTheme>): String {
-        return themes.joinToString("|") { "${it.name}~${it.backgroundColor},${it.textColor}" }
+        return NovelReaderSettingsPolicy.encodeCustomThemes(themes)
     }
 
     private fun decodeCustomThemes(value: String?): List<CustomReaderTheme> {
-        if (value.isNullOrBlank()) return emptyList()
-        return value.split("|")
-            .mapNotNull { encoded ->
-                val parts = encoded.split("~", limit = 2)
-                if (parts.size != 2) return@mapNotNull null
-                val colorParts = parts[1].split(",")
-                val backgroundColor = colorParts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-                val textColor = colorParts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
-                CustomReaderTheme(name = parts[0], backgroundColor = backgroundColor, textColor = textColor)
-            }
-            .distinct()
+        return NovelReaderSettingsPolicy.decodeCustomThemes(value)
     }
 
     private fun androidx.datastore.preferences.core.Preferences.getSafeDouble(key: androidx.datastore.preferences.core.Preferences.Key<Double>, default: Double): Double {
@@ -105,155 +78,157 @@ class NovelReaderSettings(private val context: Context, private val namespace: S
     }
 
     val theme: Flow<Theme> = dataStore.data.map { prefs ->
-        Theme.valueOf(prefs[keys.THEME] ?: Theme.SYSTEM.name)
+        Theme.valueOf(prefs[keys.THEME] ?: NovelReaderSettingsDefaults.theme.name)
     }
 
     val systemLightSepia: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.SYSTEM_LIGHT_SEPIA] ?: false
+        prefs[keys.SYSTEM_LIGHT_SEPIA] ?: NovelReaderSettingsDefaults.systemLightSepia
     }
 
     val uiTheme: Flow<Theme> = dataStore.data.map { prefs ->
-        Theme.valueOf(prefs[keys.UI_THEME] ?: Theme.SYSTEM.name)
+        Theme.valueOf(prefs[keys.UI_THEME] ?: NovelReaderSettingsDefaults.uiTheme.name)
     }
 
     val customBackgroundColor: Flow<Int> = dataStore.data.map { prefs ->
-        prefs[keys.CUSTOM_BACKGROUND_COLOR] ?: 0xFFF2E2C9.toInt()
+        prefs[keys.CUSTOM_BACKGROUND_COLOR] ?: NovelReaderSettingsDefaults.customBackgroundColor
     }
 
     val customTextColor: Flow<Int> = dataStore.data.map { prefs ->
-        prefs[keys.CUSTOM_TEXT_COLOR] ?: Color.BLACK
+        prefs[keys.CUSTOM_TEXT_COLOR] ?: NovelReaderSettingsDefaults.customTextColor
     }
 
     val customThemes: Flow<List<CustomReaderTheme>> = dataStore.data.map { prefs ->
-        decodeCustomThemes(prefs[keys.customThemes])
+        decodeCustomThemes(prefs[keys.CUSTOM_THEMES])
     }
 
     val customInfoColor: Flow<Int> = dataStore.data.map { prefs ->
-        prefs[keys.CUSTOM_INFO_COLOR] ?: Color.DKGRAY
+        prefs[keys.CUSTOM_INFO_COLOR] ?: NovelReaderSettingsDefaults.customInfoColor
     }
 
     val verticalWriting: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.VERTICAL_WRITING] ?: true
+        prefs[keys.VERTICAL_WRITING] ?: NovelReaderSettingsDefaults.verticalWriting
     }
 
     val selectedFont: Flow<String> = dataStore.data.map { prefs ->
-        prefs[keys.SELECTED_FONT] ?: "System"
+        prefs[keys.SELECTED_FONT] ?: NovelReaderSettingsDefaults.selectedFont
     }
 
     val fontSize: Flow<Double> = dataStore.data.map { prefs ->
-        prefs.getSafeDouble(keys.FONT_SIZE, 18.0)
+        prefs.getSafeDouble(keys.FONT_SIZE, NovelReaderSettingsDefaults.fontSize)
     }
 
     val readerHideFurigana: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_HIDE_FURIGANA] ?: false
+        prefs[keys.READER_HIDE_FURIGANA] ?: NovelReaderSettingsDefaults.readerHideFurigana
     }
 
     val continuousMode: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.CONTINUOUS_MODE] ?: false
+        prefs[keys.CONTINUOUS_MODE] ?: NovelReaderSettingsDefaults.continuousMode
     }
 
     val chapterSwipeDistance: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.CHAPTER_SWIPE_DISTANCE, 96)
+        prefs.getSafeInt(keys.CHAPTER_SWIPE_DISTANCE, NovelReaderSettingsDefaults.chapterSwipeDistance)
     }
 
     val chapterTapZones: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.CHAPTER_TAP_ZONES, 20)
+        prefs.getSafeInt(keys.CHAPTER_TAP_ZONES, NovelReaderSettingsDefaults.chapterTapZones)
     }
 
     val horizontalPadding: Flow<Double> = dataStore.data.map { prefs ->
-        prefs.getSafeDouble(keys.HORIZONTAL_PADDING, 10.0)
+        prefs.getSafeDouble(keys.HORIZONTAL_PADDING, NovelReaderSettingsDefaults.horizontalPadding)
     }
 
     val verticalPadding: Flow<Double> = dataStore.data.map { prefs ->
-        prefs.getSafeDouble(keys.VERTICAL_PADDING, 10.0)
+        prefs.getSafeDouble(keys.VERTICAL_PADDING, NovelReaderSettingsDefaults.verticalPadding)
     }
 
     val avoidPageBreak: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.AVOID_PAGE_BREAK] ?: true
+        prefs[keys.AVOID_PAGE_BREAK] ?: NovelReaderSettingsDefaults.avoidPageBreak
     }
 
     val justifyText: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.JUSTIFY_TEXT] ?: false
+        prefs[keys.JUSTIFY_TEXT] ?: NovelReaderSettingsDefaults.justifyText
     }
 
     val layoutAdvanced: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.LAYOUT_ADVANCED] ?: false
+        prefs[keys.LAYOUT_ADVANCED] ?: NovelReaderSettingsDefaults.layoutAdvanced
     }
 
     val lineHeight: Flow<Double> = dataStore.data.map { prefs ->
-        prefs.getSafeDouble(keys.LINE_HEIGHT, 1.6)
+        prefs.getSafeDouble(keys.LINE_HEIGHT, NovelReaderSettingsDefaults.lineHeight)
     }
 
     val characterSpacing: Flow<Double> = dataStore.data.map { prefs ->
-        prefs.getSafeDouble(keys.CHARACTER_SPACING, 0.0)
+        prefs.getSafeDouble(keys.CHARACTER_SPACING, NovelReaderSettingsDefaults.characterSpacing)
     }
 
     val paragraphSpacing: Flow<Double> = dataStore.data.map { prefs ->
-        prefs.getSafeDouble(keys.PARAGRAPH_SPACING, 0.0)
+        prefs.getSafeDouble(keys.PARAGRAPH_SPACING, NovelReaderSettingsDefaults.paragraphSpacing)
     }
 
     val readerShowTitle: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_SHOW_TITLE] ?: true
+        prefs[keys.READER_SHOW_TITLE] ?: NovelReaderSettingsDefaults.readerShowTitle
     }
 
     val readerShowCharacters: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_SHOW_CHARACTERS] ?: true
+        prefs[keys.READER_SHOW_CHARACTERS] ?: NovelReaderSettingsDefaults.readerShowCharacters
     }
 
     val readerShowPercentage: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_SHOW_PERCENTAGE] ?: true
+        prefs[keys.READER_SHOW_PERCENTAGE] ?: NovelReaderSettingsDefaults.readerShowPercentage
     }
 
     val readerShowProgressTop: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_SHOW_PROGRESS_TOP] ?: true
+        prefs[keys.READER_SHOW_PROGRESS_TOP] ?: NovelReaderSettingsDefaults.readerShowProgressTop
     }
 
     val enableStatistics: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.ENABLE_STATISTICS] ?: true
+        prefs[keys.ENABLE_STATISTICS] ?: NovelReaderSettingsDefaults.enableStatistics
     }
 
     val statisticsAutostartMode: Flow<StatisticsAutostartMode> = dataStore.data.map { prefs ->
-        StatisticsAutostartMode.valueOf(prefs[keys.STATISTICS_AUTOSTART_MODE] ?: StatisticsAutostartMode.ON.name)
+        StatisticsAutostartMode.valueOf(
+            prefs[keys.STATISTICS_AUTOSTART_MODE] ?: NovelReaderSettingsDefaults.statisticsAutostartMode.name,
+        )
     }
 
     val readerShowReadingSpeed: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_SHOW_READING_SPEED] ?: true
+        prefs[keys.READER_SHOW_READING_SPEED] ?: NovelReaderSettingsDefaults.readerShowReadingSpeed
     }
 
     val readerShowReadingTime: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.READER_SHOW_READING_TIME] ?: true
+        prefs[keys.READER_SHOW_READING_TIME] ?: NovelReaderSettingsDefaults.readerShowReadingTime
     }
 
     val popupWidth: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.POPUP_WIDTH, 300)
+        prefs.getSafeInt(keys.POPUP_WIDTH, NovelReaderSettingsDefaults.popupWidth)
     }
 
     val popupHeight: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.POPUP_HEIGHT, 200)
+        prefs.getSafeInt(keys.POPUP_HEIGHT, NovelReaderSettingsDefaults.popupHeight)
     }
 
     val popupFullWidth: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.POPUP_FULL_WIDTH] ?: false
+        prefs[keys.POPUP_FULL_WIDTH] ?: NovelReaderSettingsDefaults.popupFullWidth
     }
 
     val popupSwipeToDismiss: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.POPUP_SWIPE_TO_DISMISS] ?: true
+        prefs[keys.POPUP_SWIPE_TO_DISMISS] ?: NovelReaderSettingsDefaults.popupSwipeToDismiss
     }
 
     val popupSwipeThreshold: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.POPUP_SWIPE_THRESHOLD, 50)
+        prefs.getSafeInt(keys.POPUP_SWIPE_THRESHOLD, NovelReaderSettingsDefaults.popupSwipeThreshold)
     }
 
     val maxResults: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.MAX_RESULTS, 10)
+        prefs.getSafeInt(keys.MAX_RESULTS, NovelReaderSettingsDefaults.maxResults)
     }
 
     val scanLength: Flow<Int> = dataStore.data.map { prefs ->
-        prefs.getSafeInt(keys.SCAN_LENGTH, 50)
+        prefs.getSafeInt(keys.SCAN_LENGTH, NovelReaderSettingsDefaults.scanLength)
     }
 
     val keepScreenOn: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[keys.KEEP_SCREEN_ON] ?: false
+        prefs[keys.KEEP_SCREEN_ON] ?: NovelReaderSettingsDefaults.keepScreenOn
     }
 
     suspend fun setTheme(value: Theme) {
@@ -296,9 +271,13 @@ class NovelReaderSettings(private val context: Context, private val namespace: S
 
     suspend fun addCustomTheme(value: CustomReaderTheme) {
         dataStore.edit { prefs ->
-            val existing = decodeCustomThemes(prefs[keys.customThemes])
-            val next = (existing + value).distinct().takeLast(MAX_CUSTOM_THEMES)
-            prefs[keys.customThemes] = encodeCustomThemes(next)
+            val existing = decodeCustomThemes(prefs[keys.CUSTOM_THEMES])
+            val next = NovelReaderSettingsPolicy.addCustomTheme(
+                themes = existing,
+                theme = value,
+                maxThemes = NovelReaderSettingsDefaults.maxCustomThemes,
+            )
+            prefs[keys.CUSTOM_THEMES] = encodeCustomThemes(next)
             prefs[keys.CUSTOM_BACKGROUND_COLOR] = value.backgroundColor
             prefs[keys.CUSTOM_TEXT_COLOR] = value.textColor
             prefs[keys.THEME] = Theme.CUSTOM.name
@@ -307,19 +286,24 @@ class NovelReaderSettings(private val context: Context, private val namespace: S
 
     suspend fun deleteCustomTheme(value: CustomReaderTheme) {
         dataStore.edit { prefs ->
-            val existing = decodeCustomThemes(prefs[keys.customThemes])
-            val next = existing.filter { it != value }
-            prefs[keys.customThemes] = encodeCustomThemes(next)
+            val existing = decodeCustomThemes(prefs[keys.CUSTOM_THEMES])
+            val next = NovelReaderSettingsPolicy.deleteCustomTheme(
+                themes = existing,
+                theme = value,
+            )
+            prefs[keys.CUSTOM_THEMES] = encodeCustomThemes(next)
         }
     }
 
     suspend fun renameCustomTheme(old: CustomReaderTheme, newName: String) {
         dataStore.edit { prefs ->
-            val existing = decodeCustomThemes(prefs[keys.customThemes])
-            val next = existing.map {
-                if (it == old) it.copy(name = newName) else it
-            }
-            prefs[keys.customThemes] = encodeCustomThemes(next)
+            val existing = decodeCustomThemes(prefs[keys.CUSTOM_THEMES])
+            val next = NovelReaderSettingsPolicy.renameCustomTheme(
+                themes = existing,
+                theme = old,
+                newName = newName,
+            )
+            prefs[keys.CUSTOM_THEMES] = encodeCustomThemes(next)
         }
     }
 
@@ -517,44 +501,44 @@ class NovelReaderSettings(private val context: Context, private val namespace: S
 
     @Suppress("PropertyName", "ktlint:standard:property-naming")
     private inner class PreferencesKeys {
-        val THEME = stringKey("theme")
-        val SYSTEM_LIGHT_SEPIA = booleanKey("system_light_sepia")
-        val UI_THEME = stringKey("ui_theme")
-        val CUSTOM_BACKGROUND_COLOR = intKey("custom_background_color")
-        val CUSTOM_TEXT_COLOR = intKey("custom_text_color")
-        val customThemes = stringKey("custom_themes")
-        val CUSTOM_INFO_COLOR = intKey("custom_info_color")
-        val VERTICAL_WRITING = booleanKey("vertical_writing")
-        val SELECTED_FONT = stringKey("selected_font")
-        val FONT_SIZE = doubleKey("font_size")
-        val READER_HIDE_FURIGANA = booleanKey("reader_hide_furigana")
-        val CONTINUOUS_MODE = booleanKey("continuous_mode")
-        val CHAPTER_SWIPE_DISTANCE = intKey("chapter_swipe_distance")
-        val CHAPTER_TAP_ZONES = intKey("chapter_tap_zones")
-        val HORIZONTAL_PADDING = doubleKey("horizontal_padding")
-        val VERTICAL_PADDING = doubleKey("vertical_padding")
-        val AVOID_PAGE_BREAK = booleanKey("avoid_page_break")
-        val JUSTIFY_TEXT = booleanKey("justify_text")
-        val LAYOUT_ADVANCED = booleanKey("layout_advanced")
-        val LINE_HEIGHT = doubleKey("line_height")
-        val CHARACTER_SPACING = doubleKey("character_spacing")
-        val PARAGRAPH_SPACING = doubleKey("paragraph_spacing")
-        val READER_SHOW_TITLE = booleanKey("reader_show_title")
-        val READER_SHOW_CHARACTERS = booleanKey("reader_show_characters")
-        val READER_SHOW_PERCENTAGE = booleanKey("reader_show_percentage")
-        val READER_SHOW_PROGRESS_TOP = booleanKey("reader_show_progress_top")
-        val ENABLE_STATISTICS = booleanKey("enable_statistics")
-        val STATISTICS_AUTOSTART_MODE = stringKey("statistics_autostart_mode")
-        val READER_SHOW_READING_SPEED = booleanKey("reader_show_reading_speed")
-        val READER_SHOW_READING_TIME = booleanKey("reader_show_reading_time")
-        val POPUP_WIDTH = intKey("popup_width")
-        val POPUP_HEIGHT = intKey("popup_height")
-        val POPUP_FULL_WIDTH = booleanKey("popup_full_width")
-        val POPUP_SWIPE_TO_DISMISS = booleanKey("popup_swipe_to_dismiss")
-        val POPUP_SWIPE_THRESHOLD = intKey("popup_swipe_threshold")
-        val MAX_RESULTS = intKey("max_results")
-        val SCAN_LENGTH = intKey("scan_length")
-        val KEEP_SCREEN_ON = booleanKey("keep_screen_on")
+        val THEME = stringKey(NovelReaderPreferenceKeys.THEME)
+        val SYSTEM_LIGHT_SEPIA = booleanKey(NovelReaderPreferenceKeys.SYSTEM_LIGHT_SEPIA)
+        val UI_THEME = stringKey(NovelReaderPreferenceKeys.UI_THEME)
+        val CUSTOM_BACKGROUND_COLOR = intKey(NovelReaderPreferenceKeys.CUSTOM_BACKGROUND_COLOR)
+        val CUSTOM_TEXT_COLOR = intKey(NovelReaderPreferenceKeys.CUSTOM_TEXT_COLOR)
+        val CUSTOM_THEMES = stringKey(NovelReaderPreferenceKeys.CUSTOM_THEMES)
+        val CUSTOM_INFO_COLOR = intKey(NovelReaderPreferenceKeys.CUSTOM_INFO_COLOR)
+        val VERTICAL_WRITING = booleanKey(NovelReaderPreferenceKeys.VERTICAL_WRITING)
+        val SELECTED_FONT = stringKey(NovelReaderPreferenceKeys.SELECTED_FONT)
+        val FONT_SIZE = doubleKey(NovelReaderPreferenceKeys.FONT_SIZE)
+        val READER_HIDE_FURIGANA = booleanKey(NovelReaderPreferenceKeys.READER_HIDE_FURIGANA)
+        val CONTINUOUS_MODE = booleanKey(NovelReaderPreferenceKeys.CONTINUOUS_MODE)
+        val CHAPTER_SWIPE_DISTANCE = intKey(NovelReaderPreferenceKeys.CHAPTER_SWIPE_DISTANCE)
+        val CHAPTER_TAP_ZONES = intKey(NovelReaderPreferenceKeys.CHAPTER_TAP_ZONES)
+        val HORIZONTAL_PADDING = doubleKey(NovelReaderPreferenceKeys.HORIZONTAL_PADDING)
+        val VERTICAL_PADDING = doubleKey(NovelReaderPreferenceKeys.VERTICAL_PADDING)
+        val AVOID_PAGE_BREAK = booleanKey(NovelReaderPreferenceKeys.AVOID_PAGE_BREAK)
+        val JUSTIFY_TEXT = booleanKey(NovelReaderPreferenceKeys.JUSTIFY_TEXT)
+        val LAYOUT_ADVANCED = booleanKey(NovelReaderPreferenceKeys.LAYOUT_ADVANCED)
+        val LINE_HEIGHT = doubleKey(NovelReaderPreferenceKeys.LINE_HEIGHT)
+        val CHARACTER_SPACING = doubleKey(NovelReaderPreferenceKeys.CHARACTER_SPACING)
+        val PARAGRAPH_SPACING = doubleKey(NovelReaderPreferenceKeys.PARAGRAPH_SPACING)
+        val READER_SHOW_TITLE = booleanKey(NovelReaderPreferenceKeys.READER_SHOW_TITLE)
+        val READER_SHOW_CHARACTERS = booleanKey(NovelReaderPreferenceKeys.READER_SHOW_CHARACTERS)
+        val READER_SHOW_PERCENTAGE = booleanKey(NovelReaderPreferenceKeys.READER_SHOW_PERCENTAGE)
+        val READER_SHOW_PROGRESS_TOP = booleanKey(NovelReaderPreferenceKeys.READER_SHOW_PROGRESS_TOP)
+        val ENABLE_STATISTICS = booleanKey(NovelReaderPreferenceKeys.ENABLE_STATISTICS)
+        val STATISTICS_AUTOSTART_MODE = stringKey(NovelReaderPreferenceKeys.STATISTICS_AUTOSTART_MODE)
+        val READER_SHOW_READING_SPEED = booleanKey(NovelReaderPreferenceKeys.READER_SHOW_READING_SPEED)
+        val READER_SHOW_READING_TIME = booleanKey(NovelReaderPreferenceKeys.READER_SHOW_READING_TIME)
+        val POPUP_WIDTH = intKey(NovelReaderPreferenceKeys.POPUP_WIDTH)
+        val POPUP_HEIGHT = intKey(NovelReaderPreferenceKeys.POPUP_HEIGHT)
+        val POPUP_FULL_WIDTH = booleanKey(NovelReaderPreferenceKeys.POPUP_FULL_WIDTH)
+        val POPUP_SWIPE_TO_DISMISS = booleanKey(NovelReaderPreferenceKeys.POPUP_SWIPE_TO_DISMISS)
+        val POPUP_SWIPE_THRESHOLD = intKey(NovelReaderPreferenceKeys.POPUP_SWIPE_THRESHOLD)
+        val MAX_RESULTS = intKey(NovelReaderPreferenceKeys.MAX_RESULTS)
+        val SCAN_LENGTH = intKey(NovelReaderPreferenceKeys.SCAN_LENGTH)
+        val KEEP_SCREEN_ON = booleanKey(NovelReaderPreferenceKeys.KEEP_SCREEN_ON)
     }
 
     private val keys = PreferencesKeys()

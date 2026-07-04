@@ -4,6 +4,7 @@ import com.canopus.chimareader.data.epub.EpubBook
 import com.canopus.chimareader.data.epub.EpubParseException
 import com.canopus.chimareader.data.epub.EpubParser
 import kotlinx.serialization.json.Json
+import tachiyomi.domain.library.service.NovelBookIdentityPolicy
 import java.io.File
 
 object BookStorage {
@@ -109,34 +110,24 @@ object BookStorage {
         val booksDir = getBooksDirectory(context)
         if (!booksDir.exists()) return emptyList()
 
-        return loadStoredBookDirs(booksDir)
-            .groupBy { bookIdentityKey(it.metadata) }
-            .map { (_, dupes) ->
-                if (dupes.size == 1) {
-                    dupes.first().metadata
-                } else {
-                    dupes.minWith(
-                        compareBy<StoredBookDir>(
-                            { it.metadata.isGhost },
-                            { !hasImportedBookContent(it.directory) },
-                            { it.directory.name != bookIdentityKey(it.metadata) },
-                            { -it.metadata.lastAccess },
-                        ),
-                    ).metadata
-                }
-            }
+        return NovelBookIdentityPolicy.deduplicateByIdentity(
+            books = loadStoredBookDirs(booksDir),
+            identityKey = { bookIdentityKey(it.metadata) },
+            isGhost = { it.metadata.isGhost },
+            hasImportedContent = { hasImportedBookContent(it.directory) },
+            folderName = { it.directory.name },
+            lastAccess = { it.metadata.lastAccess },
+        ).map { it.metadata }
     }
 
     fun bookIdentityKey(metadata: BookMetadata): String {
-        val titleKey = metadata.title?.trim()?.lowercase().orEmpty()
-        val authorKey = metadata.author?.trim()?.lowercase().orEmpty()
-        if (titleKey.isNotEmpty() || authorKey.isNotEmpty()) {
-            return md5Hex("$titleKey|$authorKey")
-        }
-
-        metadata.hash?.takeIf { it.isNotBlank() }?.let { return it }
-
-        return metadata.id
+        return NovelBookIdentityPolicy.identityKey(
+            title = metadata.title,
+            author = metadata.author,
+            storedHash = metadata.hash,
+            fallbackId = metadata.id,
+            hashIdentity = ::md5Hex,
+        )
     }
 
     fun hasImportedBookContent(directory: File): Boolean {

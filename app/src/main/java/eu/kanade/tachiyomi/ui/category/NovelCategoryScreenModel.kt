@@ -14,6 +14,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import tachiyomi.domain.library.service.NovelCategoryPolicy
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -57,12 +58,11 @@ class NovelCategoryScreenModel(
             val allBooks = BookStorage.loadAllBooks(app)
             allBooks.filter { it.categoryIds.contains(category.id) }.forEach { book ->
                 val bookDir = BookStorage.getBookDirectory(app, book.id)
-                val remainingIds = book.categoryIds - category.id
-                val updatedCategories = if (remainingIds.isEmpty()) {
-                    listOf(NovelCategory.UNCATEGORIZED_ID)
-                } else {
-                    remainingIds
-                }
+                val updatedCategories = NovelCategoryPolicy.removeCategoryId(
+                    categoryIds = book.categoryIds,
+                    categoryId = category.id,
+                    uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+                )
                 BookStorage.saveMetadata(book.copy(categoryIds = updatedCategories), bookDir)
             }
             categoryStorage.deleteCategory(category.id)
@@ -85,17 +85,16 @@ class NovelCategoryScreenModel(
     fun reorderCategory(category: NovelCategory, newIndex: Int) {
         screenModelScope.launch {
             val categories = categoryStorage.loadAllCategories()
-            val systemCategories = categories.filter { it.isSystemCategory }
-            val userCategories = categories.filterNot { it.isSystemCategory }.toMutableList()
-            val oldIndex = userCategories.indexOfFirst { it.id == category.id }
-            if (oldIndex != -1) {
-                val item = userCategories.removeAt(oldIndex)
-                userCategories.add(newIndex.coerceIn(0, userCategories.size), item)
-                val reorderedUserCategories = userCategories.mapIndexed { index, cat ->
-                    cat.copy(order = index)
-                }
-                val reorderedSystemCategories = systemCategories.map { it.copy(order = -1) }
-                categoryStorage.saveCategories(reorderedSystemCategories + reorderedUserCategories)
+            val reorderedCategories = NovelCategoryPolicy.reorderUserCategories(
+                categories = categories,
+                targetCategoryId = category.id,
+                newIndex = newIndex,
+                categoryId = NovelCategory::id,
+                isSystemCategory = NovelCategory::isSystemCategory,
+                withOrder = { item, order -> item.copy(order = order) },
+            )
+            if (reorderedCategories != categories) {
+                categoryStorage.saveCategories(reorderedCategories)
                 loadCategories()
             }
         }

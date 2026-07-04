@@ -14,10 +14,14 @@ import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSavedSearch
 import eu.kanade.tachiyomi.data.backup.models.BackupSource
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
+import eu.kanade.tachiyomi.data.backup.models.BackupStatEntry
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import logcat.logcat
+import tachiyomi.domain.library.service.NovelBookIdentityPolicy
+import tachiyomi.domain.library.service.NovelBookMergePolicy
+import tachiyomi.domain.library.service.NovelCategoryPolicy
 
 @Serializable
 data class SyncData(
@@ -557,46 +561,36 @@ abstract class SyncService(
         val localNovelsSafe = localNovelList.orEmpty()
         val remoteNovelsSafe = remoteNovelList.orEmpty()
 
-        val localCategoriesById = localCategories.associateBy { it.id }
-        val remoteCategoriesById = remoteCategories.associateBy { it.id }
-        val mergedCategoriesById = mergedCategories.associateBy { it.id }
-        val mergedCategoriesByName = mergedCategories.associateBy { categoryKey(it.name) }
-
-        fun updateCategories(novel: BackupNovel, sourceCategoriesById: Map<String, BackupNovelCategory>): BackupNovel {
-            val categoryIds = novel.categoryIds.mapNotNull { categoryId ->
-                when (categoryId) {
-                    NovelCategory.UNCATEGORIZED_ID -> NovelCategory.UNCATEGORIZED_ID
-                    else -> {
-                        val sourceCategory = sourceCategoriesById[categoryId]
-                        val mergedCategoryByName = sourceCategory?.let {
-                            mergedCategoriesByName[categoryKey(it.name)]
-                        }
-
-                        mergedCategoryByName?.id ?: mergedCategoriesById[categoryId]?.id
-                    }
-                }
-            }
-
+        fun updateCategories(novel: BackupNovel, sourceCategories: List<BackupNovelCategory>): BackupNovel {
             return novel.copy(
                 id = stableNovelId(novel),
-                categoryIds = normalizeNovelCategoryIds(categoryIds),
+                categoryIds = NovelCategoryPolicy.remapCategoryIdsToMergedCategories(
+                    categoryIds = novel.categoryIds,
+                    sourceCategories = sourceCategories,
+                    mergedCategories = mergedCategories,
+                    uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+                    sourceCategoryId = BackupNovelCategory::id,
+                    sourceCategoryName = BackupNovelCategory::name,
+                    mergedCategoryId = BackupNovelCategory::id,
+                    mergedCategoryName = BackupNovelCategory::name,
+                ),
             )
         }
 
         fun canonicalNovelMap(
             novels: List<BackupNovel>,
-            sourceCategoriesById: Map<String, BackupNovelCategory>,
+            sourceCategories: List<BackupNovelCategory>,
         ): Map<String, BackupNovel> {
             return novels
-                .map { updateCategories(it, sourceCategoriesById) }
+                .map { updateCategories(it, sourceCategories) }
                 .groupBy { stableNovelId(it) }
                 .mapValues { (_, duplicates) ->
                     duplicates.reduce { first, second -> mergeNovelData(first, second) }
                 }
         }
 
-        val localNovelMap = canonicalNovelMap(localNovelsSafe, localCategoriesById)
-        val remoteNovelMap = canonicalNovelMap(remoteNovelsSafe, remoteCategoriesById)
+        val localNovelMap = canonicalNovelMap(localNovelsSafe, localCategories)
+        val remoteNovelMap = canonicalNovelMap(remoteNovelsSafe, remoteCategories)
 
         val mergedList = (localNovelMap.keys + remoteNovelMap.keys).distinct().mapNotNull { id ->
             val local = localNovelMap[id]
@@ -613,22 +607,21 @@ abstract class SyncService(
     }
 
     private fun mergeNovelData(first: BackupNovel, second: BackupNovel): BackupNovel {
-        val firstStatsMap = first.stats.associateBy { it.dateKey }
-        val secondStatsMap = second.stats.associateBy { it.dateKey }
-        val mergedStats = (firstStatsMap.keys + secondStatsMap.keys).distinct().mapNotNull { dateKey ->
-            val firstStat = firstStatsMap[dateKey]
-            val secondStat = secondStatsMap[dateKey]
-            when {
-                firstStat != null && secondStat == null -> firstStat
-                firstStat == null && secondStat != null -> secondStat
-                firstStat != null && secondStat != null -> {
-                    if (firstStat.lastStatisticModified >= secondStat.lastStatisticModified) firstStat else secondStat
-                }
-                else -> null
-            }
-        }
-        val mergedCategoryIds = normalizeNovelCategoryIds(first.categoryIds + second.categoryIds)
-        val latest = if (first.lastModified >= second.lastModified) first else second
+        val mergedStats = NovelBookMergePolicy.mergeLatestByKey(
+            items = first.stats + second.stats,
+            itemKey = BackupStatEntry::dateKey,
+            lastModified = BackupStatEntry::lastStatisticModified,
+        )
+        val mergedCategoryIds = NovelBookMergePolicy.mergeCategoryIds(
+            currentCategoryIds = first.categoryIds,
+            incomingCategoryIds = second.categoryIds,
+            uncategorizedCategoryId = NovelCategory.UNCATEGORIZED_ID,
+        )
+        val latest = NovelBookMergePolicy.selectLatest(
+            current = first,
+            incoming = second,
+            lastModified = BackupNovel::lastModified,
+        )
 
         return latest.copy(
             id = stableNovelId(latest),
@@ -641,50 +634,23 @@ abstract class SyncService(
         localCategories: List<BackupNovelCategory>?,
         remoteCategories: List<BackupNovelCategory>?,
     ): List<BackupNovelCategory> {
-        val categories = localCategories.orEmpty() + remoteCategories.orEmpty()
-        if (categories.isEmpty()) return emptyList()
-
-        val merged = mutableListOf<BackupNovelCategory>()
-
-        categories.forEach { cat ->
-            val existingIndex = merged.indexOfFirst {
-                it.id == cat.id || categoryKey(it.name) == categoryKey(cat.name)
-            }
-
-            if (existingIndex == -1) {
-                merged.add(cat)
-            } else if (cat.order > merged[existingIndex].order) {
-                merged[existingIndex] = cat
-            }
-        }
-
-        return merged
+        return NovelCategoryPolicy.mergeCategoriesByIdentity(
+            categories = localCategories.orEmpty() + remoteCategories.orEmpty(),
+            categoryId = BackupNovelCategory::id,
+            categoryName = BackupNovelCategory::name,
+            categoryOrder = BackupNovelCategory::order,
+        )
     }
 
     private fun stableNovelId(novel: BackupNovel): String {
-        val title = novel.title.trim().lowercase()
-        val author = novel.author?.trim()?.lowercase().orEmpty()
-        return if (title.isNotEmpty() || author.isNotEmpty()) {
-            md5Hex("$title|$author")
-        } else {
-            novel.id
-        }
+        return NovelBookIdentityPolicy.identityKey(
+            title = novel.title,
+            author = novel.author,
+            storedHash = null,
+            fallbackId = novel.id,
+            hashIdentity = ::md5Hex,
+        )
     }
 
-    private fun normalizeNovelCategoryIds(categoryIds: List<String>): List<String> {
-        val distinctIds = categoryIds
-            .filter { it.isNotBlank() }
-            .distinct()
-
-        return if (distinctIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
-            distinctIds.filterNot { it == NovelCategory.UNCATEGORIZED_ID }
-        } else {
-            distinctIds
-        }
-    }
-
-    private fun categoryKey(name: String): String {
-        return name.trim().lowercase()
-    }
     // Chimahon <--
 }
