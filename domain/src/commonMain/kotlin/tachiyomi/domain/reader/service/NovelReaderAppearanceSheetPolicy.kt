@@ -197,6 +197,13 @@ object NovelReaderAppearanceSheetPolicy {
         val steps: Int,
     )
 
+    data class SliderControlState(
+        val label: String,
+        val value: Double,
+        val valueText: String,
+        val spec: SliderSpec,
+    )
+
     val fixedThemeOptions = listOf(
         ThemeOption(
             theme = NovelReaderTheme.SYSTEM,
@@ -390,6 +397,51 @@ object NovelReaderAppearanceSheetPolicy {
         return SwitchControlState(
             label = JUSTIFY_TEXT_LABEL,
             checked = justifyText,
+        )
+    }
+
+    fun fontSizeSliderState(fontSize: Double): SliderControlState {
+        return SliderControlState(
+            label = FONT_SIZE_LABEL,
+            value = fontSize,
+            valueText = fontSizeLabel(fontSize),
+            spec = fontSizeSliderSpec,
+        )
+    }
+
+    fun lineHeightSliderState(lineHeight: Double): SliderControlState {
+        return SliderControlState(
+            label = LINE_HEIGHT_LABEL,
+            value = lineHeight,
+            valueText = lineHeightLabel(lineHeight),
+            spec = lineHeightSliderSpec,
+        )
+    }
+
+    fun horizontalPaddingSliderState(horizontalPadding: Double): SliderControlState {
+        return SliderControlState(
+            label = HORIZONTAL_PADDING_LABEL,
+            value = horizontalPadding,
+            valueText = paddingPercentLabel(horizontalPadding),
+            spec = paddingSliderSpec,
+        )
+    }
+
+    fun verticalPaddingSliderState(verticalPadding: Double): SliderControlState {
+        return SliderControlState(
+            label = VERTICAL_PADDING_LABEL,
+            value = verticalPadding,
+            valueText = paddingPercentLabel(verticalPadding),
+            spec = paddingSliderSpec,
+        )
+    }
+
+    fun tapZoneSliderState(tapZonePercent: Int): SliderControlState {
+        return SliderControlState(
+            label = TAP_ZONE_SIZE_LABEL,
+            value = tapZonePercent.toDouble(),
+            valueText = tapZonePercentLabel(tapZonePercent),
+            spec = tapZoneSliderSpec,
         )
     }
 

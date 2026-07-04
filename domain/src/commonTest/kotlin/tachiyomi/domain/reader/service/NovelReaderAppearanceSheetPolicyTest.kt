@@ -509,6 +509,55 @@ class NovelReaderAppearanceSheetPolicyTest {
     }
 
     @Test
+    fun primarySliderStatesExposeLabelsValuesAndSpecs() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.FONT_SIZE_LABEL,
+                value = 18.5,
+                valueText = "18.5px",
+                spec = NovelReaderAppearanceSheetPolicy.fontSizeSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.fontSizeSliderState(fontSize = 18.5),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.LINE_HEIGHT_LABEL,
+                value = 1.6,
+                valueText = "1.60",
+                spec = NovelReaderAppearanceSheetPolicy.lineHeightSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.lineHeightSliderState(lineHeight = 1.6),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_PADDING_LABEL,
+                value = 10.5,
+                valueText = "10.5%",
+                spec = NovelReaderAppearanceSheetPolicy.paddingSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.horizontalPaddingSliderState(horizontalPadding = 10.5),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.VERTICAL_PADDING_LABEL,
+                value = 10.0,
+                valueText = "10%",
+                spec = NovelReaderAppearanceSheetPolicy.paddingSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.verticalPaddingSliderState(verticalPadding = 10.0),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.TAP_ZONE_SIZE_LABEL,
+                value = 25.0,
+                valueText = "25%",
+                spec = NovelReaderAppearanceSheetPolicy.tapZoneSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.tapZoneSliderState(tapZonePercent = 25),
+        )
+    }
+
+    @Test
     fun valueLabelsAndSnappingMatchSheetControls() {
         assertEquals("18px", NovelReaderAppearanceSheetPolicy.fontSizeLabel(18.0))
         assertEquals("18.5px", NovelReaderAppearanceSheetPolicy.fontSizeLabel(18.5))

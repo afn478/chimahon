@@ -360,53 +360,53 @@ fun AppearanceSheet(
 
                 // Font Size
                 Column {
-                    val sliderSpec = NovelReaderAppearanceSheetPolicy.fontSizeSliderSpec
+                    val sliderState = NovelReaderAppearanceSheetPolicy.fontSizeSliderState(viewModel.fontSize)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            NovelReaderAppearanceSheetPolicy.FONT_SIZE_LABEL,
+                            sliderState.label,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            NovelReaderAppearanceSheetPolicy.fontSizeLabel(viewModel.fontSize),
+                            sliderState.valueText,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                     Slider(
-                        value = viewModel.fontSize.toFloat(),
+                        value = sliderState.value.toFloat(),
                         onValueChange = {
                             viewModel.updateFontSize(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
                         },
-                        valueRange = sliderSpec.toFloatRange(),
-                        steps = sliderSpec.steps,
+                        valueRange = sliderState.spec.toFloatRange(),
+                        steps = sliderState.spec.steps,
                     )
                 }
 
                 // Line Height
                 Column {
-                    val sliderSpec = NovelReaderAppearanceSheetPolicy.lineHeightSliderSpec
+                    val sliderState = NovelReaderAppearanceSheetPolicy.lineHeightSliderState(viewModel.lineHeight)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            NovelReaderAppearanceSheetPolicy.LINE_HEIGHT_LABEL,
+                            sliderState.label,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            NovelReaderAppearanceSheetPolicy.lineHeightLabel(viewModel.lineHeight),
+                            sliderState.valueText,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                     Slider(
-                        value = viewModel.lineHeight.toFloat(),
+                        value = sliderState.value.toFloat(),
                         onValueChange = {
                             viewModel.updateLineHeight(NovelReaderAppearanceSheetPolicy.snapTwentieth(it.toDouble()))
                         },
-                        valueRange = sliderSpec.toFloatRange(),
-                        steps = sliderSpec.steps,
+                        valueRange = sliderState.spec.toFloatRange(),
+                        steps = sliderState.spec.steps,
                     )
                 }
 
@@ -458,52 +458,56 @@ fun AppearanceSheet(
                 )
 
                 Column {
-                    val sliderSpec = NovelReaderAppearanceSheetPolicy.paddingSliderSpec
+                    val sliderState = NovelReaderAppearanceSheetPolicy.horizontalPaddingSliderState(
+                        viewModel.horizontalPadding,
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            NovelReaderAppearanceSheetPolicy.HORIZONTAL_PADDING_LABEL,
+                            sliderState.label,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            NovelReaderAppearanceSheetPolicy.paddingPercentLabel(viewModel.horizontalPadding),
+                            sliderState.valueText,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                     Slider(
-                        value = viewModel.horizontalPadding.toFloat(),
+                        value = sliderState.value.toFloat(),
                         onValueChange = {
                             viewModel.updateHorizontalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
                         },
-                        valueRange = sliderSpec.toFloatRange(),
-                        steps = sliderSpec.steps,
+                        valueRange = sliderState.spec.toFloatRange(),
+                        steps = sliderState.spec.steps,
                     )
                 }
 
                 Column {
-                    val sliderSpec = NovelReaderAppearanceSheetPolicy.paddingSliderSpec
+                    val sliderState = NovelReaderAppearanceSheetPolicy.verticalPaddingSliderState(
+                        viewModel.verticalPadding,
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            NovelReaderAppearanceSheetPolicy.VERTICAL_PADDING_LABEL,
+                            sliderState.label,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            NovelReaderAppearanceSheetPolicy.paddingPercentLabel(viewModel.verticalPadding),
+                            sliderState.valueText,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                     Slider(
-                        value = viewModel.verticalPadding.toFloat(),
+                        value = sliderState.value.toFloat(),
                         onValueChange = {
                             viewModel.updateVerticalPadding(NovelReaderAppearanceSheetPolicy.snapHalf(it.toDouble()))
                         },
-                        valueRange = sliderSpec.toFloatRange(),
-                        steps = sliderSpec.steps,
+                        valueRange = sliderState.spec.toFloatRange(),
+                        steps = sliderState.spec.steps,
                     )
                 }
             }
@@ -543,27 +547,27 @@ fun AppearanceSheet(
 
                 // Tap Zone Size
                 Column {
-                    val sliderSpec = NovelReaderAppearanceSheetPolicy.tapZoneSliderSpec
+                    val sliderState = NovelReaderAppearanceSheetPolicy.tapZoneSliderState(viewModel.tapZonePercent)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            NovelReaderAppearanceSheetPolicy.TAP_ZONE_SIZE_LABEL,
+                            sliderState.label,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            NovelReaderAppearanceSheetPolicy.tapZonePercentLabel(viewModel.tapZonePercent),
+                            sliderState.valueText,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                     Slider(
-                        value = viewModel.tapZonePercent.toFloat(),
+                        value = sliderState.value.toFloat(),
                         onValueChange = {
                             viewModel.updateTapZonePercent(NovelReaderAppearanceSheetPolicy.snapWhole(it.toDouble()))
                         },
-                        valueRange = sliderSpec.toFloatRange(),
-                        steps = sliderSpec.steps,
+                        valueRange = sliderState.spec.toFloatRange(),
+                        steps = sliderState.spec.steps,
                     )
                 }
 
