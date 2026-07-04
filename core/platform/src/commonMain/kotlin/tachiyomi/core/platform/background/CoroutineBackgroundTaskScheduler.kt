@@ -34,7 +34,7 @@ class CoroutineBackgroundTaskScheduler(
         enqueue(
             uniqueName = task.uniqueName,
             policy = task.policy,
-            tags = task.tags + task.uniqueName,
+            tags = task.taskTags(),
         ) { id ->
             runTask(
                 task = task,
@@ -42,6 +42,7 @@ class CoroutineBackgroundTaskScheduler(
                 id = id,
                 periodic = task.cadence is BackgroundTaskCadence.Periodic,
                 markSuccess = true,
+                runningTags = task.taskTags(),
             )
         }
     }
@@ -51,10 +52,18 @@ class CoroutineBackgroundTaskScheduler(
         enqueue(
             uniqueName = chain.uniqueName,
             policy = chain.policy,
-            tags = chain.tasks.flatMapTo(mutableSetOf(chain.uniqueName)) { it.tags },
+            tags = chain.scheduledTags(),
         ) { id ->
             for (task in chain.tasks) {
-                if (!runTask(task, chain.uniqueName, id, periodic = false, markSuccess = false)) {
+                val completed = runTask(
+                    task = task,
+                    trackingName = chain.uniqueName,
+                    id = id,
+                    periodic = false,
+                    markSuccess = false,
+                    runningTags = task.chainTaskTags(chain.uniqueName),
+                )
+                if (!completed) {
                     return@enqueue
                 }
             }
@@ -144,6 +153,7 @@ class CoroutineBackgroundTaskScheduler(
         id: String,
         periodic: Boolean,
         markSuccess: Boolean,
+        runningTags: Set<String>,
     ): Boolean {
         if (task.initialDelay > Duration.ZERO) {
             delay(task.initialDelay)
@@ -153,7 +163,7 @@ class CoroutineBackgroundTaskScheduler(
             var attempt = 0
             while (true) {
                 constraintMonitor.awaitConstraints(task.constraints)
-                updateState(trackingName, id, BackgroundTaskState.Running)
+                updateState(trackingName, id, BackgroundTaskState.Running, runningTags)
 
                 val result = try {
                     workerRegistry.requireWorker(task.workerKey).run(task.inputData)
@@ -188,13 +198,24 @@ class CoroutineBackgroundTaskScheduler(
         } while (true)
     }
 
-    private fun updateState(uniqueName: String, id: String, state: BackgroundTaskState) {
+    private fun updateState(
+        uniqueName: String,
+        id: String,
+        state: BackgroundTaskState,
+        tags: Set<String>? = null,
+    ) {
         work.update { scheduled ->
             val current = scheduled[uniqueName]
             if (current == null || current.info.id != id) {
                 scheduled
             } else {
-                scheduled + (uniqueName to current.copy(info = current.info.copy(state = state)))
+                val updated = current.copy(
+                    info = current.info.copy(
+                        state = state,
+                        tags = tags ?: current.info.tags,
+                    )
+                )
+                scheduled + (uniqueName to updated)
             }
         }
     }
@@ -214,4 +235,16 @@ class CoroutineBackgroundTaskScheduler(
 
 private fun BackgroundWorkerRegistry.requireWorker(workerKey: String): BackgroundWorker {
     return worker(workerKey) ?: throw MissingBackgroundWorkerException(workerKey)
+}
+
+private fun BackgroundTask.taskTags(): Set<String> {
+    return tags + uniqueName
+}
+
+private fun BackgroundTask.chainTaskTags(chainUniqueName: String): Set<String> {
+    return taskTags() + chainUniqueName
+}
+
+private fun BackgroundTaskChain.scheduledTags(): Set<String> {
+    return tasks.flatMapTo(mutableSetOf(uniqueName)) { task -> task.taskTags() }
 }

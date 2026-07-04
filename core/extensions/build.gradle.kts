@@ -32,6 +32,13 @@ kotlin {
                 runtimeOnly(libs.junit.platform.launcher)
             }
         }
+        val iosTest by getting {
+            dependencies {
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.coroutines.core)
+                implementation(kotlin("test"))
+            }
+        }
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)

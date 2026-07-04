@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.SourceRegistry
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.online.ScriptHttpSource
+import eu.kanade.tachiyomi.source.online.resolveScriptSourceUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,6 +56,7 @@ internal actual class ChimahonPlatformServices actual constructor() {
 
     actual fun resolveExternalMangaUrl(source: CatalogueSource, manga: SManga): String? {
         return when (source) {
+            is ScriptHttpSource -> resolveScriptSourceUrl(source.baseUrl, manga.safeSourceUrl())
             is HttpSource -> runCatching { source.getMangaUrl(manga) }.getOrNull()
             else -> manga.url
         }

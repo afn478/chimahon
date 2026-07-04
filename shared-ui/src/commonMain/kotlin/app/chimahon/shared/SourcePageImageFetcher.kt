@@ -97,8 +97,9 @@ internal class SourcePageImageFetcher(
     ): ByteArray {
         try {
             val bytes = loadAndValidate(source, page, options)
+            val loadedKey = CacheKey.from(source, page, options)
             mutex.withLock {
-                putCacheEntry(key, bytes)
+                putCacheEntry(loadedKey, bytes)
             }
             result.complete(bytes.copyOf())
             return bytes.copyOf()
@@ -136,15 +137,7 @@ internal class SourcePageImageFetcher(
             )
         }
 
-        if (bytes.isEmpty()) {
-            throw SourceImageFetchException(
-                failure = SourceImageFetchFailure.EMPTY_RESPONSE,
-                sourceId = source.id,
-                sourceName = source.name,
-                pageIndex = page.index,
-            )
-        }
-        return bytes
+        return validateLoadedSourcePageImage(source, page, bytes)
     }
 
     private fun putCacheEntry(key: CacheKey, bytes: ByteArray) {

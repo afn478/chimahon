@@ -191,6 +191,69 @@ class CoroutineBackgroundTaskSchedulerTest {
     }
 
     @Test
+    fun `chain reports the currently running task tags`() = runTest {
+        val releasePrepare = CompletableDeferred<Unit>()
+        val releaseUpdate = CompletableDeferred<Unit>()
+        val scheduler = CoroutineBackgroundTaskScheduler(
+            workerRegistry = BackgroundWorkerRegistry { key ->
+                when (key) {
+                    "prepare" -> BackgroundWorker {
+                        releasePrepare.await()
+                        BackgroundTaskResult.Success
+                    }
+                    "update" -> BackgroundWorker {
+                        releaseUpdate.await()
+                        BackgroundTaskResult.Success
+                    }
+                    else -> null
+                }
+            },
+            scope = this,
+        )
+        val chain = BackgroundTaskChain(
+            uniqueName = "library-chain",
+            tasks = listOf(
+                task(
+                    uniqueName = "prepare-library",
+                    workerKey = "prepare",
+                    tags = setOf("library"),
+                ),
+                task(
+                    uniqueName = "update-library",
+                    workerKey = "update",
+                    tags = setOf("network"),
+                ),
+            ),
+        )
+
+        scheduler.schedule(chain)
+        runCurrent()
+
+        assertTrue(scheduler.isRunningWithTag(chain.uniqueName))
+        assertTrue(scheduler.isRunningWithTag("prepare-library"))
+        assertTrue(scheduler.isRunningWithTag("library"))
+        assertFalse(scheduler.isRunningWithTag("update-library"))
+        assertEquals(
+            chain.uniqueName,
+            scheduler.runningTasksWithTag("prepare-library").single().uniqueName,
+        )
+
+        releasePrepare.complete(Unit)
+        runCurrent()
+
+        assertTrue(scheduler.isRunningWithTag(chain.uniqueName))
+        assertFalse(scheduler.isRunningWithTag("prepare-library"))
+        assertTrue(scheduler.isRunningWithTag("update-library"))
+        assertTrue(scheduler.isRunningWithTag("network"))
+
+        releaseUpdate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(scheduler.isRunningWithTag(chain.uniqueName))
+        assertEquals(BackgroundTaskState.Succeeded, scheduler.taskInfo(chain.uniqueName)?.state)
+    }
+
+    @Test
     fun `periodic task repeats and can be cancelled`() = runTest {
         var executions = 0
         val scheduler = scheduler {

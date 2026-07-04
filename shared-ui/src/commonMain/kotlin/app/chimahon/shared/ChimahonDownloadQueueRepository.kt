@@ -261,8 +261,14 @@ internal class ChimahonDownloadQueueRepository(
     }
 
     private suspend fun loadEntriesUnlocked(): List<ChimahonDownloadQueueEntry> {
-        val entries = loadPersistedEntriesUnlocked()
-        if (activeDownloadsRecovered) return entries
+        val persisted = loadPersistedEntriesUnlocked()
+        val entries = persisted.entries
+        if (activeDownloadsRecovered) {
+            if (persisted.needsRepair) {
+                persistEntriesUnlocked(entries)
+            }
+            return entries
+        }
 
         activeDownloadsRecovered = true
         val recoveredEntries = entries.map { entry ->
@@ -272,20 +278,32 @@ internal class ChimahonDownloadQueueRepository(
                 entry
             }
         }
-        if (recoveredEntries != entries) {
+        if (persisted.needsRepair || recoveredEntries != entries) {
             persistEntriesUnlocked(recoveredEntries)
         }
         return recoveredEntries
     }
 
-    private suspend fun loadPersistedEntriesUnlocked(): List<ChimahonDownloadQueueEntry> {
-        val payload = settingsStore.readString(DOWNLOAD_QUEUE_KEY) ?: return emptyList()
+    private suspend fun loadPersistedEntriesUnlocked(): PersistedDownloadQueueEntries {
+        val payload = settingsStore.readString(DOWNLOAD_QUEUE_KEY)
+            ?: return PersistedDownloadQueueEntries(emptyList(), needsRepair = false)
         val array = runCatching { json.parseToJsonElement(payload) as? JsonArray }
             .getOrNull()
-            ?: return emptyList()
-        return array.mapNotNull { element ->
-            runCatching { element.jsonObject.toQueueEntry() }.getOrNull()
+            ?: return PersistedDownloadQueueEntries(emptyList(), needsRepair = true)
+        var droppedMalformedEntry = false
+        val decodedEntries = array.mapNotNull { element ->
+            runCatching { element.jsonObject.toQueueEntry() }
+                .onFailure { droppedMalformedEntry = true }
+                .getOrNull()
         }
+        val normalizedEntries = decodedEntries.map { entry -> entry.normalized() }
+        val repairedEntries = normalizedEntries.distinctBy(ChimahonDownloadQueueEntry::chapterId)
+        return PersistedDownloadQueueEntries(
+            entries = repairedEntries,
+            needsRepair = droppedMalformedEntry ||
+                decodedEntries != normalizedEntries ||
+                normalizedEntries.size != repairedEntries.size,
+        )
     }
 
     private suspend fun persistEntriesUnlocked(entries: List<ChimahonDownloadQueueEntry>) {
@@ -361,7 +379,7 @@ internal class ChimahonDownloadQueueRepository(
             totalBytes = this["totalBytes"]?.jsonPrimitive?.longOrNull,
             addedAt = this["addedAt"]?.jsonPrimitive?.longOrNull ?: 0L,
             errorMessage = string("errorMessage"),
-        ).normalized()
+        )
     }
 
     private fun JsonObject.requiredLong(key: String): Long {
@@ -382,3 +400,8 @@ internal class ChimahonDownloadQueueRepository(
             "__APP_STATE_individually_paused_downloads"
     }
 }
+
+private data class PersistedDownloadQueueEntries(
+    val entries: List<ChimahonDownloadQueueEntry>,
+    val needsRepair: Boolean,
+)

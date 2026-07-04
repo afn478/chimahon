@@ -3,6 +3,7 @@ package app.chimahon.shared
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.ScriptHttpSource
+import eu.kanade.tachiyomi.source.online.resolveScriptSourceUrl
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.headers
@@ -55,11 +56,13 @@ internal actual suspend fun loadSourcePageImage(
 
     page.status = Page.State.DownloadImage
     return try {
-        if (options.headers.isEmpty() && options.referer == null) {
+        val usesSourceOwnedRequest = options.headers.isEmpty() && options.referer == null
+        val bytes = if (usesSourceOwnedRequest) {
             scriptSource.getImageBytes(page)
         } else {
             val requestHeaders = options.effectiveHeaders()
-            val response = sourceImageHttpClient.request(imageUrl) {
+            val requestUrl = resolveScriptSourceUrl(scriptSource.baseUrl, imageUrl) ?: imageUrl
+            val response = sourceImageHttpClient.request(requestUrl) {
                 headers {
                     requestHeaders.forEach { (name, value) ->
                         append(name, value)
@@ -80,6 +83,7 @@ internal actual suspend fun loadSourcePageImage(
             }
             response.readRawBytes()
         }
+        validateLoadedSourcePageImage(source, page, bytes)
     } catch (error: CancellationException) {
         throw error
     } catch (error: SourceImageFetchException) {

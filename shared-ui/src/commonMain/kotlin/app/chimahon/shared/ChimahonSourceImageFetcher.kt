@@ -143,6 +143,22 @@ internal suspend fun sourcePageImageCacheStats(): SourceImageCacheStats {
     return sourcePageImageFetcher.stats()
 }
 
+internal fun validateLoadedSourcePageImage(
+    source: CatalogueSource,
+    page: Page,
+    bytes: ByteArray,
+): ByteArray {
+    if (bytes.isEmpty()) {
+        throw SourceImageFetchException(
+            failure = SourceImageFetchFailure.EMPTY_RESPONSE,
+            sourceId = source.id,
+            sourceName = source.name,
+            pageIndex = page.index,
+        )
+    }
+    return bytes
+}
+
 internal expect suspend fun loadSourcePageImage(
     source: CatalogueSource,
     page: Page,

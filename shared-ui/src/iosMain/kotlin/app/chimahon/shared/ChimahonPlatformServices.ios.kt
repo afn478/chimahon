@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.SourceRegistry
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ScriptHttpSource
+import eu.kanade.tachiyomi.source.online.resolveScriptSourceUrl
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +75,7 @@ internal actual class ChimahonPlatformServices actual constructor() {
     actual fun resolveExternalMangaUrl(source: CatalogueSource, manga: SManga): String? {
         val mangaUrl = manga.safeSourceUrl()
         return when (source) {
-            is ScriptHttpSource -> resolveScriptMangaUrl(source.baseUrl, mangaUrl)
+            is ScriptHttpSource -> resolveScriptSourceUrl(source.baseUrl, mangaUrl)
             else -> mangaUrl
         }
     }
@@ -88,40 +89,4 @@ internal actual class ChimahonPlatformServices actual constructor() {
         apkExtensionManager.close()
         databaseDriver.close()
     }
-}
-
-private fun resolveScriptMangaUrl(baseUrl: String, path: String): String? {
-    val candidate = path.trim()
-    if (candidate.isBlank()) return null
-    if (candidate.hasUrlScheme()) return candidate
-    if (candidate.startsWith("//")) return "https:$candidate"
-
-    val root = baseUrl.trimEnd('/')
-    if (root.isBlank()) return candidate
-    return if (candidate.startsWith("/")) {
-        val schemeSplit = root.indexOf("://")
-        if (schemeSplit == -1) {
-            "$root$candidate"
-        } else {
-            val hostStart = schemeSplit + 3
-            val hostEnd = root.indexOf('/', startIndex = hostStart).takeIf { it >= 0 } ?: root.length
-            root.take(hostEnd) + candidate
-        }
-    } else {
-        "$root/${candidate.trimStart('/')}"
-    }
-}
-
-private fun SManga.safeSourceUrl(): String {
-    return runCatching { url }
-        .getOrNull()
-        .orEmpty()
-}
-
-private fun String.hasUrlScheme(): Boolean {
-    val colon = indexOf(':')
-    if (colon <= 0) return false
-    val scheme = take(colon)
-    return scheme.first().isLetter() &&
-        scheme.all { it.isLetterOrDigit() || it == '+' || it == '-' || it == '.' }
 }

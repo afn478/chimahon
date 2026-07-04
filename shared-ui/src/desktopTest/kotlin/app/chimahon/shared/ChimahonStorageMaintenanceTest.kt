@@ -1,13 +1,33 @@
 package app.chimahon.shared
 
 import okio.FileSystem
+import okio.Path
 import okio.Path.Companion.toPath
+import tachiyomi.core.platform.storage.PlatformStorageDirectories
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ChimahonStorageMaintenanceTest {
+    @Test
+    fun ensureChimahonDirectoriesCreatesSharedStorageRoots() {
+        val root = Files.createTempDirectory("chimahon-storage-roots").toString().toPath()
+        val directories = TestPlatformStorageDirectories(root)
+
+        try {
+            directories.ensureChimahonDirectories()
+
+            assertDirectory(directories.filesDir)
+            assertDirectory(directories.filesDir / DATABASE_DIRECTORY)
+            assertDirectory(directories.cacheDir)
+            assertDirectory(directories.temporaryDir)
+            assertDirectory(directories.defaultDownloadsDir(APP_NAME))
+        } finally {
+            FileSystem.SYSTEM.deleteRecursively(root, mustExist = false)
+        }
+    }
+
     @Test
     fun clearDirectoryContentsPreservesRootAndRemovesDescendants() {
         val root = Files.createTempDirectory("chimahon-cache-maintenance")
@@ -40,5 +60,21 @@ class ChimahonStorageMaintenanceTest {
 
         assertEquals(1, result.failures.size)
         assertTrue(result.failures.single().reason.contains("filesystem root"))
+    }
+
+    private fun assertDirectory(path: Path) {
+        assertTrue(FileSystem.SYSTEM.metadata(path).isDirectory, "$path should be a directory")
+    }
+
+    private class TestPlatformStorageDirectories(
+        private val root: Path,
+    ) : PlatformStorageDirectories {
+        override val cacheDir: Path = root / "cache"
+        override val filesDir: Path = root / "files"
+        override val temporaryDir: Path = root / "tmp"
+
+        override fun defaultDownloadsDir(appName: String): Path = root / "downloads" / appName
+
+        override fun fileUri(path: Path): String = "file://$path"
     }
 }

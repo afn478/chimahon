@@ -24,6 +24,11 @@ kotlin {
                 api(libs.okio)
             }
         }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
         val androidMain by getting {
             dependencies {
                 implementation(androidx.workmanager)
@@ -44,6 +49,13 @@ kotlin {
                 implementation(kotlinx.coroutines.test)
                 implementation(libs.bundles.test)
                 runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+        val iosTest by getting {
+            dependencies {
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.coroutines.core)
+                implementation(kotlin("test"))
             }
         }
         val linuxTest by getting {

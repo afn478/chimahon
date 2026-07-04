@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -136,6 +137,29 @@ class ScriptHttpSource(
         )
     }
 
+    suspend fun getImageBytes(page: Page): ByteArray {
+        if (page.imageUrl.isNullOrBlank()) {
+            page.imageUrl = getImageUrl(page)
+        }
+        val arguments = buildJsonObject {
+            put("page", page.toScriptPage().toJson())
+        }
+        val request = try {
+            invoker.invoke(
+                extension = extension,
+                sourceId = id,
+                method = "imageRequest",
+                arguments = arguments,
+                deserializer = ScriptHttpRequest.serializer(),
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            ScriptHttpRequest(url = requireNotNull(page.imageUrl))
+        }
+        return executeBytes(request.resolveAgainst(baseUrl))
+    }
+
     override fun getFilterList(): FilterList = FilterList()
 
     private suspend fun <T> execute(
@@ -150,7 +174,7 @@ class ScriptHttpSource(
             arguments = arguments,
             deserializer = ScriptHttpRequest.serializer(),
         )
-        val response = execute(request)
+        val response = execute(request.resolveAgainst(baseUrl))
         return invoker.invoke(
             extension = extension,
             sourceId = id,
@@ -161,26 +185,7 @@ class ScriptHttpSource(
     }
 
     private suspend fun execute(scriptRequest: ScriptHttpRequest): ScriptHttpResponse {
-        val request = Request.Builder()
-            .url(scriptRequest.url)
-            .apply {
-                scriptRequest.headers.forEach { (name, value) ->
-                    header(name, value)
-                }
-                val method = scriptRequest.method.uppercase()
-                val requestBody = scriptRequest.body
-                val body = when {
-                    requestBody != null -> {
-                        requestBody.toRequestBody(scriptRequest.contentType?.toMediaTypeOrNull())
-                    }
-                    method in METHODS_REQUIRING_BODY -> "".toRequestBody()
-                    else -> null
-                }
-                method(method, body)
-            }
-            .build()
-
-        return client.newCall(request).awaitSuccess().use { response ->
+        return client.newCall(scriptRequest.toOkHttpRequest()).awaitSuccess().use { response ->
             ScriptHttpResponse(
                 status = response.code,
                 headers = response.headers.toMultimap(),
@@ -188,6 +193,33 @@ class ScriptHttpSource(
                 finalUrl = response.request.url.toString(),
             )
         }
+    }
+
+    private suspend fun executeBytes(scriptRequest: ScriptHttpRequest): ByteArray {
+        return client.newCall(scriptRequest.toOkHttpRequest()).awaitSuccess().use { response ->
+            response.body.bytes()
+        }
+    }
+
+    private fun ScriptHttpRequest.toOkHttpRequest(): Request {
+        return Request.Builder()
+            .url(url)
+            .apply {
+                headers.forEach { (name, value) ->
+                    header(name, value)
+                }
+                val requestMethod = method.uppercase()
+                val requestBody = body
+                val okHttpBody = when {
+                    requestBody != null -> {
+                        requestBody.toRequestBody(contentType?.toMediaTypeOrNull())
+                    }
+                    requestMethod in METHODS_REQUIRING_BODY -> "".toRequestBody()
+                    else -> null
+                }
+                method(requestMethod, okHttpBody)
+            }
+            .build()
     }
 
     override fun popularMangaRequest(page: Int): Request = unsupportedLegacyPath()

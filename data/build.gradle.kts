@@ -49,6 +49,11 @@ kotlin {
                 runtimeOnly(libs.junit.platform.launcher)
             }
         }
+        val nativeTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)

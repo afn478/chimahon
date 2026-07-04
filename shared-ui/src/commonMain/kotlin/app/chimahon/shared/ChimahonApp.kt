@@ -54,9 +54,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -73,10 +75,8 @@ import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FormatListNumbered
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.NewReleases
@@ -25319,8 +25319,8 @@ private val UiIcon.imageVector: ImageVector
         UiIcon.Search -> Icons.Outlined.Search
         UiIcon.Filter -> Icons.Outlined.FilterList
         UiIcon.Refresh -> Icons.Outlined.Refresh
-        UiIcon.Back -> Icons.Outlined.ArrowBack
-        UiIcon.Forward -> Icons.Outlined.ArrowForward
+        UiIcon.Back -> Icons.AutoMirrored.Outlined.ArrowBack
+        UiIcon.Forward -> Icons.AutoMirrored.Outlined.ArrowForward
         UiIcon.Play -> Icons.Outlined.PlayArrow
         UiIcon.Pause -> Icons.Outlined.Pause
         UiIcon.DoneAll -> Icons.Outlined.DoneAll
@@ -25335,7 +25335,7 @@ private val UiIcon.imageVector: ImageVector
         UiIcon.Download -> Icons.Outlined.Download
         UiIcon.Incognito -> Icons.Outlined.VisibilityOff
         UiIcon.VisibilityOff -> Icons.Outlined.VisibilityOff
-        UiIcon.Tag -> Icons.Outlined.Label
+        UiIcon.Tag -> Icons.AutoMirrored.Outlined.Label
         UiIcon.Statistics -> Icons.Outlined.QueryStats
         UiIcon.Storage -> Icons.Outlined.Storage
         UiIcon.Extensions -> Icons.Outlined.Extension
@@ -25344,7 +25344,7 @@ private val UiIcon.imageVector: ImageVector
         UiIcon.Security -> Icons.Outlined.Security
         UiIcon.Backup -> Icons.Outlined.Backup
         UiIcon.Info -> Icons.Outlined.Info
-        UiIcon.Help -> Icons.Outlined.HelpOutline
+        UiIcon.Help -> Icons.AutoMirrored.Outlined.HelpOutline
         UiIcon.Star -> Icons.Outlined.Star
         UiIcon.Add -> Icons.Outlined.Add
         UiIcon.Reorder -> Icons.Outlined.Reorder

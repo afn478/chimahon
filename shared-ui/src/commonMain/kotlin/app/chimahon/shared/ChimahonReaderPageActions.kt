@@ -6,6 +6,7 @@ import kotlinx.coroutines.ensureActive
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
+import kotlin.random.Random
 
 data class ChimahonReaderPageActionFile(
     val filename: String,
@@ -250,12 +251,7 @@ private suspend fun writePageBytes(
     val path = directory / filename
 
     return try {
-        currentCoroutineContext().ensureActive()
-        fileSystem.createDirectories(directory)
-        fileSystem.write(path) {
-            write(bytes)
-        }
-        currentCoroutineContext().ensureActive()
+        writeReaderPageBytesAtomically(path, bytes, fileSystem)
         WritePageFileResult.Success(
             ChimahonReaderPageActionFile(
                 filename = filename,
@@ -269,6 +265,52 @@ private suspend fun writePageBytes(
             message = failure.message ?: "Page image could not be written.",
             cause = failure,
         )
+    }
+}
+
+internal suspend fun writeReaderPageBytesAtomically(
+    path: Path,
+    bytes: ByteArray,
+    fileSystem: FileSystem = FileSystem.SYSTEM,
+) {
+    val parent = checkNotNull(path.parent) { "Reader page image path has no parent." }
+    val temporaryPath = uniqueReaderPageTemporarySibling(path, fileSystem)
+
+    try {
+        currentCoroutineContext().ensureActive()
+        fileSystem.createDirectories(parent)
+        fileSystem.write(temporaryPath) {
+            write(bytes)
+        }
+        currentCoroutineContext().ensureActive()
+        fileSystem.atomicMove(temporaryPath, path)
+    } catch (cancellation: CancellationException) {
+        deleteReaderPageTemporaryFile(temporaryPath, fileSystem)
+        throw cancellation
+    } catch (failure: Throwable) {
+        deleteReaderPageTemporaryFile(temporaryPath, fileSystem)
+        throw failure
+    }
+}
+
+private fun uniqueReaderPageTemporarySibling(
+    target: Path,
+    fileSystem: FileSystem,
+): Path {
+    val parent = checkNotNull(target.parent) { "Reader page image path has no parent." }
+    repeat(READER_PAGE_TEMPORARY_PATH_ATTEMPTS) {
+        val candidate = parent / "${target.name}.tmp-${Random.nextInt(Int.MAX_VALUE)}"
+        if (!fileSystem.exists(candidate)) return candidate
+    }
+    error("Unable to allocate a temporary reader page image path beside $target.")
+}
+
+private fun deleteReaderPageTemporaryFile(
+    path: Path,
+    fileSystem: FileSystem,
+) {
+    if (fileSystem.exists(path)) {
+        runCatching { fileSystem.delete(path) }
     }
 }
 
@@ -361,6 +403,7 @@ private fun ByteArray.sliceEquals(offset: Int, value: String): Boolean {
 
 private const val READER_PAGE_SAVE_DIRECTORY = "reader-pages"
 private const val READER_PAGE_SHARE_DIRECTORY = "shared-reader-pages"
+private const val READER_PAGE_TEMPORARY_PATH_ATTEMPTS = 16
 private const val MAX_FILE_NAME_BYTES = 240
 private const val DEFAULT_IMAGE_EXTENSION = "jpg"
 private const val INVALID_FILE_NAME = "(invalid)"

@@ -3,7 +3,9 @@ package app.chimahon.shared
 import okio.FileSystem
 import tachiyomi.core.platform.storage.PlatformStorageDirectories
 
-internal fun PlatformStorageDirectories.ensureChimahonDirectories() {
+internal fun PlatformStorageDirectories.ensureChimahonDirectories(
+    fileSystem: FileSystem = FileSystem.SYSTEM,
+) {
     listOf(
         filesDir,
         filesDir / DATABASE_DIRECTORY,
@@ -12,7 +14,7 @@ internal fun PlatformStorageDirectories.ensureChimahonDirectories() {
         defaultDownloadsDir(APP_NAME),
     ).forEach { path ->
         runCatching {
-            FileSystem.SYSTEM.createDirectories(path)
+            fileSystem.createDirectories(path)
         }
     }
 }

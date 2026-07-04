@@ -278,7 +278,7 @@ internal actual class ChimahonPlatformApkExtensionManager actual constructor(
             ?: manifest.displayName
         val shouldConvert = Files.notExists(jarPath) ||
             stored?.apkSha256 != apkHash ||
-            stored?.compatibilityVersion != DESKTOP_COMPATIBILITY_VERSION
+            stored.compatibilityVersion != DESKTOP_COMPATIBILITY_VERSION
         if (shouldConvert) {
             val temporaryJar = Files.createTempFile(extensionDirectory, "$fileStem-", ".jar")
             try {

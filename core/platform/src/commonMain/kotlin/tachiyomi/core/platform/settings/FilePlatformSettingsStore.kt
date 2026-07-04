@@ -4,6 +4,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okio.FileSystem
 import okio.Path
+import okio.Path.Companion.toPath
 
 class FilePlatformSettingsStore(
     private val settingsFile: Path,
@@ -76,9 +77,15 @@ class FilePlatformSettingsStore(
             .joinToString(separator = "\n", postfix = if (values.isEmpty()) "" else "\n") { (key, value) ->
                 "${encodeToken(key)}\t${encodeToken(value)}"
             }
-        fileSystem.write(settingsFile) {
+        val temporaryFile = settingsFile.temporaryFile()
+        fileSystem.write(temporaryFile) {
             writeUtf8(encoded)
         }
+        fileSystem.atomicMove(temporaryFile, settingsFile)
+    }
+
+    private fun Path.temporaryFile(): Path {
+        return parent?.let { directory -> directory / "$name.tmp" } ?: "$name.tmp".toPath()
     }
 }
 

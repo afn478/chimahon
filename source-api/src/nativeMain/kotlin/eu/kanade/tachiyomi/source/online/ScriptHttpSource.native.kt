@@ -21,6 +21,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -159,10 +160,11 @@ class ScriptHttpSource(
                 arguments = arguments,
                 deserializer = ScriptHttpRequest.serializer(),
             )
-        }.getOrElse {
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
             ScriptHttpRequest(url = requireNotNull(page.imageUrl))
         }
-        return nativeScriptHttpClient.executeBytes(request)
+        return nativeScriptHttpClient.executeBytes(request.resolveAgainst(baseUrl))
     }
 
     override fun getFilterList(): FilterList = FilterList()
@@ -179,7 +181,7 @@ class ScriptHttpSource(
             arguments = arguments,
             deserializer = ScriptHttpRequest.serializer(),
         )
-        val response = nativeScriptHttpClient.execute(request)
+        val response = nativeScriptHttpClient.execute(request.resolveAgainst(baseUrl))
         return invoker.invoke(
             extension = extension,
             sourceId = id,

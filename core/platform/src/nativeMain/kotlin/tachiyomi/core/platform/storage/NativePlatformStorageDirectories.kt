@@ -25,7 +25,7 @@ class NativePlatformStorageDirectories(
     }
 
     override fun fileUri(path: Path): String {
-        return "file://$path"
+        return encodedFileUri(path)
     }
 
     private fun defaultDataRoot(homePath: Path): Path {

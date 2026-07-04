@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     id("mihon.library")
@@ -13,6 +14,14 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+
+    targets.withType<KotlinNativeTarget>().configureEach {
+        if (name.startsWith("ios")) {
+            binaries.configureEach {
+                linkerOpts("-lsqlite3")
+            }
+        }
+    }
 
     applyDefaultHierarchyTemplate()
 
@@ -42,6 +51,11 @@ kotlin {
             dependencies {
                 implementation(libs.bundles.test)
                 runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+        val nativeTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
             }
         }
     }

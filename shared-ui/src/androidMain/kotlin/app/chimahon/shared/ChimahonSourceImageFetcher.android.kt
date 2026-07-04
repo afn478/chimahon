@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.online.ScriptHttpSource
+import eu.kanade.tachiyomi.source.online.resolveScriptSourceUrl
 import kotlinx.coroutines.CancellationException
 import okhttp3.Request
 
@@ -51,22 +53,33 @@ internal actual suspend fun loadSourcePageImage(
 
     page.status = Page.State.DownloadImage
     return try {
-        val response = if (options.headers.isEmpty() && options.referer == null) {
-            httpSource.getImage(page)
+        val usesSourceOwnedRequest = options.headers.isEmpty() && options.referer == null
+        val bytes = if (usesSourceOwnedRequest && httpSource is ScriptHttpSource) {
+            httpSource.getImageBytes(page)
         } else {
-            val headers = httpSource.headers.newBuilder().apply {
-                options.effectiveHeaders().forEach { (name, value) ->
-                    set(name, value)
+            val response = if (usesSourceOwnedRequest) {
+                httpSource.getImage(page)
+            } else {
+                val headers = httpSource.headers.newBuilder().apply {
+                    options.effectiveHeaders().forEach { (name, value) ->
+                        set(name, value)
+                    }
+                }.build()
+                val requestUrl = if (httpSource is ScriptHttpSource) {
+                    resolveScriptSourceUrl(httpSource.baseUrl, imageUrl) ?: imageUrl
+                } else {
+                    imageUrl
                 }
-            }.build()
-            val request = Request.Builder()
-                .url(imageUrl)
-                .headers(headers)
-                .get()
-                .build()
-            httpSource.client.newCall(request).awaitSuccess()
+                val request = Request.Builder()
+                    .url(requestUrl)
+                    .headers(headers)
+                    .get()
+                    .build()
+                httpSource.client.newCall(request).awaitSuccess()
+            }
+            response.use { it.body.bytes() }
         }
-        response.use { it.body.bytes() }
+        validateLoadedSourcePageImage(source, page, bytes)
     } catch (error: CancellationException) {
         throw error
     } catch (error: HttpException) {
