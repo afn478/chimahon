@@ -90,14 +90,20 @@ fun AppearanceSheet(
     }
 
     var importedFonts by remember { mutableStateOf(FontManager.getImportedFonts(context)) }
-    val allFonts = remember(importedFonts) {
-        NovelReaderAppearanceSheetPolicy.fontChoices(
+    var isImporting by remember { mutableStateOf(false) }
+    val fontDropdownState = remember(viewModel.selectedFont, importedFonts) {
+        NovelReaderAppearanceSheetPolicy.fontDropdownState(
+            selectedFont = viewModel.selectedFont,
             defaultFonts = FontManager.defaultFonts,
             importedFonts = importedFonts,
         )
     }
+    val fontImportButtonState = NovelReaderAppearanceSheetPolicy.fontImportButtonState(isImporting)
+    val fontDeleteButtonState = NovelReaderAppearanceSheetPolicy.fontDeleteButtonState(
+        selectedFont = viewModel.selectedFont,
+        importedFonts = importedFonts,
+    )
 
-    var isImporting by remember { mutableStateOf(false) }
     var showCustomThemeDialog by remember { mutableStateOf(false) }
     var draftThemeName by remember { mutableStateOf(initialCustomThemeDraft.name) }
     var draftBackgroundColor by remember { mutableIntStateOf(initialCustomThemeDraft.backgroundColor) }
@@ -281,10 +287,10 @@ fun AppearanceSheet(
                     onExpandedChange = { fontExpanded = it },
                 ) {
                     OutlinedTextField(
-                        value = viewModel.selectedFont,
+                        value = fontDropdownState.selectedFont,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text(NovelReaderAppearanceSheetPolicy.FONT_FAMILY_LABEL) },
+                        label = { Text(fontDropdownState.label) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fontExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
                     )
@@ -292,7 +298,7 @@ fun AppearanceSheet(
                         expanded = fontExpanded,
                         onDismissRequest = { fontExpanded = false },
                     ) {
-                        allFonts.forEach { font ->
+                        fontDropdownState.choices.forEach { font ->
                             DropdownMenuItem(
                                 text = { Text(font) },
                                 onClick = {
@@ -312,29 +318,24 @@ fun AppearanceSheet(
                     OutlinedButton(
                         onClick = {
                             fontPickerLauncher.launch(
-                                NovelReaderAppearanceSheetPolicy.fontImportMimeTypes.toTypedArray(),
+                                fontImportButtonState.mimeTypes.toTypedArray(),
                             )
                         },
                         modifier = Modifier.weight(1f),
-                        enabled = !isImporting,
+                        enabled = fontImportButtonState.enabled,
                     ) {
-                        if (isImporting) {
+                        if (fontImportButtonState.showProgress) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
                             )
                         } else {
-                            Text(NovelReaderAppearanceSheetPolicy.IMPORT_FONT_BUTTON_TEXT)
+                            Text(fontImportButtonState.buttonText)
                         }
                     }
 
                     // Delete imported font button
-                    if (
-                        NovelReaderAppearanceSheetPolicy.shouldShowDeleteFontButton(
-                            selectedFont = viewModel.selectedFont,
-                            importedFonts = importedFonts,
-                        )
-                    ) {
+                    if (fontDeleteButtonState.visible) {
                         OutlinedButton(
                             onClick = {
                                 NovelReaderAppearanceSheetPolicy.fontDeleteAction(
@@ -352,7 +353,7 @@ fun AppearanceSheet(
                                 contentColor = MaterialTheme.colorScheme.error,
                             ),
                         ) {
-                            Text(NovelReaderAppearanceSheetPolicy.DELETE_FONT_BUTTON_TEXT)
+                            Text(fontDeleteButtonState.buttonText)
                         }
                     }
                 }
@@ -410,33 +411,39 @@ fun AppearanceSheet(
                 }
 
                 // Hide Furigana
+                val hideFuriganaSwitchState = NovelReaderAppearanceSheetPolicy.hideFuriganaSwitchState(
+                    viewModel.hideFurigana,
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Text(
-                        NovelReaderAppearanceSheetPolicy.HIDE_FURIGANA_LABEL,
+                        hideFuriganaSwitchState.label,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Switch(
-                        checked = viewModel.hideFurigana,
+                        checked = hideFuriganaSwitchState.checked,
                         onCheckedChange = { viewModel.updateHideFurigana(it) },
                     )
                 }
 
                 // Keep screen on
+                val keepScreenOnSwitchState = NovelReaderAppearanceSheetPolicy.keepScreenOnSwitchState(
+                    viewModel.keepScreenOn,
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Text(
-                        NovelReaderAppearanceSheetPolicy.KEEP_SCREEN_ON_LABEL,
+                        keepScreenOnSwitchState.label,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Switch(
-                        checked = viewModel.keepScreenOn,
+                        checked = keepScreenOnSwitchState.checked,
                         onCheckedChange = { viewModel.updateKeepScreenOn(it) },
                     )
                 }
@@ -599,34 +606,40 @@ fun AppearanceSheet(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         // Avoid Page Break
+                        val avoidPageBreakSwitchState = NovelReaderAppearanceSheetPolicy.avoidPageBreakSwitchState(
+                            viewModel.avoidPageBreak,
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             Text(
-                                NovelReaderAppearanceSheetPolicy.AVOID_PAGE_BREAK_LABEL,
+                                avoidPageBreakSwitchState.label,
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             Switch(
-                                checked = viewModel.avoidPageBreak,
+                                checked = avoidPageBreakSwitchState.checked,
                                 onCheckedChange = { viewModel.updateAvoidPageBreak(it) },
                                 modifier = Modifier.scale(0.85f),
                             )
                         }
 
                         // Justify Text
+                        val justifyTextSwitchState = NovelReaderAppearanceSheetPolicy.justifyTextSwitchState(
+                            viewModel.justifyText,
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             Text(
-                                NovelReaderAppearanceSheetPolicy.JUSTIFY_TEXT_LABEL,
+                                justifyTextSwitchState.label,
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             Switch(
-                                checked = viewModel.justifyText,
+                                checked = justifyTextSwitchState.checked,
                                 onCheckedChange = { viewModel.updateJustifyText(it) },
                                 modifier = Modifier.scale(0.85f),
                             )
@@ -969,7 +982,11 @@ private fun ColorReviewChip(
                 Text(
                     text = state.valueText,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (!state.isValid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    color = if (!state.isValid) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                     maxLines = 1,
                 )
             }

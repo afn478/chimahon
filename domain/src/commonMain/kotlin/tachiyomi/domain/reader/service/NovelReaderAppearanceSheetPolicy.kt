@@ -145,6 +145,24 @@ object NovelReaderAppearanceSheetPolicy {
         val fallbackFont: String,
     )
 
+    data class FontDropdownState(
+        val label: String,
+        val selectedFont: String,
+        val choices: List<String>,
+    )
+
+    data class FontImportButtonState(
+        val buttonText: String,
+        val enabled: Boolean,
+        val showProgress: Boolean,
+        val mimeTypes: List<String>,
+    )
+
+    data class FontDeleteButtonState(
+        val visible: Boolean,
+        val buttonText: String,
+    )
+
     sealed interface FontImportResultAction {
         data object KeepExistingFonts : FontImportResultAction
         data class RefreshFonts(val importedFonts: List<String>) : FontImportResultAction
@@ -154,6 +172,11 @@ object NovelReaderAppearanceSheetPolicy {
         val label: String,
         val value: Boolean,
         val selected: Boolean,
+    )
+
+    data class SwitchControlState(
+        val label: String,
+        val checked: Boolean,
     )
 
     enum class AdvancedToggleIcon {
@@ -274,6 +297,43 @@ object NovelReaderAppearanceSheetPolicy {
         return defaultFonts + importedFonts
     }
 
+    fun fontDropdownState(
+        selectedFont: String,
+        defaultFonts: List<String>,
+        importedFonts: List<String>,
+    ): FontDropdownState {
+        return FontDropdownState(
+            label = FONT_FAMILY_LABEL,
+            selectedFont = selectedFont,
+            choices = fontChoices(
+                defaultFonts = defaultFonts,
+                importedFonts = importedFonts,
+            ),
+        )
+    }
+
+    fun fontImportButtonState(isImporting: Boolean): FontImportButtonState {
+        return FontImportButtonState(
+            buttonText = IMPORT_FONT_BUTTON_TEXT,
+            enabled = !isImporting,
+            showProgress = isImporting,
+            mimeTypes = fontImportMimeTypes,
+        )
+    }
+
+    fun fontDeleteButtonState(
+        selectedFont: String,
+        importedFonts: List<String>,
+    ): FontDeleteButtonState {
+        return FontDeleteButtonState(
+            visible = shouldShowDeleteFontButton(
+                selectedFont = selectedFont,
+                importedFonts = importedFonts,
+            ),
+            buttonText = DELETE_FONT_BUTTON_TEXT,
+        )
+    }
+
     fun shouldShowDeleteFontButton(
         selectedFont: String,
         importedFonts: List<String>,
@@ -303,6 +363,34 @@ object NovelReaderAppearanceSheetPolicy {
         } else {
             FontImportResultAction.KeepExistingFonts
         }
+    }
+
+    fun hideFuriganaSwitchState(hideFurigana: Boolean): SwitchControlState {
+        return SwitchControlState(
+            label = HIDE_FURIGANA_LABEL,
+            checked = hideFurigana,
+        )
+    }
+
+    fun keepScreenOnSwitchState(keepScreenOn: Boolean): SwitchControlState {
+        return SwitchControlState(
+            label = KEEP_SCREEN_ON_LABEL,
+            checked = keepScreenOn,
+        )
+    }
+
+    fun avoidPageBreakSwitchState(avoidPageBreak: Boolean): SwitchControlState {
+        return SwitchControlState(
+            label = AVOID_PAGE_BREAK_LABEL,
+            checked = avoidPageBreak,
+        )
+    }
+
+    fun justifyTextSwitchState(justifyText: Boolean): SwitchControlState {
+        return SwitchControlState(
+            label = JUSTIFY_TEXT_LABEL,
+            checked = justifyText,
+        )
     }
 
     fun customThemeChoices(

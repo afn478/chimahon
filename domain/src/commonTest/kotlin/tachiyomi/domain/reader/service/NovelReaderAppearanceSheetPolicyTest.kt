@@ -349,6 +349,44 @@ class NovelReaderAppearanceSheetPolicyTest {
     }
 
     @Test
+    fun fontDropdownStateExposesLabelSelectionAndChoices() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDropdownState(
+                label = NovelReaderAppearanceSheetPolicy.FONT_FAMILY_LABEL,
+                selectedFont = "Mincho",
+                choices = listOf("System", "Serif", "Mincho"),
+            ),
+            NovelReaderAppearanceSheetPolicy.fontDropdownState(
+                selectedFont = "Mincho",
+                defaultFonts = listOf("System", "Serif"),
+                importedFonts = listOf("Mincho"),
+            ),
+        )
+    }
+
+    @Test
+    fun fontImportButtonStateDisablesAndShowsProgressOnlyWhileImporting() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontImportButtonState(
+                buttonText = NovelReaderAppearanceSheetPolicy.IMPORT_FONT_BUTTON_TEXT,
+                enabled = true,
+                showProgress = false,
+                mimeTypes = NovelReaderAppearanceSheetPolicy.fontImportMimeTypes,
+            ),
+            NovelReaderAppearanceSheetPolicy.fontImportButtonState(isImporting = false),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontImportButtonState(
+                buttonText = NovelReaderAppearanceSheetPolicy.IMPORT_FONT_BUTTON_TEXT,
+                enabled = false,
+                showProgress = true,
+                mimeTypes = NovelReaderAppearanceSheetPolicy.fontImportMimeTypes,
+            ),
+            NovelReaderAppearanceSheetPolicy.fontImportButtonState(isImporting = true),
+        )
+    }
+
+    @Test
     fun deleteFontActionOnlyTargetsImportedFontsAndFallsBackToFirstDefault() {
         assertTrue(
             NovelReaderAppearanceSheetPolicy.shouldShowDeleteFontButton(
@@ -379,6 +417,26 @@ class NovelReaderAppearanceSheetPolicyTest {
                 selectedFont = "System",
                 importedFonts = listOf("Mincho"),
                 defaultFonts = listOf("System", "Serif"),
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDeleteButtonState(
+                visible = true,
+                buttonText = NovelReaderAppearanceSheetPolicy.DELETE_FONT_BUTTON_TEXT,
+            ),
+            NovelReaderAppearanceSheetPolicy.fontDeleteButtonState(
+                selectedFont = "Mincho",
+                importedFonts = listOf("Mincho"),
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.FontDeleteButtonState(
+                visible = false,
+                buttonText = NovelReaderAppearanceSheetPolicy.DELETE_FONT_BUTTON_TEXT,
+            ),
+            NovelReaderAppearanceSheetPolicy.fontDeleteButtonState(
+                selectedFont = "System",
+                importedFonts = listOf("Mincho"),
             ),
         )
     }
@@ -415,6 +473,38 @@ class NovelReaderAppearanceSheetPolicyTest {
                 success = false,
                 importedFonts = listOf("Mincho"),
             ),
+        )
+    }
+
+    @Test
+    fun readerSwitchStatesExposeLabelsAndCheckedValues() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                label = NovelReaderAppearanceSheetPolicy.HIDE_FURIGANA_LABEL,
+                checked = true,
+            ),
+            NovelReaderAppearanceSheetPolicy.hideFuriganaSwitchState(hideFurigana = true),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                label = NovelReaderAppearanceSheetPolicy.KEEP_SCREEN_ON_LABEL,
+                checked = false,
+            ),
+            NovelReaderAppearanceSheetPolicy.keepScreenOnSwitchState(keepScreenOn = false),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                label = NovelReaderAppearanceSheetPolicy.AVOID_PAGE_BREAK_LABEL,
+                checked = true,
+            ),
+            NovelReaderAppearanceSheetPolicy.avoidPageBreakSwitchState(avoidPageBreak = true),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                label = NovelReaderAppearanceSheetPolicy.JUSTIFY_TEXT_LABEL,
+                checked = false,
+            ),
+            NovelReaderAppearanceSheetPolicy.justifyTextSwitchState(justifyText = false),
         )
     }
 
