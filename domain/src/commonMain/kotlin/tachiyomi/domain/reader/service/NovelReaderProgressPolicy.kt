@@ -13,6 +13,16 @@ object NovelReaderProgressPolicy {
         data class ScheduleDelayed(val delayMillis: Long) : ScrollProgressReportAction
     }
 
+    sealed interface WebProgressRequestAction {
+        data object Ignore : WebProgressRequestAction
+        data class EvaluateScript(val script: String) : WebProgressRequestAction
+    }
+
+    sealed interface WebProgressResultAction {
+        data object Ignore : WebProgressResultAction
+        data class ReportProgress(val progress: Double) : WebProgressResultAction
+    }
+
     fun accumulatedCharacterCounts(chapterCharacterCounts: List<Int>): List<Int> {
         val accumulated = mutableListOf<Int>()
         var runningTotal = 0
@@ -106,5 +116,24 @@ object NovelReaderProgressPolicy {
         } else {
             ScrollProgressReportAction.ScheduleDelayed(intervalMillis)
         }
+    }
+
+    fun webProgressRequestAction(
+        continuousMode: Boolean,
+        imageOnly: Boolean,
+    ): WebProgressRequestAction {
+        return if (continuousMode && !imageOnly) {
+            WebProgressRequestAction.EvaluateScript(
+                NovelReaderWebScriptPolicy.calculateProgressScript(),
+            )
+        } else {
+            WebProgressRequestAction.Ignore
+        }
+    }
+
+    fun webProgressResultAction(result: String?): WebProgressResultAction {
+        return NovelReaderWebResultPolicy.progressResult(result)?.let { progress ->
+            WebProgressResultAction.ReportProgress(progress)
+        } ?: WebProgressResultAction.Ignore
     }
 }

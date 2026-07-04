@@ -37,7 +37,6 @@ import tachiyomi.domain.reader.service.NovelReaderWebHostPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebInjectionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebLoadPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebNavigationPolicy
-import tachiyomi.domain.reader.service.NovelReaderWebResultPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebScriptPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebSettingsPolicy
 
@@ -338,12 +337,29 @@ private class ReaderAndroidWebView(
 
     private var lastProgressReportTime = 0L
     private val reportProgressRunnable = Runnable {
-        if (continuousMode && !isImageOnly) {
-            evaluateJavascript(NovelReaderWebScriptPolicy.calculateProgressScript()) { p ->
-                NovelReaderWebResultPolicy.progressResult(p)?.let {
-                    pendingProgress = it
-                    onProgressChanged(it)
+        when (
+            val action = NovelReaderProgressPolicy.webProgressRequestAction(
+                continuousMode = continuousMode,
+                imageOnly = isImageOnly,
+            )
+        ) {
+            NovelReaderProgressPolicy.WebProgressRequestAction.Ignore -> Unit
+            is NovelReaderProgressPolicy.WebProgressRequestAction.EvaluateScript -> {
+                evaluateJavascript(action.script) { result ->
+                    handleProgressResult(result)
                 }
+            }
+        }
+    }
+
+    private fun handleProgressResult(result: String?) {
+        when (
+            val action = NovelReaderProgressPolicy.webProgressResultAction(result)
+        ) {
+            NovelReaderProgressPolicy.WebProgressResultAction.Ignore -> Unit
+            is NovelReaderProgressPolicy.WebProgressResultAction.ReportProgress -> {
+                pendingProgress = action.progress
+                onProgressChanged(action.progress)
             }
         }
     }
@@ -692,10 +708,7 @@ private class ReaderAndroidWebView(
                     evaluateJavascript(
                         action.progressScript,
                     ) { progressResult ->
-                        NovelReaderWebResultPolicy.progressResult(progressResult)?.let {
-                            pendingProgress = it
-                            onProgressChanged(it)
-                        }
+                        handleProgressResult(progressResult)
                     }
                 }
                 is NovelReaderWebNavigationPolicy.PagedNavigationResultAction.UseChapterFallback -> {

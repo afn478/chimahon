@@ -243,4 +243,47 @@ class NovelReaderProgressPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun webProgressRequestActionEvaluatesOnlyForContinuousTextReaders() {
+        assertEquals(
+            NovelReaderProgressPolicy.WebProgressRequestAction.EvaluateScript(
+                NovelReaderWebScriptPolicy.calculateProgressScript(),
+            ),
+            NovelReaderProgressPolicy.webProgressRequestAction(
+                continuousMode = true,
+                imageOnly = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.WebProgressRequestAction.Ignore,
+            NovelReaderProgressPolicy.webProgressRequestAction(
+                continuousMode = false,
+                imageOnly = false,
+            ),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.WebProgressRequestAction.Ignore,
+            NovelReaderProgressPolicy.webProgressRequestAction(
+                continuousMode = true,
+                imageOnly = true,
+            ),
+        )
+    }
+
+    @Test
+    fun webProgressResultActionReportsOnlyParsedProgress() {
+        assertEquals(
+            NovelReaderProgressPolicy.WebProgressResultAction.ReportProgress(0.33),
+            NovelReaderProgressPolicy.webProgressResultAction("\"0.33\""),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.WebProgressResultAction.Ignore,
+            NovelReaderProgressPolicy.webProgressResultAction("\"limit\""),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.WebProgressResultAction.Ignore,
+            NovelReaderProgressPolicy.webProgressResultAction(null),
+        )
+    }
 }
