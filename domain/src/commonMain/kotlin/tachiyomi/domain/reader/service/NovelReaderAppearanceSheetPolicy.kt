@@ -174,9 +174,19 @@ object NovelReaderAppearanceSheetPolicy {
         val selected: Boolean,
     )
 
+    data class BooleanSegmentedControlState(
+        val label: String,
+        val options: List<BooleanSegmentOption>,
+    )
+
     data class SwitchControlState(
         val label: String,
         val checked: Boolean,
+    )
+
+    data class ConditionalSwitchControlState(
+        val visible: Boolean,
+        val switchState: SwitchControlState,
     )
 
     enum class AdvancedToggleIcon {
@@ -249,6 +259,19 @@ object NovelReaderAppearanceSheetPolicy {
         return theme == NovelReaderTheme.SYSTEM
     }
 
+    fun systemLightSepiaSwitchState(
+        theme: NovelReaderTheme,
+        systemLightSepia: Boolean,
+    ): ConditionalSwitchControlState {
+        return ConditionalSwitchControlState(
+            visible = shouldShowSystemLightSepia(theme),
+            switchState = SwitchControlState(
+                label = SYSTEM_LIGHT_SEPIA_LABEL,
+                checked = systemLightSepia,
+            ),
+        )
+    }
+
     fun readerModeOptions(continuousMode: Boolean): List<BooleanSegmentOption> {
         return listOf(
             BooleanSegmentOption(
@@ -264,6 +287,13 @@ object NovelReaderAppearanceSheetPolicy {
         )
     }
 
+    fun readerModeControlState(continuousMode: Boolean): BooleanSegmentedControlState {
+        return BooleanSegmentedControlState(
+            label = MODE_SECTION_TITLE,
+            options = readerModeOptions(continuousMode),
+        )
+    }
+
     fun writingModeOptions(verticalWriting: Boolean): List<BooleanSegmentOption> {
         return listOf(
             BooleanSegmentOption(
@@ -276,6 +306,13 @@ object NovelReaderAppearanceSheetPolicy {
                 value = false,
                 selected = !verticalWriting,
             ),
+        )
+    }
+
+    fun writingModeControlState(verticalWriting: Boolean): BooleanSegmentedControlState {
+        return BooleanSegmentedControlState(
+            label = WRITING_MODE_LABEL,
+            options = writingModeOptions(verticalWriting),
         )
     }
 
@@ -442,6 +479,24 @@ object NovelReaderAppearanceSheetPolicy {
             value = tapZonePercent.toDouble(),
             valueText = tapZonePercentLabel(tapZonePercent),
             spec = tapZoneSliderSpec,
+        )
+    }
+
+    fun characterSpacingSliderState(characterSpacing: Double): SliderControlState {
+        return SliderControlState(
+            label = CHARACTER_SPACING_LABEL,
+            value = characterSpacing,
+            valueText = characterSpacingLabel(characterSpacing),
+            spec = characterSpacingSliderSpec,
+        )
+    }
+
+    fun paragraphSpacingSliderState(paragraphSpacing: Double): SliderControlState {
+        return SliderControlState(
+            label = PARAGRAPH_SPACING_LABEL,
+            value = paragraphSpacing,
+            valueText = paragraphSpacingLabel(paragraphSpacing),
+            spec = paragraphSpacingSliderSpec,
         )
     }
 

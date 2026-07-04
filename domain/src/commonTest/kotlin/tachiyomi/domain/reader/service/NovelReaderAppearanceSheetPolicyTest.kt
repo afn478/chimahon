@@ -53,72 +53,118 @@ class NovelReaderAppearanceSheetPolicyTest {
         assertTrue(NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(NovelReaderTheme.SYSTEM))
         assertFalse(NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(NovelReaderTheme.LIGHT))
         assertFalse(NovelReaderAppearanceSheetPolicy.shouldShowSystemLightSepia(NovelReaderTheme.SEPIA))
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ConditionalSwitchControlState(
+                visible = true,
+                switchState = NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                    label = NovelReaderAppearanceSheetPolicy.SYSTEM_LIGHT_SEPIA_LABEL,
+                    checked = true,
+                ),
+            ),
+            NovelReaderAppearanceSheetPolicy.systemLightSepiaSwitchState(
+                theme = NovelReaderTheme.SYSTEM,
+                systemLightSepia = true,
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ConditionalSwitchControlState(
+                visible = false,
+                switchState = NovelReaderAppearanceSheetPolicy.SwitchControlState(
+                    label = NovelReaderAppearanceSheetPolicy.SYSTEM_LIGHT_SEPIA_LABEL,
+                    checked = false,
+                ),
+            ),
+            NovelReaderAppearanceSheetPolicy.systemLightSepiaSwitchState(
+                theme = NovelReaderTheme.LIGHT,
+                systemLightSepia = false,
+            ),
+        )
     }
 
     @Test
     fun readerModeOptionsReflectContinuousModeSelection() {
-        assertEquals(
-            listOf(
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL,
-                    value = false,
-                    selected = true,
-                ),
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL,
-                    value = true,
-                    selected = false,
-                ),
+        val paginatedModeOptions = listOf(
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL,
+                value = false,
+                selected = true,
             ),
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL,
+                value = true,
+                selected = false,
+            ),
+        )
+        val continuousModeOptions = listOf(
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL,
+                value = false,
+                selected = false,
+            ),
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL,
+                value = true,
+                selected = true,
+            ),
+        )
+
+        assertEquals(
+            paginatedModeOptions,
             NovelReaderAppearanceSheetPolicy.readerModeOptions(continuousMode = false),
         )
         assertEquals(
-            listOf(
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.PAGINATED_MODE_LABEL,
-                    value = false,
-                    selected = false,
-                ),
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.CONTINUOUS_MODE_LABEL,
-                    value = true,
-                    selected = true,
-                ),
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentedControlState(
+                label = NovelReaderAppearanceSheetPolicy.MODE_SECTION_TITLE,
+                options = paginatedModeOptions,
             ),
+            NovelReaderAppearanceSheetPolicy.readerModeControlState(continuousMode = false),
+        )
+        assertEquals(
+            continuousModeOptions,
             NovelReaderAppearanceSheetPolicy.readerModeOptions(continuousMode = true),
         )
     }
 
     @Test
     fun writingModeOptionsReflectVerticalWritingSelection() {
-        assertEquals(
-            listOf(
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL,
-                    value = true,
-                    selected = true,
-                ),
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL,
-                    value = false,
-                    selected = false,
-                ),
+        val verticalWritingOptions = listOf(
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL,
+                value = true,
+                selected = true,
             ),
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL,
+                value = false,
+                selected = false,
+            ),
+        )
+        val horizontalWritingOptions = listOf(
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL,
+                value = true,
+                selected = false,
+            ),
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
+                label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL,
+                value = false,
+                selected = true,
+            ),
+        )
+
+        assertEquals(
+            verticalWritingOptions,
             NovelReaderAppearanceSheetPolicy.writingModeOptions(verticalWriting = true),
         )
         assertEquals(
-            listOf(
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.VERTICAL_WRITING_LABEL,
-                    value = true,
-                    selected = false,
-                ),
-                NovelReaderAppearanceSheetPolicy.BooleanSegmentOption(
-                    label = NovelReaderAppearanceSheetPolicy.HORIZONTAL_WRITING_LABEL,
-                    value = false,
-                    selected = true,
-                ),
+            NovelReaderAppearanceSheetPolicy.BooleanSegmentedControlState(
+                label = NovelReaderAppearanceSheetPolicy.WRITING_MODE_LABEL,
+                options = verticalWritingOptions,
             ),
+            NovelReaderAppearanceSheetPolicy.writingModeControlState(verticalWriting = true),
+        )
+        assertEquals(
+            horizontalWritingOptions,
             NovelReaderAppearanceSheetPolicy.writingModeOptions(verticalWriting = false),
         )
     }
@@ -554,6 +600,24 @@ class NovelReaderAppearanceSheetPolicyTest {
                 spec = NovelReaderAppearanceSheetPolicy.tapZoneSliderSpec,
             ),
             NovelReaderAppearanceSheetPolicy.tapZoneSliderState(tapZonePercent = 25),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.CHARACTER_SPACING_LABEL,
+                value = 0.05,
+                valueText = "0.05",
+                spec = NovelReaderAppearanceSheetPolicy.characterSpacingSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.characterSpacingSliderState(characterSpacing = 0.05),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.SliderControlState(
+                label = NovelReaderAppearanceSheetPolicy.PARAGRAPH_SPACING_LABEL,
+                value = 1.25,
+                valueText = "1.25 em",
+                spec = NovelReaderAppearanceSheetPolicy.paragraphSpacingSliderSpec,
+            ),
+            NovelReaderAppearanceSheetPolicy.paragraphSpacingSliderState(paragraphSpacing = 1.25),
         )
     }
 
