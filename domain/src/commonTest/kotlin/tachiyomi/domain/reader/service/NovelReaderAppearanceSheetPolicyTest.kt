@@ -446,6 +446,24 @@ class NovelReaderAppearanceSheetPolicyTest {
         assertEquals("Custom", state.sampleThemeName)
         assertEquals(0xFF123456.toInt(), state.background.parsedColor)
         assertEquals(0xFF0A141E.toInt(), state.text.parsedColor)
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ColorReviewState(
+                label = "Background",
+                color = 0xFF123456.toInt(),
+                valueText = "#123456",
+                isValid = true,
+            ),
+            state.background.review,
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ColorReviewState(
+                label = "Text",
+                color = 0xFF0A141E.toInt(),
+                valueText = "#0A141E",
+                isValid = true,
+            ),
+            state.text.review,
+        )
         assertTrue(state.background.isValid)
         assertTrue(state.text.isValid)
         assertTrue(state.confirmEnabled)
@@ -467,10 +485,48 @@ class NovelReaderAppearanceSheetPolicyTest {
         assertFalse(state.background.isValid)
         assertFalse(state.confirmEnabled)
         assertEquals("Enter a hex or RGB color", state.background.supportingText)
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ColorReviewState(
+                label = "Background",
+                color = 0x00000000,
+                valueText = NovelReaderAppearanceSheetPolicy.INVALID_COLOR_LABEL,
+                isValid = false,
+            ),
+            state.background.review,
+        )
     }
 
     @Test
-    fun deleteThemeMessageUsesThemeNameOrFallback() {
+    fun deleteThemeDialogStateUsesThemeNameOrFallback() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.DeleteThemeDialogState(
+                title = NovelReaderAppearanceSheetPolicy.DELETE_THEME_TITLE,
+                message = "Delete \"Night\"?",
+                confirmButtonText = NovelReaderAppearanceSheetPolicy.DELETE_BUTTON_TEXT,
+                dismissButtonText = NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT,
+            ),
+            NovelReaderAppearanceSheetPolicy.deleteThemeDialogState(
+                CustomReaderTheme(
+                    name = "Night",
+                    backgroundColor = 0,
+                    textColor = 1,
+                ),
+            ),
+        )
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.DeleteThemeDialogState(
+                title = NovelReaderAppearanceSheetPolicy.DELETE_THEME_TITLE,
+                message = "Delete \"Custom theme\"?",
+                confirmButtonText = NovelReaderAppearanceSheetPolicy.DELETE_BUTTON_TEXT,
+                dismissButtonText = NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT,
+            ),
+            NovelReaderAppearanceSheetPolicy.deleteThemeDialogState(
+                CustomReaderTheme(
+                    backgroundColor = 0,
+                    textColor = 1,
+                ),
+            ),
+        )
         assertEquals(
             "Delete \"Night\"?",
             NovelReaderAppearanceSheetPolicy.deleteThemeMessage(
@@ -489,6 +545,34 @@ class NovelReaderAppearanceSheetPolicyTest {
                     textColor = 1,
                 ),
             ),
+        )
+    }
+
+    @Test
+    fun themeSwatchMenuStateTracksAvailableActions() {
+        assertEquals(
+            NovelReaderAppearanceSheetPolicy.ThemeSwatchMenuState(
+                showRename = true,
+                showDelete = true,
+                renameMenuText = NovelReaderAppearanceSheetPolicy.RENAME_MENU_TEXT,
+                deleteMenuText = NovelReaderAppearanceSheetPolicy.DELETE_MENU_TEXT,
+            ),
+            NovelReaderAppearanceSheetPolicy.themeSwatchMenuState(
+                canRename = true,
+                canDelete = true,
+            ),
+        )
+        assertTrue(
+            NovelReaderAppearanceSheetPolicy.themeSwatchMenuState(
+                canRename = true,
+                canDelete = false,
+            ).enabled,
+        )
+        assertFalse(
+            NovelReaderAppearanceSheetPolicy.themeSwatchMenuState(
+                canRename = false,
+                canDelete = false,
+            ).enabled,
         )
     }
 }

@@ -73,11 +73,18 @@ object NovelReaderAppearanceSheetPolicy {
     data class ColorInputState(
         val label: String,
         val placeholder: String,
-        val reviewLabel: String,
         val parsedColor: Int?,
         val previewColor: Int,
         val isValid: Boolean,
         val supportingText: String,
+        val review: ColorReviewState,
+    )
+
+    data class ColorReviewState(
+        val label: String,
+        val color: Int,
+        val valueText: String,
+        val isValid: Boolean,
     )
 
     data class CustomThemeDialogState(
@@ -115,6 +122,23 @@ object NovelReaderAppearanceSheetPolicy {
         val dismissButtonText: String,
         val confirmEnabled: Boolean,
     )
+
+    data class DeleteThemeDialogState(
+        val title: String,
+        val message: String,
+        val confirmButtonText: String,
+        val dismissButtonText: String,
+    )
+
+    data class ThemeSwatchMenuState(
+        val showRename: Boolean,
+        val showDelete: Boolean,
+        val renameMenuText: String,
+        val deleteMenuText: String,
+    ) {
+        val enabled: Boolean
+            get() = showRename || showDelete
+    }
 
     data class FontDeleteAction(
         val fontName: String,
@@ -329,24 +353,42 @@ object NovelReaderAppearanceSheetPolicy {
             background = ColorInputState(
                 label = "Background",
                 placeholder = "Hex or RGB",
-                reviewLabel = "Background",
                 parsedColor = parsedBackgroundColor,
                 previewColor = parsedBackgroundColor ?: backgroundColor,
                 isValid = parsedBackgroundColor != null,
                 supportingText = "Enter a hex or RGB color",
+                review = colorReviewState(
+                    label = "Background",
+                    parsedColor = parsedBackgroundColor,
+                ),
             ),
             text = ColorInputState(
                 label = "Text",
                 placeholder = "Hex or RGB",
-                reviewLabel = "Text",
                 parsedColor = parsedTextColor,
                 previewColor = parsedTextColor ?: textColor,
                 isValid = parsedTextColor != null,
                 supportingText = "Enter a hex or RGB color",
+                review = colorReviewState(
+                    label = "Text",
+                    parsedColor = parsedTextColor,
+                ),
             ),
             confirmButtonText = "Save",
             dismissButtonText = CANCEL_BUTTON_TEXT,
             confirmEnabled = parsedBackgroundColor != null && parsedTextColor != null,
+        )
+    }
+
+    fun colorReviewState(
+        label: String,
+        parsedColor: Int?,
+    ): ColorReviewState {
+        return ColorReviewState(
+            label = label,
+            color = parsedColor ?: 0x00000000,
+            valueText = parsedColor?.let(NovelReaderAppearancePolicy::colorHex) ?: INVALID_COLOR_LABEL,
+            isValid = parsedColor != null,
         )
     }
 
@@ -393,6 +435,27 @@ object NovelReaderAppearanceSheetPolicy {
             confirmButtonText = RENAME_BUTTON_TEXT,
             dismissButtonText = CANCEL_BUTTON_TEXT,
             confirmEnabled = renameInput.isNotBlank(),
+        )
+    }
+
+    fun deleteThemeDialogState(theme: CustomReaderTheme): DeleteThemeDialogState {
+        return DeleteThemeDialogState(
+            title = DELETE_THEME_TITLE,
+            message = deleteThemeMessage(theme),
+            confirmButtonText = DELETE_BUTTON_TEXT,
+            dismissButtonText = CANCEL_BUTTON_TEXT,
+        )
+    }
+
+    fun themeSwatchMenuState(
+        canRename: Boolean,
+        canDelete: Boolean,
+    ): ThemeSwatchMenuState {
+        return ThemeSwatchMenuState(
+            showRename = canRename,
+            showDelete = canDelete,
+            renameMenuText = RENAME_MENU_TEXT,
+            deleteMenuText = DELETE_MENU_TEXT,
         )
     }
 

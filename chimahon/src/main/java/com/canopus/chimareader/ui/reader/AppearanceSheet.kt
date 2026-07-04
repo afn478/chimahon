@@ -69,7 +69,6 @@ import androidx.compose.ui.unit.dp
 import com.canopus.chimareader.data.CustomReaderTheme
 import com.canopus.chimareader.data.FontManager
 import kotlinx.coroutines.launch
-import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,6 +82,12 @@ fun AppearanceSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+    val initialCustomThemeDraft = remember {
+        NovelReaderAppearanceSheetPolicy.newCustomThemeDraft(
+            backgroundColor = viewModel.customBackgroundColor,
+            textColor = viewModel.customTextColor,
+        )
+    }
 
     var importedFonts by remember { mutableStateOf(FontManager.getImportedFonts(context)) }
     val allFonts = remember(importedFonts) {
@@ -94,15 +99,11 @@ fun AppearanceSheet(
 
     var isImporting by remember { mutableStateOf(false) }
     var showCustomThemeDialog by remember { mutableStateOf(false) }
-    var draftThemeName by remember { mutableStateOf("") }
-    var draftBackgroundColor by remember { mutableIntStateOf(viewModel.customBackgroundColor) }
-    var draftTextColor by remember { mutableIntStateOf(viewModel.customTextColor) }
-    var draftBackgroundInput by remember {
-        mutableStateOf(NovelReaderAppearancePolicy.colorHex(viewModel.customBackgroundColor))
-    }
-    var draftTextInput by remember {
-        mutableStateOf(NovelReaderAppearancePolicy.colorHex(viewModel.customTextColor))
-    }
+    var draftThemeName by remember { mutableStateOf(initialCustomThemeDraft.name) }
+    var draftBackgroundColor by remember { mutableIntStateOf(initialCustomThemeDraft.backgroundColor) }
+    var draftTextColor by remember { mutableIntStateOf(initialCustomThemeDraft.textColor) }
+    var draftBackgroundInput by remember { mutableStateOf(initialCustomThemeDraft.backgroundColorInput) }
+    var draftTextInput by remember { mutableStateOf(initialCustomThemeDraft.textColorInput) }
     var renameTarget by remember { mutableStateOf<CustomReaderTheme?>(null) }
     var deleteTarget by remember { mutableStateOf<CustomReaderTheme?>(null) }
     var renameInput by remember { mutableStateOf("") }
@@ -198,7 +199,7 @@ fun AppearanceSheet(
                             textColor = customTheme.textColor,
                             selected = choice.selected,
                             onClick = { viewModel.applyCustomTheme(customTheme) },
-                            onLongClick = {
+                            onRenameClick = {
                                 renameTarget = customTheme
                                 renameInput = customTheme.name
                             },
@@ -762,10 +763,11 @@ fun AppearanceSheet(
     }
 
     deleteTarget?.let { target ->
+        val dialogState = NovelReaderAppearanceSheetPolicy.deleteThemeDialogState(target)
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text(NovelReaderAppearanceSheetPolicy.DELETE_THEME_TITLE) },
-            text = { Text(NovelReaderAppearanceSheetPolicy.deleteThemeMessage(target)) },
+            title = { Text(dialogState.title) },
+            text = { Text(dialogState.message) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -774,14 +776,14 @@ fun AppearanceSheet(
                     },
                 ) {
                     Text(
-                        NovelReaderAppearanceSheetPolicy.DELETE_BUTTON_TEXT,
+                        dialogState.confirmButtonText,
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) {
-                    Text(NovelReaderAppearanceSheetPolicy.CANCEL_BUTTON_TEXT)
+                    Text(dialogState.dismissButtonText)
                 }
             },
         )
@@ -799,19 +801,23 @@ private fun ReaderThemeSwatchButton(
     textColor: Int,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
+    onRenameClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
     splitBackgroundColor: Int? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
+    val menuState = NovelReaderAppearanceSheetPolicy.themeSwatchMenuState(
+        canRename = onRenameClick != null,
+        canDelete = onDeleteClick != null,
+    )
     Surface(
         modifier = Modifier
             .width(84.dp)
             .height(64.dp)
             .combinedClickable(
                 onClick = { onClick() },
-                onLongClick = if (onLongClick != null) {
+                onLongClick = if (menuState.enabled) {
                     {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         showMenu = true
@@ -833,24 +839,26 @@ private fun ReaderThemeSwatchButton(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
         ) {
-            DropdownMenuItem(
-                text = { Text(NovelReaderAppearanceSheetPolicy.RENAME_MENU_TEXT) },
-                onClick = {
-                    showMenu = false
-                    onLongClick?.invoke()
-                },
-            )
-            if (onDeleteClick != null) {
+            if (menuState.showRename) {
+                DropdownMenuItem(
+                    text = { Text(menuState.renameMenuText) },
+                    onClick = {
+                        showMenu = false
+                        onRenameClick?.invoke()
+                    },
+                )
+            }
+            if (menuState.showDelete) {
                 DropdownMenuItem(
                     text = {
                         Text(
-                            NovelReaderAppearanceSheetPolicy.DELETE_MENU_TEXT,
+                            menuState.deleteMenuText,
                             color = MaterialTheme.colorScheme.error,
                         )
                     },
                     onClick = {
                         showMenu = false
-                        onDeleteClick()
+                        onDeleteClick?.invoke()
                     },
                 )
             }
@@ -927,8 +935,7 @@ private fun AddThemeButton(onClick: () -> Unit) {
 
 @Composable
 private fun ColorReviewChip(
-    label: String,
-    parsedColor: Int?,
+    state: NovelReaderAppearanceSheetPolicy.ColorReviewState,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -937,7 +944,7 @@ private fun ColorReviewChip(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         border = BorderStroke(
             1.dp,
-            if (parsedColor == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant,
+            if (!state.isValid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant,
         ),
     ) {
         Row(
@@ -950,20 +957,19 @@ private fun ColorReviewChip(
             Box(
                 modifier = Modifier
                     .size(20.dp)
-                    .background(Color(parsedColor ?: 0x00000000), RoundedCornerShape(5.dp))
+                    .background(Color(state.color), RoundedCornerShape(5.dp))
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(5.dp)),
             )
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
-                    text = label,
+                    text = state.label,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = parsedColor?.let(NovelReaderAppearancePolicy::colorHex)
-                        ?: NovelReaderAppearanceSheetPolicy.INVALID_COLOR_LABEL,
+                    text = state.valueText,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (parsedColor == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    color = if (!state.isValid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                 )
             }
@@ -1064,13 +1070,11 @@ private fun CustomThemeDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     ColorReviewChip(
-                        label = dialogState.background.reviewLabel,
-                        parsedColor = dialogState.background.parsedColor,
+                        state = dialogState.background.review,
                         modifier = Modifier.weight(1f),
                     )
                     ColorReviewChip(
-                        label = dialogState.text.reviewLabel,
-                        parsedColor = dialogState.text.parsedColor,
+                        state = dialogState.text.review,
                         modifier = Modifier.weight(1f),
                     )
                 }
