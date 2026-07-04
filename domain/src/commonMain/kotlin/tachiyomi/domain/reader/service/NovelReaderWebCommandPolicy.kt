@@ -1,8 +1,33 @@
 package tachiyomi.domain.reader.service
 
 import tachiyomi.domain.reader.model.NovelReaderWebCommand
+import tachiyomi.domain.reader.model.ReaderSettings
 
 object NovelReaderWebCommandPolicy {
+    fun initialLoadCommand(
+        chapterUrl: String?,
+        progress: Double,
+        hasPendingCommands: Boolean,
+    ): NovelReaderWebCommand? {
+        if (hasPendingCommands) return null
+        return chapterUrl?.let { NovelReaderWebCommand.LoadChapter(it, progress) }
+    }
+
+    fun reloadChapterCommand(
+        chapterUrl: String?,
+        progress: Double,
+    ): NovelReaderWebCommand? {
+        return chapterUrl?.let { NovelReaderWebCommand.LoadChapter(it, progress) }
+    }
+
+    fun focusModeCommand(focusMode: Boolean): NovelReaderWebCommand {
+        return NovelReaderWebCommand.ChangeFocusMode(focusMode)
+    }
+
+    fun settingsCommand(settings: ReaderSettings): NovelReaderWebCommand {
+        return NovelReaderWebCommand.ApplySettings(settings)
+    }
+
     fun collapseConsecutiveLoads(
         commands: Iterable<NovelReaderWebCommand>,
     ): List<NovelReaderWebCommand> {

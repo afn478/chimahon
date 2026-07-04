@@ -3,8 +3,91 @@ package tachiyomi.domain.reader.service
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import tachiyomi.domain.reader.model.NovelReaderWebCommand
+import tachiyomi.domain.reader.model.ReaderSettings
 
 class NovelReaderWebCommandPolicyTest {
+    @Test
+    fun initialLoadCommandLoadsCurrentChapterWhenQueueIsEmpty() {
+        assertEquals(
+            NovelReaderWebCommand.LoadChapter(
+                url = "file:///chapter.xhtml",
+                progress = 0.35,
+            ),
+            NovelReaderWebCommandPolicy.initialLoadCommand(
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.35,
+                hasPendingCommands = false,
+            ),
+        )
+    }
+
+    @Test
+    fun initialLoadCommandWaitsForExistingPendingCommands() {
+        assertEquals(
+            null,
+            NovelReaderWebCommandPolicy.initialLoadCommand(
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.35,
+                hasPendingCommands = true,
+            ),
+        )
+    }
+
+    @Test
+    fun initialLoadCommandIgnoresMissingChapterUrl() {
+        assertEquals(
+            null,
+            NovelReaderWebCommandPolicy.initialLoadCommand(
+                chapterUrl = null,
+                progress = 0.35,
+                hasPendingCommands = false,
+            ),
+        )
+    }
+
+    @Test
+    fun reloadChapterCommandReloadsCurrentChapterProgress() {
+        assertEquals(
+            NovelReaderWebCommand.LoadChapter(
+                url = "file:///chapter.xhtml",
+                progress = 0.65,
+            ),
+            NovelReaderWebCommandPolicy.reloadChapterCommand(
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.65,
+            ),
+        )
+    }
+
+    @Test
+    fun reloadChapterCommandIgnoresMissingChapterUrl() {
+        assertEquals(
+            null,
+            NovelReaderWebCommandPolicy.reloadChapterCommand(
+                chapterUrl = null,
+                progress = 0.65,
+            ),
+        )
+    }
+
+    @Test
+    fun focusModeCommandBuildsFocusCommand() {
+        assertEquals(
+            NovelReaderWebCommand.ChangeFocusMode(focusMode = true),
+            NovelReaderWebCommandPolicy.focusModeCommand(focusMode = true),
+        )
+    }
+
+    @Test
+    fun settingsCommandBuildsApplySettingsCommand() {
+        val settings = ReaderSettings(fontSize = 24.0)
+
+        assertEquals(
+            NovelReaderWebCommand.ApplySettings(settings),
+            NovelReaderWebCommandPolicy.settingsCommand(settings),
+        )
+    }
+
     @Test
     fun collapseConsecutiveLoadsKeepsLastSharedLoadCommandInEachRun() {
         val commands = listOf(

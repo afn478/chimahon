@@ -24,13 +24,13 @@ import com.google.common.io.Files.append
 import kotlinx.coroutines.delay
 import java.io.BufferedReader
 import java.io.File
-import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import tachiyomi.domain.reader.model.ReaderSettings
 import tachiyomi.domain.reader.service.NovelReaderInputPolicy
 import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebBridgePolicy
 import tachiyomi.domain.reader.service.NovelReaderWebCommandActionPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebHostPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebInjectionPolicy
 import tachiyomi.domain.reader.service.NovelReaderWebLoadPolicy
@@ -66,10 +66,11 @@ fun ReaderWebView(
     val pendingCommands = remember(bridge) { bridge.pendingCommands }
 
     LaunchedEffect(bridge.chapterUrl) {
-        val chapterUrl = bridge.chapterUrl ?: return@LaunchedEffect
-        if (pendingCommands.isEmpty()) {
-            bridge.send(NovelReaderWebCommand.LoadChapter(chapterUrl, bridge.progress))
-        }
+        NovelReaderWebCommandPolicy.initialLoadCommand(
+            chapterUrl = bridge.chapterUrl,
+            progress = bridge.progress,
+            hasPendingCommands = pendingCommands.isNotEmpty(),
+        )?.let(bridge::send)
     }
 
     val isFirstContinuous = remember { mutableStateOf(true) }
@@ -78,13 +79,14 @@ fun ReaderWebView(
             isFirstContinuous.value = false
             return@LaunchedEffect
         }
-        bridge.chapterUrl?.let { url ->
-            bridge.send(NovelReaderWebCommand.LoadChapter(url, bridge.progress))
-        }
+        NovelReaderWebCommandPolicy.reloadChapterCommand(
+            chapterUrl = bridge.chapterUrl,
+            progress = bridge.progress,
+        )?.let(bridge::send)
     }
 
     LaunchedEffect(focusMode) {
-        bridge.send(NovelReaderWebCommand.ChangeFocusMode(focusMode))
+        bridge.send(NovelReaderWebCommandPolicy.focusModeCommand(focusMode))
     }
 
     val isFirstComposition = remember { mutableStateOf(true) }
@@ -93,8 +95,8 @@ fun ReaderWebView(
             isFirstComposition.value = false
             return@LaunchedEffect
         }
-        kotlinx.coroutines.delay(100)
-        bridge.send(NovelReaderWebCommand.ApplySettings(readerSettings))
+        delay(100)
+        bridge.send(NovelReaderWebCommandPolicy.settingsCommand(readerSettings))
     }
 
     AndroidView(
