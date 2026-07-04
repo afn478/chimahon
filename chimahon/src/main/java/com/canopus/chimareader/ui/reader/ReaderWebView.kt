@@ -590,19 +590,18 @@ private class ReaderAndroidWebView(
                 touchStartY = event.y
             }
             MotionEvent.ACTION_UP -> {
-                if (NovelReaderInputPolicy.shouldHandleTap(totalMovement)) {
-                    val cssPoint = NovelReaderWebGeometryPolicy.viewportPointToCssPoint(
-                        x = event.x.toDouble(),
-                        y = event.y.toDouble(),
+                when (
+                    val action = NovelReaderWebBridgePolicy.touchTapAction(
+                        viewportX = event.x.toDouble(),
+                        viewportY = event.y.toDouble(),
+                        totalMovement = totalMovement,
                         scale = resources.displayMetrics.density.toDouble(),
                     )
-                    evaluateJavascript(
-                        NovelReaderWebScriptPolicy.handleTapScript(
-                            cssPoint.x.toFloat(),
-                            cssPoint.y.toFloat(),
-                        ),
-                        null,
-                    )
+                ) {
+                    NovelReaderWebBridgePolicy.TouchTapAction.Ignore -> Unit
+                    is NovelReaderWebBridgePolicy.TouchTapAction.EvaluateScript -> {
+                        evaluateJavascript(action.script, null)
+                    }
                 }
                 performClick()
             }

@@ -20,6 +20,11 @@ object NovelReaderWebBridgePolicy {
         ) : TextSelectionAction
     }
 
+    sealed interface TouchTapAction {
+        data object Ignore : TouchTapAction
+        data class EvaluateScript(val script: String) : TouchTapAction
+    }
+
     fun backgroundTapAction(
         clientX: Double,
         clientY: Double,
@@ -81,6 +86,36 @@ object NovelReaderWebBridgePolicy {
                 viewportLeft = viewportLeft,
                 viewportTop = viewportTop,
                 scale = scale,
+            ),
+        )
+    }
+
+    fun touchTapAction(
+        viewportX: Double,
+        viewportY: Double,
+        totalMovement: Float,
+        scale: Double,
+        tapMovementThreshold: Float = NovelReaderInputPolicy.MAX_TAP_MOVEMENT,
+    ): TouchTapAction {
+        if (
+            !NovelReaderInputPolicy.shouldHandleTap(
+                totalMovement = totalMovement,
+                tapMovementThreshold = tapMovementThreshold,
+            )
+        ) {
+            return TouchTapAction.Ignore
+        }
+
+        val cssPoint = NovelReaderWebGeometryPolicy.viewportPointToCssPoint(
+            x = viewportX,
+            y = viewportY,
+            scale = scale,
+        )
+
+        return TouchTapAction.EvaluateScript(
+            NovelReaderWebScriptPolicy.handleTapScript(
+                cssX = cssPoint.x.toFloat(),
+                cssY = cssPoint.y.toFloat(),
             ),
         )
     }

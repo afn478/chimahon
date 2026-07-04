@@ -133,6 +133,44 @@ class NovelReaderWebBridgePolicyTest {
     }
 
     @Test
+    fun touchTapActionIgnoresTouchMovementAtOrBeyondThreshold() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.TouchTapAction.Ignore,
+            NovelReaderWebBridgePolicy.touchTapAction(
+                viewportX = 100.0,
+                viewportY = 80.0,
+                totalMovement = NovelReaderInputPolicy.MAX_TAP_MOVEMENT,
+                scale = 2.0,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebBridgePolicy.TouchTapAction.Ignore,
+            NovelReaderWebBridgePolicy.touchTapAction(
+                viewportX = 100.0,
+                viewportY = 80.0,
+                totalMovement = 4.0f,
+                scale = 2.0,
+                tapMovementThreshold = 4.0f,
+            ),
+        )
+    }
+
+    @Test
+    fun touchTapActionBuildsHandleTapScriptAtCssPoint() {
+        assertEquals(
+            NovelReaderWebBridgePolicy.TouchTapAction.EvaluateScript(
+                "if (window.hoshiReader && window.hoshiReader.handleTap) { window.hoshiReader.handleTap(50.0, 40.0); }",
+            ),
+            NovelReaderWebBridgePolicy.touchTapAction(
+                viewportX = 100.0,
+                viewportY = 80.0,
+                totalMovement = 3.0f,
+                scale = 2.0,
+            ),
+        )
+    }
+
+    @Test
     fun nativeCallbackBridgeScriptInstallsReaderBridgeCallbacks() {
         val script = NovelReaderWebBridgePolicy.nativeCallbackBridgeScript(
             nativeBridgeName = "Native'Bridge",
