@@ -15,48 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import kotlin.math.abs
-
-class CueTimeline(matchData: SasayakiMatchData?) {
-    private val cues: List<SasayakiMatch> = matchData?.matches ?: emptyList()
-
-    fun nextCue(afterTime: Double): Double? {
-        var index = findCue(afterTime)
-        if (index < cues.size && cues[index].startTime == afterTime) {
-            index++
-        }
-        return if (index < cues.size) cues[index].startTime else null
-    }
-
-    fun prevCue(beforeTime: Double): Double? {
-        val index = findCue(beforeTime)
-        return if (index > 0) cues[index - 1].startTime else null
-    }
-
-    fun cueAt(time: Double): SasayakiMatch? {
-        val index = findCue(time)
-        if (index < cues.size && abs(cues[index].startTime - time) <= 0.01) {
-            return cues[index]
-        }
-        if (index == 0) return null
-        val cue = cues[index - 1]
-        return if (time <= cue.endTime) cue else null
-    }
-
-    private fun findCue(time: Double): Int {
-        var low = 0
-        var high = cues.size
-        while (low < high) {
-            val mid = (low + high) / 2
-            if (cues[mid].startTime < time) {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        return low
-    }
-}
+import tachiyomi.domain.reader.service.NovelReaderSasayakiCueTimeline
 
 class SasayakiPlayer(
     private val context: Context,
@@ -70,7 +29,7 @@ class SasayakiPlayer(
 
     var matchData: SasayakiMatchData? = null
         private set
-    var timeline = CueTimeline(null)
+    var timeline = NovelReaderSasayakiCueTimeline(null)
         private set
 
     var playback = SasayakiPlaybackData(lastPosition = 0.0)
@@ -102,7 +61,7 @@ class SasayakiPlayer(
     init {
         matchData = BookStorage.loadSasayakiMatchData(rootDir)
         if (matchData != null) {
-            timeline = CueTimeline(matchData)
+            timeline = NovelReaderSasayakiCueTimeline(matchData)
             playback = BookStorage.loadSasayakiPlaybackData(rootDir) ?: SasayakiPlaybackData(lastPosition = 0.0)
             currentTime = playback.lastPosition
             delay = playback.delay
