@@ -69,6 +69,18 @@ class NovelReaderWebLoadPolicyTest {
             NovelReaderWebLoadPolicy.localFileMissingMessage("file:///book/missing.xhtml"),
         )
         assertEquals(
+            "Disk permission denied",
+            NovelReaderWebLoadPolicy.loadExceptionFailureMessage("Disk permission denied"),
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.DEFAULT_CHAPTER_LOAD_FAILURE_MESSAGE,
+            NovelReaderWebLoadPolicy.loadExceptionFailureMessage(null),
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.DEFAULT_CHAPTER_LOAD_FAILURE_MESSAGE,
+            NovelReaderWebLoadPolicy.loadExceptionFailureMessage(""),
+        )
+        assertEquals(
             NovelReaderWebLoadPolicy.RendererGoneFailure(
                 reason = "WebView crashed",
                 message = "Renderer died (WebView crashed). Try disabling hardware acceleration or 'Avoid page breaks'.",
@@ -81,6 +93,33 @@ class NovelReaderWebLoadPolicyTest {
                 message = "Renderer died (WebView killed by system (OOM)). Try disabling hardware acceleration or 'Avoid page breaks'.",
             ),
             NovelReaderWebLoadPolicy.rendererGoneFailure(crashed = false),
+        )
+    }
+
+    @Test
+    fun receivedErrorActionReportsOnlyMainFrameFailures() {
+        assertEquals(
+            NovelReaderWebLoadPolicy.ReceivedErrorAction.ReportFailure("Network unavailable"),
+            NovelReaderWebLoadPolicy.receivedErrorAction(
+                isMainFrame = true,
+                description = "Network unavailable",
+            ),
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.ReceivedErrorAction.ReportFailure(
+                NovelReaderWebLoadPolicy.DEFAULT_CHAPTER_LOAD_FAILURE_MESSAGE,
+            ),
+            NovelReaderWebLoadPolicy.receivedErrorAction(
+                isMainFrame = true,
+                description = null,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebLoadPolicy.ReceivedErrorAction.Ignore,
+            NovelReaderWebLoadPolicy.receivedErrorAction(
+                isMainFrame = false,
+                description = "Missing image",
+            ),
         )
     }
 

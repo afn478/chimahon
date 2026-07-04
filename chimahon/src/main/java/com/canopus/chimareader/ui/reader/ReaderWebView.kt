@@ -208,8 +208,16 @@ fun ReaderWebView(
                         error: WebResourceError?,
                     ) {
                         Log.e("ReaderWebView", "onReceivedError: url=${request?.url}, error=$error")
-                        if (request?.isForMainFrame == true) {
-                            onLoadFailed(error?.description?.toString() ?: "Failed to load chapter")
+                        when (
+                            val action = NovelReaderWebLoadPolicy.receivedErrorAction(
+                                isMainFrame = request?.isForMainFrame == true,
+                                description = error?.description?.toString(),
+                            )
+                        ) {
+                            NovelReaderWebLoadPolicy.ReceivedErrorAction.Ignore -> Unit
+                            is NovelReaderWebLoadPolicy.ReceivedErrorAction.ReportFailure -> {
+                                onLoadFailed(action.message)
+                            }
                         }
                     }
                 }
@@ -514,7 +522,7 @@ private class ReaderAndroidWebView(
             }
         } catch (e: Exception) {
             Log.e("ReaderWebView", "loadChapter error", e)
-            onLoadFailed(e.message ?: "Failed to load chapter")
+            onLoadFailed(NovelReaderWebLoadPolicy.loadExceptionFailureMessage(e.message))
         }
     }
 

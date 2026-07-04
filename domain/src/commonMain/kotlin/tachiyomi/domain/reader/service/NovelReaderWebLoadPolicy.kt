@@ -2,6 +2,7 @@ package tachiyomi.domain.reader.service
 
 object NovelReaderWebLoadPolicy {
     const val CHAPTER_LOAD_DEFER_DELAY_MS = 100L
+    const val DEFAULT_CHAPTER_LOAD_FAILURE_MESSAGE = "Failed to load chapter"
 
     data class ChapterLoadKey(
         val url: String,
@@ -19,6 +20,11 @@ object NovelReaderWebLoadPolicy {
         data class Defer(val delayMillis: Long = CHAPTER_LOAD_DEFER_DELAY_MS) : ChapterLoadAction
         data object SkipDuplicate : ChapterLoadAction
         data class Load(val key: ChapterLoadKey) : ChapterLoadAction
+    }
+
+    sealed interface ReceivedErrorAction {
+        data object Ignore : ReceivedErrorAction
+        data class ReportFailure(val message: String) : ReceivedErrorAction
     }
 
     data class RendererGoneFailure(
@@ -62,6 +68,21 @@ object NovelReaderWebLoadPolicy {
 
     fun localFileMissingMessage(url: String): String {
         return "File not found: $url"
+    }
+
+    fun loadExceptionFailureMessage(message: String?): String {
+        return message?.takeIf { it.isNotBlank() } ?: DEFAULT_CHAPTER_LOAD_FAILURE_MESSAGE
+    }
+
+    fun receivedErrorAction(
+        isMainFrame: Boolean,
+        description: String?,
+    ): ReceivedErrorAction {
+        return if (isMainFrame) {
+            ReceivedErrorAction.ReportFailure(loadExceptionFailureMessage(description))
+        } else {
+            ReceivedErrorAction.Ignore
+        }
     }
 
     fun rendererGoneFailure(crashed: Boolean): RendererGoneFailure {
