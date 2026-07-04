@@ -4,6 +4,15 @@ import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import tachiyomi.domain.reader.model.ReaderSettings
 
 object NovelReaderWebCommandPolicy {
+    data class CommandTriggerState(
+        val hasObservedInitialValue: Boolean = false,
+    )
+
+    data class CommandTriggerResult(
+        val state: CommandTriggerState,
+        val command: NovelReaderWebCommand?,
+    )
+
     fun initialLoadCommand(
         chapterUrl: String?,
         progress: Double,
@@ -26,6 +35,44 @@ object NovelReaderWebCommandPolicy {
 
     fun settingsCommand(settings: ReaderSettings): NovelReaderWebCommand {
         return NovelReaderWebCommand.ApplySettings(settings)
+    }
+
+    fun continuousModeChangedCommand(
+        state: CommandTriggerState,
+        chapterUrl: String?,
+        progress: Double,
+    ): CommandTriggerResult {
+        val nextState = state.copy(hasObservedInitialValue = true)
+        val command = if (state.hasObservedInitialValue) {
+            reloadChapterCommand(
+                chapterUrl = chapterUrl,
+                progress = progress,
+            )
+        } else {
+            null
+        }
+
+        return CommandTriggerResult(
+            state = nextState,
+            command = command,
+        )
+    }
+
+    fun settingsChangedCommand(
+        state: CommandTriggerState,
+        settings: ReaderSettings,
+    ): CommandTriggerResult {
+        val nextState = state.copy(hasObservedInitialValue = true)
+        val command = if (state.hasObservedInitialValue) {
+            settingsCommand(settings)
+        } else {
+            null
+        }
+
+        return CommandTriggerResult(
+            state = nextState,
+            command = command,
+        )
     }
 
     fun collapseConsecutiveLoads(

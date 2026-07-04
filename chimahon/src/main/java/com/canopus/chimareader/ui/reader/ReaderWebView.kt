@@ -73,30 +73,35 @@ fun ReaderWebView(
         )?.let(bridge::send)
     }
 
-    val isFirstContinuous = remember { mutableStateOf(true) }
+    val continuousModeCommandState = remember {
+        mutableStateOf(NovelReaderWebCommandPolicy.CommandTriggerState())
+    }
     LaunchedEffect(continuousMode) {
-        if (isFirstContinuous.value) {
-            isFirstContinuous.value = false
-            return@LaunchedEffect
-        }
-        NovelReaderWebCommandPolicy.reloadChapterCommand(
+        val result = NovelReaderWebCommandPolicy.continuousModeChangedCommand(
+            state = continuousModeCommandState.value,
             chapterUrl = bridge.chapterUrl,
             progress = bridge.progress,
-        )?.let(bridge::send)
+        )
+        continuousModeCommandState.value = result.state
+        result.command?.let(bridge::send)
     }
 
     LaunchedEffect(focusMode) {
         bridge.send(NovelReaderWebCommandPolicy.focusModeCommand(focusMode))
     }
 
-    val isFirstComposition = remember { mutableStateOf(true) }
+    val settingsCommandState = remember {
+        mutableStateOf(NovelReaderWebCommandPolicy.CommandTriggerState())
+    }
     LaunchedEffect(readerSettings) {
-        if (isFirstComposition.value) {
-            isFirstComposition.value = false
-            return@LaunchedEffect
-        }
+        val result = NovelReaderWebCommandPolicy.settingsChangedCommand(
+            state = settingsCommandState.value,
+            settings = readerSettings,
+        )
+        settingsCommandState.value = result.state
+        val command = result.command ?: return@LaunchedEffect
         delay(100)
-        bridge.send(NovelReaderWebCommandPolicy.settingsCommand(readerSettings))
+        bridge.send(command)
     }
 
     AndroidView(

@@ -89,6 +89,102 @@ class NovelReaderWebCommandPolicyTest {
     }
 
     @Test
+    fun continuousModeChangedCommandConsumesInitialValueWithoutCommand() {
+        assertEquals(
+            NovelReaderWebCommandPolicy.CommandTriggerResult(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                command = null,
+            ),
+            NovelReaderWebCommandPolicy.continuousModeChangedCommand(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(),
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.4,
+            ),
+        )
+    }
+
+    @Test
+    fun continuousModeChangedCommandReloadsAfterInitialValue() {
+        assertEquals(
+            NovelReaderWebCommandPolicy.CommandTriggerResult(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                command = NovelReaderWebCommand.LoadChapter(
+                    url = "file:///chapter.xhtml",
+                    progress = 0.4,
+                ),
+            ),
+            NovelReaderWebCommandPolicy.continuousModeChangedCommand(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                chapterUrl = "file:///chapter.xhtml",
+                progress = 0.4,
+            ),
+        )
+    }
+
+    @Test
+    fun continuousModeChangedCommandIgnoresMissingChapterAfterInitialValue() {
+        assertEquals(
+            NovelReaderWebCommandPolicy.CommandTriggerResult(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                command = null,
+            ),
+            NovelReaderWebCommandPolicy.continuousModeChangedCommand(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                chapterUrl = null,
+                progress = 0.4,
+            ),
+        )
+    }
+
+    @Test
+    fun settingsChangedCommandConsumesInitialValueWithoutCommand() {
+        val settings = ReaderSettings(fontSize = 20.0)
+
+        assertEquals(
+            NovelReaderWebCommandPolicy.CommandTriggerResult(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                command = null,
+            ),
+            NovelReaderWebCommandPolicy.settingsChangedCommand(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(),
+                settings = settings,
+            ),
+        )
+    }
+
+    @Test
+    fun settingsChangedCommandAppliesAfterInitialValue() {
+        val settings = ReaderSettings(fontSize = 20.0)
+
+        assertEquals(
+            NovelReaderWebCommandPolicy.CommandTriggerResult(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                command = NovelReaderWebCommand.ApplySettings(settings),
+            ),
+            NovelReaderWebCommandPolicy.settingsChangedCommand(
+                state = NovelReaderWebCommandPolicy.CommandTriggerState(
+                    hasObservedInitialValue = true,
+                ),
+                settings = settings,
+            ),
+        )
+    }
+
+    @Test
     fun collapseConsecutiveLoadsKeepsLastSharedLoadCommandInEachRun() {
         val commands = listOf(
             NovelReaderWebCommand.LoadChapter("chapter-1", progress = 0.0),
