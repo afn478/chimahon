@@ -7,6 +7,7 @@ import kotlin.test.assertTrue
 import tachiyomi.domain.library.model.NovelBookMetadata
 import tachiyomi.domain.reader.model.NovelEpubSpineItemType
 import tachiyomi.domain.reader.model.NovelReaderBookmark
+import tachiyomi.domain.reader.model.NovelReaderChapterJump
 
 class NovelReaderSessionPolicyTest {
     @Test
@@ -179,6 +180,101 @@ class NovelReaderSessionPolicyTest {
                 trackingLocked = true,
                 appBackgrounded = false,
             ).updateStatisticsBeforeChange,
+        )
+    }
+
+    @Test
+    fun chapterNavigationActionsRespectBoundaries() {
+        assertEquals(
+            NovelReaderSessionPolicy.ChapterNavigationAction.LoadChapter(
+                index = 2,
+                progress = 0.0,
+            ),
+            NovelReaderSessionPolicy.nextChapterAction(
+                currentIndex = 1,
+                chapterCount = 3,
+            ),
+        )
+        assertEquals(
+            NovelReaderSessionPolicy.ChapterNavigationAction.Ignore,
+            NovelReaderSessionPolicy.nextChapterAction(
+                currentIndex = 2,
+                chapterCount = 3,
+            ),
+        )
+        assertEquals(
+            NovelReaderSessionPolicy.ChapterNavigationAction.LoadChapter(
+                index = 1,
+                progress = 1.0,
+            ),
+            NovelReaderSessionPolicy.previousChapterAction(currentIndex = 2),
+        )
+        assertEquals(
+            NovelReaderSessionPolicy.ChapterNavigationAction.Ignore,
+            NovelReaderSessionPolicy.previousChapterAction(currentIndex = 0),
+        )
+    }
+
+    @Test
+    fun internalLinkActionJumpsOnlyWhenLinkResolved() {
+        assertEquals(
+            NovelReaderSessionPolicy.InternalLinkAction.JumpToChapter(
+                spineIndex = 4,
+                fragment = "section-2",
+                saveCurrentBookmark = true,
+            ),
+            NovelReaderSessionPolicy.internalLinkAction(
+                NovelReaderChapterJump(
+                    spineIndex = 4,
+                    fragment = "section-2",
+                ),
+            ),
+        )
+        assertEquals(
+            NovelReaderSessionPolicy.InternalLinkAction.Ignore,
+            NovelReaderSessionPolicy.internalLinkAction(null),
+        )
+    }
+
+    @Test
+    fun appVisibilityTransitionResetsStatisticsBaselineOnlyWhenForegrounded() {
+        assertEquals(
+            NovelReaderSessionPolicy.AppVisibilityTransition(
+                appBackgrounded = true,
+                resetStatisticsBaseline = false,
+            ),
+            NovelReaderSessionPolicy.appVisibilityTransition(backgrounded = true),
+        )
+        assertEquals(
+            NovelReaderSessionPolicy.AppVisibilityTransition(
+                appBackgrounded = false,
+                resetStatisticsBaseline = true,
+            ),
+            NovelReaderSessionPolicy.appVisibilityTransition(backgrounded = false),
+        )
+    }
+
+    @Test
+    fun chapterDisplayStateBuildsFileUrlWhenPathExists() {
+        assertEquals(
+            NovelReaderSessionPolicy.ChapterDisplayState(
+                fileUrl = "file:///books/Novel/Text/Chapter 1.xhtml",
+                progress = 0.75,
+                chapterTitle = "Chapter 1",
+            ),
+            NovelReaderSessionPolicy.chapterDisplayState(
+                chapterAbsolutePath = "/books/Novel/Text/Chapter 1.xhtml",
+                progress = 0.75,
+                chapterTitle = "Chapter 1",
+            ),
+        )
+        assertEquals(
+            null,
+            NovelReaderSessionPolicy.chapterDisplayState(
+                chapterAbsolutePath = null,
+                progress = 0.75,
+                chapterTitle = "Chapter 1",
+            ),
         )
     }
 }

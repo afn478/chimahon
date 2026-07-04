@@ -31,7 +31,6 @@ import tachiyomi.domain.reader.model.NovelReaderTocEntry
 import tachiyomi.domain.reader.model.NovelReaderTocItem
 import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import tachiyomi.domain.reader.model.ReaderSettings
-import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
 import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderSessionPolicy
@@ -274,11 +273,7 @@ class ReaderViewModel(
             }
         }
 
-        getCurrentChapter()?.let { file ->
-            val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
-            val chapterTitle = getCurrentChapterTitle()
-            bridge.loadChapter(fileUrl, currentProgress, chapterTitle)
-        }
+        loadCurrentChapterInBridge(currentProgress)
 
         // Start collecting updates from settings flow in the background
         scope.launch {
@@ -401,8 +396,11 @@ class ReaderViewModel(
     }
 
     fun getCurrentChapter(): File? {
-        val absolutePath = document.chapterAbsolutePath(index.toUInt()) ?: return null
-        return File(absolutePath)
+        return getCurrentChapterAbsolutePath()?.let(::File)
+    }
+
+    private fun getCurrentChapterAbsolutePath(): String? {
+        return document.chapterAbsolutePath(index.toUInt())
     }
 
     fun getCurrentChapterTitle(): String? {
@@ -444,15 +442,32 @@ class ReaderViewModel(
     }
 
     fun nextChapter(): Boolean {
-        if (index >= chapterCount - 1) return false
-        loadChapter(index + 1, 0.0)
-        return true
+        return when (
+            val action = NovelReaderSessionPolicy.nextChapterAction(
+                currentIndex = index,
+                chapterCount = chapterCount,
+            )
+        ) {
+            NovelReaderSessionPolicy.ChapterNavigationAction.Ignore -> false
+            is NovelReaderSessionPolicy.ChapterNavigationAction.LoadChapter -> {
+                loadChapter(action.index, action.progress)
+                true
+            }
+        }
     }
 
     fun previousChapter(): Boolean {
-        if (index <= 0) return false
-        loadChapter(index - 1, 1.0)
-        return true
+        return when (
+            val action = NovelReaderSessionPolicy.previousChapterAction(
+                currentIndex = index,
+            )
+        ) {
+            NovelReaderSessionPolicy.ChapterNavigationAction.Ignore -> false
+            is NovelReaderSessionPolicy.ChapterNavigationAction.LoadChapter -> {
+                loadChapter(action.index, action.progress)
+                true
+            }
+        }
     }
 
     fun jumpToChapter(spineIndex: Int, fragment: String? = null) {
@@ -473,12 +488,17 @@ class ReaderViewModel(
             url = url,
             chapterPaths = document.linearSpineItems.indices.map { document.chapterAbsolutePath(it.toUInt()) },
         )
-        if (target != null) {
-            saveBookmark(currentProgress)
-            jumpToChapter(target.spineIndex, target.fragment)
-            return
+        when (val action = NovelReaderSessionPolicy.internalLinkAction(target)) {
+            NovelReaderSessionPolicy.InternalLinkAction.Ignore -> {
+                android.util.Log.w("ReaderViewModel", "jumpToUrl: no spine match for $url")
+            }
+            is NovelReaderSessionPolicy.InternalLinkAction.JumpToChapter -> {
+                if (action.saveCurrentBookmark) {
+                    saveBookmark(currentProgress)
+                }
+                jumpToChapter(action.spineIndex, action.fragment)
+            }
         }
-        android.util.Log.w("ReaderViewModel", "jumpToUrl: no spine match for $url")
     }
 
     private fun loadChapter(newIndex: Int, progress: Double) {
@@ -505,11 +525,17 @@ class ReaderViewModel(
         // nor the saveBookmark call below register a false delta from the jump.
         statisticsTracker.resetBaseline(change.baselineCharacterCount)
         saveBookmark(change.progress, updateTracker = false, force = true)
-        getCurrentChapter()?.let { file ->
-            val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
-            val chapterTitle = getCurrentChapterTitle()
-            bridge.loadChapter(fileUrl, change.progress, chapterTitle)
-        }
+        loadCurrentChapterInBridge(change.progress)
+    }
+
+    private fun loadCurrentChapterInBridge(progress: Double) {
+        val display = NovelReaderSessionPolicy.chapterDisplayState(
+            chapterAbsolutePath = getCurrentChapterAbsolutePath(),
+            progress = progress,
+            chapterTitle = getCurrentChapterTitle(),
+        ) ?: return
+
+        bridge.loadChapter(display.fileUrl, display.progress, display.chapterTitle)
     }
 
     private fun calculateExploredCharCount(progress: Double): Int {
@@ -581,12 +607,19 @@ class ReaderViewModel(
     }
 
     fun onAppBackgrounded() {
-        appBackgrounded = true
+        applyAppVisibilityTransition(backgrounded = true)
     }
 
     fun onAppForegrounded() {
-        statisticsTracker.resetBaseline(totalExploredCharCount)
-        appBackgrounded = false
+        applyAppVisibilityTransition(backgrounded = false)
+    }
+
+    private fun applyAppVisibilityTransition(backgrounded: Boolean) {
+        val transition = NovelReaderSessionPolicy.appVisibilityTransition(backgrounded)
+        if (transition.resetStatisticsBaseline) {
+            statisticsTracker.resetBaseline(totalExploredCharCount)
+        }
+        appBackgrounded = transition.appBackgrounded
     }
 
     private fun persistToDisk() {

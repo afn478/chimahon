@@ -3,6 +3,7 @@ package tachiyomi.domain.reader.service
 import tachiyomi.domain.library.model.NovelBookMetadata
 import tachiyomi.domain.reader.model.NovelEpubSpineItemType
 import tachiyomi.domain.reader.model.NovelReaderBookmark
+import tachiyomi.domain.reader.model.NovelReaderChapterJump
 
 object NovelReaderSessionPolicy {
     const val DEFAULT_STATISTICS_TITLE = "Unknown"
@@ -32,6 +33,34 @@ object NovelReaderSessionPolicy {
         val updateStatisticsBeforeChange: Boolean,
     )
 
+    sealed interface ChapterNavigationAction {
+        data object Ignore : ChapterNavigationAction
+        data class LoadChapter(
+            val index: Int,
+            val progress: Double,
+        ) : ChapterNavigationAction
+    }
+
+    sealed interface InternalLinkAction {
+        data object Ignore : InternalLinkAction
+        data class JumpToChapter(
+            val spineIndex: Int,
+            val fragment: String?,
+            val saveCurrentBookmark: Boolean,
+        ) : InternalLinkAction
+    }
+
+    data class AppVisibilityTransition(
+        val appBackgrounded: Boolean,
+        val resetStatisticsBaseline: Boolean,
+    )
+
+    data class ChapterDisplayState(
+        val fileUrl: String,
+        val progress: Double,
+        val chapterTitle: String?,
+    )
+
     fun bookOpenAction(
         book: NovelBookMetadata,
         rootAvailable: Boolean,
@@ -59,6 +88,62 @@ object NovelReaderSessionPolicy {
                 chapterCharacterCount = chapterCharacterCount,
             ),
         )
+    }
+
+    fun nextChapterAction(
+        currentIndex: Int,
+        chapterCount: Int,
+    ): ChapterNavigationAction {
+        return if (currentIndex < chapterCount - 1) {
+            ChapterNavigationAction.LoadChapter(
+                index = currentIndex + 1,
+                progress = 0.0,
+            )
+        } else {
+            ChapterNavigationAction.Ignore
+        }
+    }
+
+    fun previousChapterAction(currentIndex: Int): ChapterNavigationAction {
+        return if (currentIndex > 0) {
+            ChapterNavigationAction.LoadChapter(
+                index = currentIndex - 1,
+                progress = 1.0,
+            )
+        } else {
+            ChapterNavigationAction.Ignore
+        }
+    }
+
+    fun internalLinkAction(target: NovelReaderChapterJump?): InternalLinkAction {
+        return target?.let {
+            InternalLinkAction.JumpToChapter(
+                spineIndex = it.spineIndex,
+                fragment = it.fragment,
+                saveCurrentBookmark = true,
+            )
+        } ?: InternalLinkAction.Ignore
+    }
+
+    fun appVisibilityTransition(backgrounded: Boolean): AppVisibilityTransition {
+        return AppVisibilityTransition(
+            appBackgrounded = backgrounded,
+            resetStatisticsBaseline = !backgrounded,
+        )
+    }
+
+    fun chapterDisplayState(
+        chapterAbsolutePath: String?,
+        progress: Double,
+        chapterTitle: String?,
+    ): ChapterDisplayState? {
+        return chapterAbsolutePath?.let {
+            ChapterDisplayState(
+                fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(it),
+                progress = progress,
+                chapterTitle = chapterTitle,
+            )
+        }
     }
 
     fun statisticsTitle(documentTitle: String?): String {
