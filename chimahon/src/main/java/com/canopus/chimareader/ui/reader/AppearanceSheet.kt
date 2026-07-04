@@ -3,7 +3,6 @@ package com.canopus.chimareader.ui.reader
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,23 +10,11 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -41,12 +28,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.chimahon.shared.reader.ReaderAddThemeButton
+import app.chimahon.shared.reader.ReaderAppearanceAdvancedToggleRow
 import app.chimahon.shared.reader.ReaderAppearanceBooleanSegmentedControl
 import app.chimahon.shared.reader.ReaderAppearanceSectionTitle
 import app.chimahon.shared.reader.ReaderAppearanceSlider
 import app.chimahon.shared.reader.ReaderAppearanceSwitchRow
 import app.chimahon.shared.reader.ReaderCustomThemeDialog
 import app.chimahon.shared.reader.ReaderDeleteThemeDialog
+import app.chimahon.shared.reader.ReaderFontActionRow
+import app.chimahon.shared.reader.ReaderFontDropdown
 import app.chimahon.shared.reader.ReaderRenameThemeDialog
 import app.chimahon.shared.reader.ReaderThemeSwatchButton
 import com.canopus.chimareader.data.CustomReaderTheme
@@ -241,84 +231,34 @@ fun AppearanceSheet(
 
                 // Font Family
                 val fontDropdownState = typographySectionState.fontDropdown
-                var fontExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = fontExpanded,
-                    onExpandedChange = { fontExpanded = it },
-                ) {
-                    OutlinedTextField(
-                        value = fontDropdownState.selectedFont,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(fontDropdownState.label) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fontExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    )
-                    ExposedDropdownMenu(
-                        expanded = fontExpanded,
-                        onDismissRequest = { fontExpanded = false },
-                    ) {
-                        fontDropdownState.choices.forEach { font ->
-                            DropdownMenuItem(
-                                text = { Text(font) },
-                                onClick = {
-                                    viewModel.updateSelectedFont(font)
-                                    fontExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
+                ReaderFontDropdown(
+                    state = fontDropdownState,
+                    onFontSelected = { viewModel.updateSelectedFont(it) },
+                )
 
                 // Import Font Button
                 val fontImportButtonState = typographySectionState.fontImportButton
                 val fontDeleteButtonState = typographySectionState.fontDeleteButton
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            fontPickerLauncher.launch(
-                                fontImportButtonState.mimeTypes.toTypedArray(),
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = fontImportButtonState.enabled,
-                    ) {
-                        if (fontImportButtonState.showProgress) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Text(fontImportButtonState.buttonText)
+                ReaderFontActionRow(
+                    importState = fontImportButtonState,
+                    deleteState = fontDeleteButtonState,
+                    onImportClick = {
+                        fontPickerLauncher.launch(
+                            fontImportButtonState.mimeTypes.toTypedArray(),
+                        )
+                    },
+                    onDeleteClick = {
+                        NovelReaderAppearanceSheetPolicy.fontDeleteAction(
+                            selectedFont = viewModel.selectedFont,
+                            importedFonts = importedFonts,
+                            defaultFonts = FontManager.defaultFonts,
+                        )?.let { action ->
+                            FontManager.deleteFont(context, action.fontName)
+                            importedFonts = FontManager.getImportedFonts(context)
+                            viewModel.updateSelectedFont(action.fallbackFont)
                         }
-                    }
-
-                    // Delete imported font button
-                    if (fontDeleteButtonState.visible) {
-                        OutlinedButton(
-                            onClick = {
-                                NovelReaderAppearanceSheetPolicy.fontDeleteAction(
-                                    selectedFont = viewModel.selectedFont,
-                                    importedFonts = importedFonts,
-                                    defaultFonts = FontManager.defaultFonts,
-                                )?.let { action ->
-                                    FontManager.deleteFont(context, action.fontName)
-                                    importedFonts = FontManager.getImportedFonts(context)
-                                    viewModel.updateSelectedFont(action.fallbackFont)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                        ) {
-                            Text(fontDeleteButtonState.buttonText)
-                        }
-                    }
-                }
+                    },
+                )
 
                 // Font Size
                 ReaderAppearanceSlider(
@@ -401,31 +341,11 @@ fun AppearanceSheet(
 
                 // Advanced Header
                 val advancedToggleState = layoutSectionState.advancedToggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.updateLayoutAdvanced(advancedToggleState.nextExpanded) }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    Text(
-                        layoutSectionState.advancedLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Icon(
-                        imageVector = when (advancedToggleState.icon) {
-                            NovelReaderAppearanceSheetPolicy.AdvancedToggleIcon.COLLAPSE -> {
-                                Icons.Default.KeyboardArrowUp
-                            }
-                            NovelReaderAppearanceSheetPolicy.AdvancedToggleIcon.EXPAND -> {
-                                Icons.Default.KeyboardArrowDown
-                            }
-                        },
-                        contentDescription = advancedToggleState.contentDescription,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                ReaderAppearanceAdvancedToggleRow(
+                    label = layoutSectionState.advancedLabel,
+                    state = advancedToggleState,
+                    onClick = { viewModel.updateLayoutAdvanced(advancedToggleState.nextExpanded) },
+                )
 
                 // Advanced settings - only visible when enabled
                 if (advancedToggleState.expanded) {
