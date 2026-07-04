@@ -24,7 +24,6 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import eu.kanade.core.preference.asState
-import eu.kanade.core.util.addOrRemove
 import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
@@ -67,6 +66,7 @@ import eu.kanade.tachiyomi.source.getNameForMangaInfo
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.MetadataSource
 import eu.kanade.tachiyomi.source.online.all.MergedSource
+import eu.kanade.tachiyomi.ui.category.toCheckboxState
 import eu.kanade.tachiyomi.ui.manga.RelatedManga.Companion.isLoading
 import eu.kanade.tachiyomi.ui.manga.RelatedManga.Companion.removeDuplicates
 import eu.kanade.tachiyomi.ui.manga.RelatedManga.Companion.sorted
@@ -114,7 +114,6 @@ import mihon.domain.manga.model.toDomainManga
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
@@ -123,6 +122,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.chapter.interactor.DeleteChapters
 import tachiyomi.domain.chapter.interactor.GetMergedChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
@@ -159,6 +159,9 @@ import tachiyomi.domain.manga.model.MergedMangaReference
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.selection.service.ListSelectionPolicy
+import tachiyomi.domain.selection.service.ListSelectionState
+import tachiyomi.domain.selection.service.SelectableListItem
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
@@ -272,8 +275,7 @@ class MangaScreenModel(
     val isUpdateIntervalEnabled =
         LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in libraryPreferences.autoUpdateMangaRestrictions().get()
 
-    private val selectedPositions: Array<Int> = arrayOf(-1, -1) // first and last selected index in list
-    private val selectedChapterIds: HashSet<Long> = HashSet()
+    private var selectionState = ListSelectionState<Long>()
 
     internal var showTrackDialogAfterCategorySelection: Boolean = false
 
@@ -901,7 +903,10 @@ class MangaScreenModel(
                 successState.copy(
                     dialog = Dialog.ChangeCategory(
                         manga = manga,
-                        initialSelection = categories.mapAsCheckboxState { it.id in selection }.toImmutableList(),
+                        initialSelection = MangaCategorySelectionPolicy
+                            .checkedSelection(categories, selection)
+                            .map { it.toCheckboxState() }
+                            .toImmutableList(),
                     ),
                 )
             }
@@ -1133,7 +1138,7 @@ class MangaScreenModel(
                 chapter = chapter,
                 downloadState = downloadState,
                 downloadProgress = activeDownload?.progress ?: 0,
-                selected = chapter.id in selectedChapterIds,
+                selected = chapter.id in selectionState.selectedIds,
                 // SY -->
                 sourceName = source?.getNameForMangaInfo(),
                 showScanlator = !isExhManga,
@@ -1778,84 +1783,56 @@ class MangaScreenModel(
         fromLongPress: Boolean = false,
     ) {
         updateSuccessState { successState ->
-            val newChapters = successState.processedChapters.toMutableList().apply {
-                val selectedIndex = successState.processedChapters.indexOfFirst { it.id == item.chapter.id }
-                if (selectedIndex < 0) return@apply
-
-                val selectedItem = get(selectedIndex)
-                if ((selectedItem.selected && selected) || (!selectedItem.selected && !selected)) return@apply
-
-                val firstSelection = none { it.selected }
-                set(selectedIndex, selectedItem.copy(selected = selected))
-                selectedChapterIds.addOrRemove(item.id, selected)
-
-                if (selected && userSelected && fromLongPress) {
-                    if (firstSelection) {
-                        selectedPositions[0] = selectedIndex
-                        selectedPositions[1] = selectedIndex
-                    } else {
-                        // Try to select the items in-between when possible
-                        val range: IntRange
-                        if (selectedIndex < selectedPositions[0]) {
-                            range = selectedIndex + 1..<selectedPositions[0]
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            range = (selectedPositions[1] + 1)..<selectedIndex
-                            selectedPositions[1] = selectedIndex
-                        } else {
-                            // Just select itself
-                            range = IntRange.EMPTY
-                        }
-
-                        range.forEach {
-                            val inbetweenItem = get(it)
-                            if (!inbetweenItem.selected) {
-                                selectedChapterIds.add(inbetweenItem.id)
-                                set(it, inbetweenItem.copy(selected = true))
-                            }
-                        }
-                    }
-                } else if (userSelected && !fromLongPress) {
-                    if (!selected) {
-                        if (selectedIndex == selectedPositions[0]) {
-                            selectedPositions[0] = indexOfFirst { it.selected }
-                        } else if (selectedIndex == selectedPositions[1]) {
-                            selectedPositions[1] = indexOfLast { it.selected }
-                        }
-                    } else {
-                        if (selectedIndex < selectedPositions[0]) {
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            selectedPositions[1] = selectedIndex
-                        }
-                    }
-                }
-            }
-            successState.copy(chapters = newChapters)
+            val result = ListSelectionPolicy.toggleSelection(
+                items = successState.processedChapters.toSelectableListItems(),
+                state = selectionState,
+                targetId = item.id,
+                selected = selected,
+                userSelected = userSelected,
+                fromLongPress = fromLongPress,
+            )
+            selectionState = result.state
+            successState.copy(chapters = successState.processedChapters.withSelection(result.items))
         }
     }
 
     fun toggleAllSelection(selected: Boolean) {
         updateSuccessState { successState ->
-            val newChapters = successState.chapters.map {
-                selectedChapterIds.addOrRemove(it.id, selected)
-                it.copy(selected = selected)
-            }
-            selectedPositions[0] = -1
-            selectedPositions[1] = -1
-            successState.copy(chapters = newChapters)
+            val result = ListSelectionPolicy.toggleAllSelection(
+                items = successState.chapters.toSelectableListItems(),
+                state = selectionState,
+                selected = selected,
+            )
+            selectionState = result.state
+            successState.copy(chapters = successState.chapters.withSelection(result.items))
         }
     }
 
     fun invertSelection() {
         updateSuccessState { successState ->
-            val newChapters = successState.chapters.map {
-                selectedChapterIds.addOrRemove(it.id, !it.selected)
-                it.copy(selected = !it.selected)
-            }
-            selectedPositions[0] = -1
-            selectedPositions[1] = -1
-            successState.copy(chapters = newChapters)
+            val result = ListSelectionPolicy.invertSelection(
+                items = successState.chapters.toSelectableListItems(),
+                state = selectionState,
+            )
+            selectionState = result.state
+            successState.copy(chapters = successState.chapters.withSelection(result.items))
+        }
+    }
+
+    private fun List<ChapterList.Item>.toSelectableListItems(): List<SelectableListItem<Long>> {
+        return map { item ->
+            SelectableListItem(
+                id = item.id,
+                selected = item.selected,
+            )
+        }
+    }
+
+    private fun List<ChapterList.Item>.withSelection(
+        selectedItems: List<SelectableListItem<Long>>,
+    ): List<ChapterList.Item> {
+        return mapIndexed { index, item ->
+            item.copy(selected = selectedItems[index].selected)
         }
     }
 

@@ -8,7 +8,6 @@ import androidx.compose.ui.util.fastFilter
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.preference.asState
-import eu.kanade.core.util.addOrRemove
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.updates.UpdatesUiModel
@@ -50,6 +49,9 @@ import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.applyFilter
+import tachiyomi.domain.selection.service.ListSelectionPolicy
+import tachiyomi.domain.selection.service.ListSelectionState
+import tachiyomi.domain.selection.service.SelectableListItem
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
@@ -84,9 +86,7 @@ class UpdatesScreenModel(
     val preserveReadingPosition by readerPreferences.preserveReadingPosition().asState(screenModelScope)
     // SY <--
 
-    // First and last selected index in list
-    private val selectedPositions: Array<Int> = arrayOf(-1, -1)
-    private val selectedChapterIds: HashSet<Long> = HashSet()
+    private var selectionState = ListSelectionState<Long>()
 
     init {
         screenModelScope.launchIO {
@@ -208,7 +208,7 @@ class UpdatesScreenModel(
                     update = update,
                     downloadStateProvider = { downloadState },
                     downloadProgressProvider = { activeDownload?.progress ?: 0 },
-                    selected = update.chapterId in selectedChapterIds,
+                    selected = update.chapterId in selectionState.selectedIds,
                 )
             }
     }
@@ -384,105 +384,74 @@ class UpdatesScreenModel(
         val (selected, userSelected, fromLongPress, isGroup, isExpanded) = selectionOptions
         // KMK <--
         mutableState.update { state ->
-            val newItems = state.items.toMutableList().apply {
-                val selectedIndex = indexOfFirst { it.update.chapterId == item.update.chapterId }
-                if (selectedIndex < 0) return@apply
-
-                val selectedItem = get(selectedIndex)
-                if (selectedItem.selected == selected) return@apply
-
-                val firstSelection = none { it.selected }
-                set(selectedIndex, selectedItem.copy(selected = selected))
-                selectedChapterIds.addOrRemove(item.update.chapterId, selected)
-
-                // KMK -->
-                if (isGroup && !isExpanded) {
-                    val selectedItemDate = selectedItem.update.dateFetch.toLocalDate()
-                    val zone = java.time.ZoneId.systemDefault()
-                    val dayStartMillis = selectedItemDate.atStartOfDay(zone).toInstant().toEpochMilli()
-                    val dayEndMillis = selectedItemDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-
-                    state.items.mapIndexed { index, item -> index to item }
-                        .filter {
-                            it.second.update.mangaId == selectedItem.update.mangaId &&
-                                it.second.update.dateFetch in dayStartMillis..<dayEndMillis
-                        }
-                        .forEach { (index, item) ->
-                            set(index, item.copy(selected = selected))
-                            selectedChapterIds.addOrRemove(item.update.chapterId, selected)
-                        }
-                }
-                // KMK <--
-
-                if (selected && userSelected && fromLongPress) {
-                    if (firstSelection) {
-                        selectedPositions[0] = selectedIndex
-                        selectedPositions[1] = selectedIndex
-                    } else {
-                        // Try to select the items in-between when possible
-                        val range: IntRange
-                        if (selectedIndex < selectedPositions[0]) {
-                            range = selectedIndex + 1..<selectedPositions[0]
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            range = (selectedPositions[1] + 1)..<selectedIndex
-                            selectedPositions[1] = selectedIndex
-                        } else {
-                            // Just select itself
-                            range = IntRange.EMPTY
-                        }
-
-                        range.forEach {
-                            val inbetweenItem = get(it)
-                            if (!inbetweenItem.selected) {
-                                selectedChapterIds.add(inbetweenItem.update.chapterId)
-                                set(it, inbetweenItem.copy(selected = true))
-                            }
-                        }
-                    }
-                } else if (userSelected && !fromLongPress) {
-                    if (!selected) {
-                        if (selectedIndex == selectedPositions[0]) {
-                            selectedPositions[0] = indexOfFirst { it.selected }
-                        } else if (selectedIndex == selectedPositions[1]) {
-                            selectedPositions[1] = indexOfLast { it.selected }
-                        }
-                    } else {
-                        if (selectedIndex < selectedPositions[0]) {
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            selectedPositions[1] = selectedIndex
-                        }
-                    }
-                }
-            }
-            state.copy(items = newItems.toPersistentList())
+            val result = ListSelectionPolicy.toggleSelection(
+                items = state.items.toSelectableListItems(),
+                state = selectionState,
+                targetId = item.update.chapterId,
+                selected = selected,
+                userSelected = userSelected,
+                fromLongPress = fromLongPress,
+                additionalTargetIds = if (isGroup && !isExpanded) {
+                    item.collapsedGroupChapterIds(state.items)
+                } else {
+                    emptySet()
+                },
+            )
+            selectionState = result.state
+            state.copy(items = state.items.withSelection(result.items).toPersistentList())
         }
     }
 
     fun toggleAllSelection(selected: Boolean) {
         mutableState.update { state ->
-            val newItems = state.items.map {
-                selectedChapterIds.addOrRemove(it.update.chapterId, selected)
-                it.copy(selected = selected)
-            }
-            state.copy(items = newItems.toPersistentList())
+            val result = ListSelectionPolicy.toggleAllSelection(
+                items = state.items.toSelectableListItems(),
+                state = selectionState,
+                selected = selected,
+            )
+            selectionState = result.state
+            state.copy(items = state.items.withSelection(result.items).toPersistentList())
         }
-
-        selectedPositions[0] = -1
-        selectedPositions[1] = -1
     }
 
     fun invertSelection() {
         mutableState.update { state ->
-            val newItems = state.items.map {
-                selectedChapterIds.addOrRemove(it.update.chapterId, !it.selected)
-                it.copy(selected = !it.selected)
-            }
-            state.copy(items = newItems.toPersistentList())
+            val result = ListSelectionPolicy.invertSelection(
+                items = state.items.toSelectableListItems(),
+                state = selectionState,
+            )
+            selectionState = result.state
+            state.copy(items = state.items.withSelection(result.items).toPersistentList())
         }
-        selectedPositions[0] = -1
-        selectedPositions[1] = -1
+    }
+
+    private fun List<UpdatesItem>.toSelectableListItems(): List<SelectableListItem<Long>> {
+        return map { item ->
+            SelectableListItem(
+                id = item.update.chapterId,
+                selected = item.selected,
+            )
+        }
+    }
+
+    private fun List<UpdatesItem>.withSelection(
+        selectedItems: List<SelectableListItem<Long>>,
+    ): List<UpdatesItem> {
+        return mapIndexed { index, item ->
+            item.copy(selected = selectedItems[index].selected)
+        }
+    }
+
+    private fun UpdatesItem.collapsedGroupChapterIds(
+        items: List<UpdatesItem>,
+    ): Set<Long> {
+        val groupDate = update.dateFetch.toLocalDate()
+        return items
+            .filter {
+                it.update.mangaId == update.mangaId &&
+                    it.update.dateFetch.toLocalDate() == groupDate
+            }
+            .mapTo(mutableSetOf()) { it.update.chapterId }
     }
 
     fun setDialog(dialog: Dialog?) {

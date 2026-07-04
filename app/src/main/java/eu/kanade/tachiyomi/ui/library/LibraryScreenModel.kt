@@ -29,6 +29,7 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.ui.category.toCheckboxState
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -94,6 +95,7 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.model.Category.Companion.UNCATEGORIZED_ID
+import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.GetMergedChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
@@ -864,18 +866,6 @@ class LibraryScreenModel(
         }
     }
 
-    /**
-     * Returns the common categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getCommonCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        return mangas
-            .map { getCategories.await(it.id).toSet() }
-            .reduce { set1, set2 -> set1.intersect(set2) }
-    }
-
     suspend fun getNextUnreadChapter(manga: Manga): Chapter? {
         // SY -->
         val mergedManga = getMergedMangaById.await(manga.id).associateBy { it.id }
@@ -887,16 +877,8 @@ class LibraryScreenModel(
         // SY <--
     }
 
-    /**
-     * Returns the mix (non-common) categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getMixCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        val mangaCategories = mangas.map { getCategories.await(it.id).toSet() }
-        val common = mangaCategories.reduce { set1, set2 -> set1.intersect(set2) }
-        return mangaCategories.flatten().distinct().subtract(common)
+    private suspend fun getCategorySets(mangas: List<Manga>): List<Set<Category>> {
+        return mangas.map { getCategories.await(it.id).toSet() }
     }
 
     /**
@@ -1115,11 +1097,11 @@ class LibraryScreenModel(
     fun setMangaCategories(mangaList: List<Manga>, addCategories: List<Long>, removeCategories: List<Long>) {
         screenModelScope.launchNonCancellable {
             mangaList.forEach { manga ->
-                val categoryIds = getCategories.await(manga.id)
-                    .map { it.id }
-                    .subtract(removeCategories.toSet())
-                    .plus(addCategories)
-                    .toList()
+                val categoryIds = MangaCategorySelectionPolicy.updatedCategoryIds(
+                    currentCategoryIds = getCategories.await(manga.id).map { it.id },
+                    addCategoryIds = addCategories,
+                    removeCategoryIds = removeCategories,
+                )
 
                 setMangaCategories.await(manga.id, categoryIds)
             }
@@ -1422,18 +1404,10 @@ class LibraryScreenModel(
             val categories = state.value.libraryData.categories.fastFilter { it.id != 0L }
             // KMK <--
 
-            // Get indexes of the common categories to preselect.
-            val common = getCommonCategories(mangaList)
-            // Get indexes of the mix categories to preselect.
-            val mix = getMixCategories(mangaList)
-            val preselected = categories
-                .fastMap {
-                    when (it) {
-                        in common -> CheckboxState.State.Checked(it)
-                        in mix -> CheckboxState.TriState.Exclude(it)
-                        else -> CheckboxState.State.None(it)
-                    }
-                }
+            val mangaCategories = getCategorySets(mangaList)
+            val preselected = MangaCategorySelectionPolicy
+                .initialSelection(categories, mangaCategories)
+                .fastMap { it.toCheckboxState() }
                 .toImmutableList()
             mutableState.update { it.copy(dialog = Dialog.ChangeCategory(mangaList, preselected)) }
         }

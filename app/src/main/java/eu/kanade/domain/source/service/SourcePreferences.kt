@@ -1,6 +1,5 @@
 package eu.kanade.domain.source.service
 
-import eu.kanade.domain.source.interactor.SetMigrateSorting
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import mihon.domain.migration.models.MigrationFlag
@@ -9,6 +8,8 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 import tachiyomi.core.common.preference.getLongArray
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.source.model.MigrationSourceSortDirection
+import tachiyomi.domain.source.model.MigrationSourceSortMode
 
 class SourcePreferences(
     private val preferenceStore: PreferenceStore,
@@ -41,11 +42,14 @@ class SourcePreferences(
 
     fun showNsfwSource() = preferenceStore.getBoolean("show_nsfw_source", true)
 
-    fun migrationSortingMode() = preferenceStore.getEnum("pref_migration_sorting", SetMigrateSorting.Mode.ALPHABETICAL)
+    fun migrationSortingMode() = preferenceStore.getEnum(
+        "pref_migration_sorting",
+        MigrationSourceSortMode.ALPHABETICAL,
+    )
 
     fun migrationSortingDirection() = preferenceStore.getEnum(
         "pref_migration_direction",
-        SetMigrateSorting.Direction.ASCENDING,
+        MigrationSourceSortDirection.ASCENDING,
     )
 
     fun hideInLibraryItems() = preferenceStore.getBoolean("browse_hide_in_library_items", false)

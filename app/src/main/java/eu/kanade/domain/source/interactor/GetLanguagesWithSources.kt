@@ -7,29 +7,29 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.repository.SourceRepository
-import java.util.SortedMap
+import tachiyomi.domain.source.service.SourceLanguagePolicy
 
 class GetLanguagesWithSources(
     private val repository: SourceRepository,
     private val preferences: SourcePreferences,
 ) {
 
-    fun subscribe(): Flow<SortedMap<String, List<Source>>> {
+    fun subscribe(): Flow<Map<String, List<Source>>> {
         return combine(
             preferences.enabledLanguages().changes(),
             preferences.disabledSources().changes(),
             repository.getOnlineSources(),
         ) { enabledLanguage, disabledSource, onlineSources ->
-            val sortedSources = onlineSources.filterNot { it.id in BlacklistedSources.HIDDEN_SOURCES }.sortedWith(
-                compareBy<Source> { it.id.toString() in disabledSource }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name },
-            )
-
-            sortedSources
-                .groupBy { it.lang }
-                .toSortedMap(
-                    compareBy<String> { it !in enabledLanguage }.then(LocaleHelper.comparator),
-                )
+            SourceLanguagePolicy.groupOnlineSourcesByLanguage(
+                onlineSources = onlineSources,
+                enabledLanguages = enabledLanguage,
+                disabledSourceIds = disabledSource,
+                hiddenSourceIds = BlacklistedSources.HIDDEN_SOURCES,
+                compareLanguages = LocaleHelper.comparator,
+                compareSourceNames = { left, right -> String.CASE_INSENSITIVE_ORDER.compare(left, right) },
+            ).associate { group ->
+                group.language to group.sources
+            }
         }
     }
 }

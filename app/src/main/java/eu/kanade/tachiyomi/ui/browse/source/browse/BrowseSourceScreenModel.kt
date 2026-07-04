@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.online.MetadataSource
 import eu.kanade.tachiyomi.source.online.all.MangaDex
+import eu.kanade.tachiyomi.ui.category.toStateCheckboxState
 import eu.kanade.tachiyomi.util.removeCovers
 import exh.metadata.metadata.RaisedSearchMetadata
 import exh.source.EH_PACKAGE
@@ -61,7 +62,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import logcat.LogPriority
 import tachiyomi.core.common.preference.CheckboxState
-import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
@@ -70,6 +70,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
@@ -86,6 +87,7 @@ import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.repository.SourcePagingSource
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.domain.source.service.SourceSavedSearchPolicy
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
@@ -202,7 +204,7 @@ open class BrowseSourceScreenModel(
             }
 
             getExhSavedSearch.subscribe(source.id, source::getFilterList)
-                .map { it.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER, EXHSavedSearch::name)) }
+                .map(SourceSavedSearchPolicy::sortSavedSearches)
                 .onEach { savedSearches ->
                     mutableState.update { it.copy(savedSearches = savedSearches.toImmutableList()) }
                 }
@@ -473,7 +475,10 @@ open class BrowseSourceScreenModel(
                     setDialog(
                         Dialog.ChangeMangaCategory(
                             manga,
-                            categories.mapAsCheckboxState { it.id in preselectedIds }.toImmutableList(),
+                            MangaCategorySelectionPolicy
+                                .checkedSelection(categories, preselectedIds)
+                                .map { it.toStateCheckboxState() }
+                                .toImmutableList(),
                         ),
                     )
                 }
@@ -584,7 +589,7 @@ open class BrowseSourceScreenModel(
     private fun reloadSavedSearches() {
         screenModelScope.launchIO {
             getExhSavedSearch.await(source.id, (source as CatalogueSource)::getFilterList)
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER, EXHSavedSearch::name))
+                .let(SourceSavedSearchPolicy::sortSavedSearches)
                 .let { savedSearches ->
                     mutableState.update { it.copy(savedSearches = savedSearches.toImmutableList()) }
                 }

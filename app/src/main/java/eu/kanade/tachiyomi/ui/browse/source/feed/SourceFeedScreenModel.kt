@@ -60,6 +60,7 @@ import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.domain.source.service.SourceSavedSearchPolicy
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.source.local.isLocal
@@ -309,7 +310,7 @@ open class SourceFeedScreenModel(
 
     private suspend fun loadSearches() =
         getExhSavedSearch.await(source.id, (source as CatalogueSource)::getFilterList)
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER, EXHSavedSearch::name))
+            .let(SourceSavedSearchPolicy::sortSavedSearches)
             .toImmutableList()
 
     fun onFilter(onBrowseClick: (query: String?, filters: String?) -> Unit) {

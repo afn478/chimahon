@@ -31,6 +31,7 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.source.service.GlobalSearchSourceSelectionPolicy
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -93,18 +94,25 @@ abstract class SearchScreenModel(
     }
 
     open fun getEnabledSources(): List<CatalogueSource> {
-        return sourceManager.getVisibleCatalogueSources()
-            .filter { it.lang in enabledLanguages && "${it.id}" !in disabledSources }
-            .sortedWith(
-                compareBy(
-                    { "${it.id}" !in pinnedSources },
-                    { "${it.name.lowercase()} (${it.lang})" },
-                ),
-            )
+        return GlobalSearchSourceSelectionPolicy.selectEnabledSources(
+            sources = sourceManager.getVisibleCatalogueSources(),
+            enabledLanguages = enabledLanguages,
+            disabledSourceIds = disabledSources,
+            pinnedSourceIds = pinnedSources,
+            sourceId = CatalogueSource::id,
+            sourceLanguage = CatalogueSource::lang,
+            sourceName = CatalogueSource::name,
+        )
     }
 
     // KMK -->
-    fun hasPinnedSources(): Boolean = getEnabledSources().any { "${it.id}" in pinnedSources }
+    fun hasPinnedSources(): Boolean {
+        return GlobalSearchSourceSelectionPolicy.hasPinnedSources(
+            sources = getEnabledSources(),
+            pinnedSourceIds = pinnedSources,
+            sourceId = CatalogueSource::id,
+        )
+    }
 
     fun shouldPinnedSourcesHidden() {
         if (!hasPinnedSources()) {

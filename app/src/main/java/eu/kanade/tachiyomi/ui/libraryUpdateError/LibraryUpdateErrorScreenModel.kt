@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.ui.libraryUpdateError
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.core.util.addOrRemove
 import eu.kanade.presentation.libraryUpdateError.components.LibraryUpdateErrorUiModel
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.flow.collectLatest
@@ -16,6 +15,9 @@ import tachiyomi.domain.libraryUpdateError.model.LibraryUpdateErrorWithRelations
 import tachiyomi.domain.libraryUpdateErrorMessage.interactor.GetLibraryUpdateErrorMessages
 import tachiyomi.domain.libraryUpdateErrorMessage.model.LibraryUpdateErrorMessage
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.selection.service.ListSelectionPolicy
+import tachiyomi.domain.selection.service.ListSelectionState
+import tachiyomi.domain.selection.service.SelectableListItem
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -27,9 +29,7 @@ class LibraryUpdateErrorScreenModel(
     private val sourceManager: SourceManager = Injekt.get(),
 ) : StateScreenModel<LibraryUpdateErrorScreenState>(LibraryUpdateErrorScreenState()) {
 
-    // First and last selected index in list
-    private val selectedPositions: Array<Int> = arrayOf(-1, -1)
-    private val selectedErrorIds: HashSet<Long> = HashSet()
+    private var selectionState = ListSelectionState<Long>()
 
     init {
         screenModelScope.launchIO {
@@ -52,7 +52,7 @@ class LibraryUpdateErrorScreenModel(
             LibraryUpdateErrorItem(
                 error = error,
                 sourceName = sourceManager.getOrStub(error.mangaSource).name,
-                selected = error.errorId in selectedErrorIds,
+                selected = error.errorId in selectionState.selectedIds,
             )
         }
             // Sort by messageId to group errors by type, preserving last_update order within groups (from DB)
@@ -66,94 +66,48 @@ class LibraryUpdateErrorScreenModel(
         fromLongPress: Boolean = false,
     ) {
         mutableState.update { state ->
-            val newItems = state.items.toMutableList().apply {
-                val selectedIndex = indexOfFirst { it.error.errorId == item.error.errorId }
-                if (selectedIndex < 0) return@apply
-
-                val selectedItem = get(selectedIndex)
-                if (selectedItem.selected == selected) return@apply
-
-                val firstSelection = none { it.selected }
-                set(selectedIndex, selectedItem.copy(selected = selected))
-                selectedErrorIds.addOrRemove(item.error.errorId, selected)
-
-                if (selected && userSelected && fromLongPress) {
-                    if (firstSelection) {
-                        selectedPositions[0] = selectedIndex
-                        selectedPositions[1] = selectedIndex
-                    } else {
-                        // Try to select the items in-between when possible
-                        val range: IntRange
-                        if (selectedIndex < selectedPositions[0]) {
-                            range = selectedIndex + 1 until selectedPositions[0]
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            range = (selectedPositions[1] + 1) until selectedIndex
-                            selectedPositions[1] = selectedIndex
-                        } else {
-                            // Just select itself
-                            range = IntRange.EMPTY
-                        }
-
-                        range.forEach {
-                            val inbetweenItem = get(it)
-                            if (!inbetweenItem.selected) {
-                                selectedErrorIds.add(inbetweenItem.error.errorId)
-                                set(it, inbetweenItem.copy(selected = true))
-                            }
-                        }
-                    }
-                } else if (userSelected && !fromLongPress) {
-                    if (!selected) {
-                        if (selectedIndex == selectedPositions[0]) {
-                            selectedPositions[0] = indexOfFirst { it.selected }
-                        } else if (selectedIndex == selectedPositions[1]) {
-                            selectedPositions[1] = indexOfLast { it.selected }
-                        }
-                    } else {
-                        if (selectedIndex < selectedPositions[0]) {
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            selectedPositions[1] = selectedIndex
-                        }
-                    }
-                }
-            }
-            state.copy(items = newItems)
+            val result = ListSelectionPolicy.toggleSelection(
+                items = state.items.toSelectableListItems(),
+                state = selectionState,
+                targetId = item.error.errorId,
+                selected = selected,
+                userSelected = userSelected,
+                fromLongPress = fromLongPress,
+            )
+            selectionState = result.state
+            state.copy(items = state.items.withSelection(result.items))
         }
     }
 
     fun toggleAllSelection(selected: Boolean) {
         mutableState.update { state ->
-            val newItems = state.items.map {
-                selectedErrorIds.addOrRemove(it.error.errorId, selected)
-                it.copy(selected = selected)
-            }
-            state.copy(items = newItems)
+            val result = ListSelectionPolicy.toggleAllSelection(
+                items = state.items.toSelectableListItems(),
+                state = selectionState,
+                selected = selected,
+            )
+            selectionState = result.state
+            state.copy(items = state.items.withSelection(result.items))
         }
-
-        selectedPositions[0] = -1
-        selectedPositions[1] = -1
     }
 
     fun invertSelection() {
         mutableState.update { state ->
-            val newItems = state.items.map {
-                selectedErrorIds.addOrRemove(it.error.errorId, !it.selected)
-                it.copy(selected = !it.selected)
-            }
-            state.copy(items = newItems)
+            val result = ListSelectionPolicy.invertSelection(
+                items = state.items.toSelectableListItems(),
+                state = selectionState,
+            )
+            selectionState = result.state
+            state.copy(items = state.items.withSelection(result.items))
         }
-        selectedPositions[0] = -1
-        selectedPositions[1] = -1
     }
 
     @OptIn(DelicateCoroutinesApi::class)
     fun deleteSelected() {
         launchIO {
-            deleteLibraryUpdateErrors.delete(selectedErrorIds.toList())
+            deleteLibraryUpdateErrors.delete(selectionState.selectedIds.toList())
             withUIContext {
-                selectedErrorIds.clear()
+                selectionState = ListSelectionState()
             }
         }
     }
@@ -163,8 +117,27 @@ class LibraryUpdateErrorScreenModel(
         launchIO {
             deleteLibraryUpdateErrors.delete(listOf(errorId))
             withUIContext {
-                selectedErrorIds.remove(errorId)
+                selectionState = selectionState.copy(
+                    selectedIds = selectionState.selectedIds - errorId,
+                )
             }
+        }
+    }
+
+    private fun List<LibraryUpdateErrorItem>.toSelectableListItems(): List<SelectableListItem<Long>> {
+        return map { item ->
+            SelectableListItem(
+                id = item.error.errorId,
+                selected = item.selected,
+            )
+        }
+    }
+
+    private fun List<LibraryUpdateErrorItem>.withSelection(
+        selectedItems: List<SelectableListItem<Long>>,
+    ): List<LibraryUpdateErrorItem> {
+        return mapIndexed { index, item ->
+            item.copy(selected = selectedItems[index].selected)
         }
     }
 }

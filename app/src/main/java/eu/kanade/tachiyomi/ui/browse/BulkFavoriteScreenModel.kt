@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.ui.browse
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.util.fastAny
-import androidx.compose.ui.util.fastDistinctBy
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -16,6 +14,7 @@ import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.presentation.components.BulkSelectionToolbar
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.tachiyomi.data.cache.CoverCache
+import eu.kanade.tachiyomi.ui.category.toCheckboxState
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.PersistentList
@@ -28,7 +27,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.preference.CheckboxState
-import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
@@ -36,12 +34,14 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.toMangaUpdate
+import tachiyomi.domain.selection.service.SelectedItemPolicy
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -85,16 +85,12 @@ class BulkFavoriteScreenModel(
      */
     fun toggleSelection(manga: Manga, toSelectedState: Boolean? = null) {
         mutableState.update { state ->
-            val newSelection = state.selection.mutate { list ->
-                val isSelected = list.fastAny { it.id == manga.id }
-                val shouldSelect = toSelectedState ?: !isSelected
-                // Both condition to avoid adding duplicate entries
-                if (shouldSelect && !isSelected) {
-                    list.add(manga)
-                } else if (!shouldSelect && isSelected) {
-                    list.removeAll { it.id == manga.id }
-                }
-            }
+            val newSelection = SelectedItemPolicy.toggleItem(
+                selectedItems = state.selection,
+                item = manga,
+                selected = toSelectedState,
+                itemId = Manga::id,
+            ).toPersistentList()
             state.copy(
                 selection = newSelection,
                 selectionMode = newSelection.isNotEmpty(),
@@ -104,11 +100,11 @@ class BulkFavoriteScreenModel(
 
     fun reverseSelection(mangas: List<Manga>) {
         mutableState.update { state ->
-            val newSelection = mangas.filterNot { manga ->
-                state.selection.contains(manga)
-            }
-                .fastDistinctBy { it.id }
-                .toPersistentList()
+            val newSelection = SelectedItemPolicy.invertVisibleSelection(
+                visibleItems = mangas,
+                selectedItems = state.selection,
+                itemId = Manga::id,
+            ).toPersistentList()
             state.copy(
                 selection = newSelection,
                 selectionMode = newSelection.isNotEmpty(),
@@ -174,18 +170,10 @@ class BulkFavoriteScreenModel(
                 }
 
                 else -> {
-                    // Get indexes of the common categories to preselect.
-                    val common = getCommonCategories(mangaList)
-                    // Get indexes of the mix categories to preselect.
-                    val mix = getMixCategories(mangaList)
-                    val preselected = categories
-                        .map {
-                            when (it) {
-                                in common -> CheckboxState.State.Checked(it)
-                                in mix -> CheckboxState.TriState.Exclude(it)
-                                else -> CheckboxState.State.None(it)
-                            }
-                        }
+                    val mangaCategories = getCategorySets(mangaList)
+                    val preselected = MangaCategorySelectionPolicy
+                        .initialSelection(categories, mangaCategories)
+                        .map { it.toCheckboxState() }
                         .toImmutableList()
                     stopRunning()
                     setDialog(Dialog.ChangeMangasCategory(mangaList, preselected))
@@ -231,11 +219,11 @@ class BulkFavoriteScreenModel(
         screenModelScope.launchNonCancellable {
             startRunning()
             mangaList.fastForEach { manga ->
-                val categoryIds = getCategories.await(manga.id)
-                    .map { it.id }
-                    .subtract(removeCategories.toSet())
-                    .plus(addCategories)
-                    .toList()
+                val categoryIds = MangaCategorySelectionPolicy.updatedCategoryIds(
+                    currentCategoryIds = getCategories.await(manga.id).map { it.id },
+                    addCategoryIds = addCategories,
+                    removeCategoryIds = removeCategories,
+                )
 
                 moveMangaToCategoriesAndAddToLibrary(manga, categoryIds)
             }
@@ -280,28 +268,8 @@ class BulkFavoriteScreenModel(
         }
     }
 
-    /**
-     * Returns the common categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getCommonCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        return mangas
-            .map { getCategories.await(it.id).toSet() }
-            .reduce { set1, set2 -> set1.intersect(set2) }
-    }
-
-    /**
-     * Returns the mix (non-common) categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getMixCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        val mangaCategories = mangas.map { getCategories.await(it.id).toSet() }
-        val common = mangaCategories.reduce { set1, set2 -> set1.intersect(set2) }
-        return mangaCategories.flatten().distinct().subtract(common)
+    private suspend fun getCategorySets(mangas: List<Manga>): List<Set<Category>> {
+        return mangas.map { getCategories.await(it.id).toSet() }
     }
 
     /**
@@ -402,7 +370,10 @@ class BulkFavoriteScreenModel(
                     setDialog(
                         Dialog.ChangeMangasCategory(
                             listOf(manga),
-                            categories.mapAsCheckboxState { it.id in preselectedIds }.toImmutableList(),
+                            MangaCategorySelectionPolicy
+                                .checkedSelection(categories, preselectedIds)
+                                .map { it.toCheckboxState() }
+                                .toImmutableList(),
                         ),
                     )
                 }

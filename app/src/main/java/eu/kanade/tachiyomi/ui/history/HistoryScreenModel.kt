@@ -9,6 +9,7 @@ import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.presentation.history.HistoryUiModel
+import eu.kanade.tachiyomi.ui.category.toCheckboxState
 import eu.kanade.tachiyomi.util.lang.toLocalDate
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -28,16 +29,15 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
-import mihon.core.common.utils.mutate
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.GetNextChapters
@@ -49,6 +49,9 @@ import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
+import tachiyomi.domain.selection.service.ListSelectionPolicy
+import tachiyomi.domain.selection.service.ListSelectionState
+import tachiyomi.domain.selection.service.SelectableListItem
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -75,8 +78,7 @@ class HistoryScreenModel(
     val events: Flow<Event> = _events.receiveAsFlow()
 
     // KMK -->
-    // First and last selected index in list
-    private val selectedPositions: Array<Int> = arrayOf(-1, -1)
+    private var selectionState = ListSelectionState<Long>()
     // KMK <--
 
     init {
@@ -280,7 +282,10 @@ class HistoryScreenModel(
                 currentState.copy(
                     dialog = Dialog.ChangeCategory(
                         manga = manga,
-                        initialSelection = categories.mapAsCheckboxState { it.id in selection }.toImmutableList(),
+                        initialSelection = MangaCategorySelectionPolicy
+                            .checkedSelection(categories, selection)
+                            .map { it.toCheckboxState() }
+                            .toImmutableList(),
                     ),
                 )
             }
@@ -301,73 +306,37 @@ class HistoryScreenModel(
         if (item.chapterId in state.value.selection == selected) return
 
         mutableState.update { state ->
-            val selection = state.selection.mutate { list ->
-                state.list.run {
-                    val selectedIndex = indexOfFirst { it.chapterId == item.chapterId }
-                    if (selectedIndex < 0) return@run
-
-                    val firstSelection = list.isEmpty()
-                    if (selected) list.add(item.chapterId) else list.remove(item.chapterId)
-
-                    if (firstSelection) {
-                        // Since it can go into selectionMode from toolbar (without long press), we need to set both positions here
-                        selectedPositions[0] = selectedIndex
-                        selectedPositions[1] = selectedIndex
-                    } else if (selected && fromLongPress) {
-                        // Try to select the items in-between when possible
-                        val range: IntRange
-                        if (selectedIndex < selectedPositions[0]) {
-                            range = selectedIndex + 1..<selectedPositions[0]
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            range = (selectedPositions[1] + 1)..<selectedIndex
-                            selectedPositions[1] = selectedIndex
-                        } else {
-                            // Just select itself
-                            range = IntRange.EMPTY
-                        }
-
-                        range.forEach {
-                            val inBetweenItem = get(it)
-                            if (inBetweenItem.chapterId !in list) {
-                                list.add(inBetweenItem.chapterId)
-                            }
-                        }
-                    } else if (!fromLongPress) {
-                        if (!selected) {
-                            if (selectedIndex == selectedPositions[0]) {
-                                selectedPositions[0] = indexOfFirst { it.chapterId in list }
-                            } else if (selectedIndex == selectedPositions[1]) {
-                                selectedPositions[1] = indexOfLast { it.chapterId in list }
-                            }
-                        } else {
-                            if (selectedIndex < selectedPositions[0]) {
-                                selectedPositions[0] = selectedIndex
-                            } else if (selectedIndex > selectedPositions[1]) {
-                                selectedPositions[1] = selectedIndex
-                            }
-                        }
-                    }
-                }
-            }
+            val result = ListSelectionPolicy.toggleSelection(
+                items = state.list.toSelectableListItems(state.selection),
+                state = selectionState.copy(selectedIds = state.selection),
+                targetId = item.chapterId,
+                selected = selected,
+                userSelected = true,
+                fromLongPress = fromLongPress || state.selection.isEmpty(),
+            )
+            selectionState = result.state
             state.copy(
-                selection = selection,
-                selectionMode = selected || selection.isNotEmpty(),
+                selection = result.state.selectedIds,
+                selectionMode = selected || result.state.selectedIds.isNotEmpty(),
             )
         }
     }
 
     fun toggleAllSelection(selected: Boolean) {
         mutableState.update { state ->
-            val selection = if (selected) {
-                state.list.mapTo(mutableSetOf()) { it.chapterId }
-            } else {
+            val seedSelection = if (selected) {
                 emptySet()
+            } else {
+                state.list.mapTo(mutableSetOf()) { it.chapterId }
             }
-            selectedPositions[0] = -1
-            selectedPositions[1] = -1
+            val result = ListSelectionPolicy.toggleAllSelection(
+                items = state.list.toSelectableListItems(seedSelection),
+                state = ListSelectionState(selectedIds = seedSelection),
+                selected = selected,
+            )
+            selectionState = result.state
             state.copy(
-                selection = selection,
+                selection = result.state.selectedIds,
                 selectionMode = selected,
             )
         }
@@ -375,14 +344,12 @@ class HistoryScreenModel(
 
     fun invertSelection() {
         mutableState.update { state ->
-            val selection = state.selection.mutate { list ->
-                state.list.forEach { item ->
-                    if (!list.remove(item.chapterId)) list.add(item.chapterId)
-                }
-            }
-            selectedPositions[0] = -1
-            selectedPositions[1] = -1
-            state.copy(selection = selection)
+            val result = ListSelectionPolicy.invertSelection(
+                items = state.list.toSelectableListItems(state.selection),
+                state = selectionState.copy(selectedIds = state.selection),
+            )
+            selectionState = result.state
+            state.copy(selection = result.state.selectedIds)
         }
     }
 
@@ -391,6 +358,17 @@ class HistoryScreenModel(
             toggleAllSelection(false)
         } else {
             mutableState.update { it.copy(selectionMode = newMode ?: !it.selectionMode) }
+        }
+    }
+
+    private fun List<HistoryWithRelations>.toSelectableListItems(
+        selectedIds: Set<Long>,
+    ): List<SelectableListItem<Long>> {
+        return map { item ->
+            SelectableListItem(
+                id = item.chapterId,
+                selected = item.chapterId in selectedIds,
+            )
         }
     }
     // KMK <--

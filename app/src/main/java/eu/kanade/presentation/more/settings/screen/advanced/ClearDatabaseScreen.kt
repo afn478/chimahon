@@ -29,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastMap
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
@@ -51,6 +50,7 @@ import tachiyomi.data.Database
 import tachiyomi.domain.source.interactor.GetSourcesWithNonLibraryManga
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.model.SourceWithCount
+import tachiyomi.domain.selection.service.SelectedItemPolicy
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LazyColumnWithAction
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -248,13 +248,13 @@ private class ClearDatabaseScreenModel : StateScreenModel<ClearDatabaseScreenMod
 
     fun toggleSelection(source: Source) = mutableState.update { state ->
         if (state !is State.Ready) return@update state
-        val mutableList = state.selection.toMutableList()
-        if (mutableList.contains(source.id)) {
-            mutableList.remove(source.id)
-        } else {
-            mutableList.add(source.id)
-        }
-        state.copy(selection = mutableList)
+        state.copy(
+            selection = SelectedItemPolicy.toggleItem(
+                selectedItems = state.selection,
+                item = source.id,
+                itemId = { it },
+            ),
+        )
     }
 
     fun clearSelection() = mutableState.update { state ->
@@ -264,15 +264,22 @@ private class ClearDatabaseScreenModel : StateScreenModel<ClearDatabaseScreenMod
 
     fun selectAll() = mutableState.update { state ->
         if (state !is State.Ready) return@update state
-        state.copy(selection = state.items.fastMap { it.id })
+        state.copy(
+            selection = SelectedItemPolicy.selectVisibleIds(
+                visibleItems = state.items,
+                itemId = SourceWithCount::id,
+            ),
+        )
     }
 
     fun invertSelection() = mutableState.update { state ->
         if (state !is State.Ready) return@update state
         state.copy(
-            selection = state.items
-                .fastMap { it.id }
-                .filterNot { it in state.selection },
+            selection = SelectedItemPolicy.invertVisibleIds(
+                visibleItems = state.items,
+                selectedIds = state.selection,
+                itemId = SourceWithCount::id,
+            ),
         )
     }
 

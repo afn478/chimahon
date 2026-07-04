@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import tachiyomi.domain.extension.service.ExtensionIdentity
+import tachiyomi.domain.extension.service.ExtensionTypePolicy
 
 class GetExtensionsByType(
     private val preferences: SourcePreferences,
@@ -21,51 +23,58 @@ class GetExtensionsByType(
             extensionManager.untrustedExtensionsFlow,
             extensionManager.availableExtensionsFlow,
         ) { enabledLanguages, _installed, _untrusted, _available ->
-            val (updates, installed) = _installed
-                .filter { (showNsfwSources || !it.isNsfw) }
-                .sortedWith(
-                    compareBy<Extension.Installed> {
-                        !it.isObsolete /* SY --> */ && !it.isRedundant /* SY <-- */
-                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name },
-                )
-                .partition { it.hasUpdate }
+            val (updates, installed) = ExtensionTypePolicy.partitionInstalledExtensions(
+                installedExtensions = _installed,
+                showNsfwSources = showNsfwSources,
+                isNsfw = Extension.Installed::isNsfw,
+                hasUpdate = Extension.Installed::hasUpdate,
+                requiresAttention = { it.isObsolete || it.isRedundant },
+                compareNames = ::compareExtensionNames,
+            )
 
-            val untrusted = _untrusted
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            val untrusted = ExtensionTypePolicy.sortUntrustedExtensions(
+                untrustedExtensions = _untrusted,
+                compareNames = ::compareExtensionNames,
+            )
 
-            val available = _available
-                .filter { extension ->
-                    _installed.none {
-                        // KMK -->
-                        it.signatureHash == extension.signatureHash &&
-                            // KMK <--
-                            it.pkgName == extension.pkgName
-                    } &&
-                        _untrusted.none {
-                            // KMK -->
-                            it.signatureHash == extension.signatureHash &&
-                                // KMK <--
-                                it.pkgName == extension.pkgName
-                        } &&
-                        (showNsfwSources || !extension.isNsfw)
-                }
-                .flatMap { ext ->
-                    if (ext.sources.isEmpty()) {
-                        return@flatMap if (ext.lang in enabledLanguages) listOf(ext) else emptyList()
-                    }
-                    ext.sources.filter { it.lang in enabledLanguages }
-                        .map {
-                            ext.copy(
-                                name = it.name,
-                                lang = it.lang,
-                                pkgName = "${ext.pkgName}-${it.id}",
-                                sources = listOf(it),
-                            )
-                        }
-                }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            val available = ExtensionTypePolicy.selectAvailableExtensions(
+                availableExtensions = _available,
+                installedExtensions = _installed,
+                untrustedExtensions = _untrusted,
+                enabledLanguages = enabledLanguages,
+                showNsfwSources = showNsfwSources,
+                availableIdentity = { it.identity() },
+                installedIdentity = { it.identity() },
+                untrustedIdentity = { it.identity() },
+                isNsfw = Extension.Available::isNsfw,
+                extensionLanguage = Extension.Available::lang,
+                sources = Extension.Available::sources,
+                sourceLanguage = Extension.Available.Source::lang,
+                copyForSource = { ext, source ->
+                    ext.copy(
+                        name = source.name,
+                        lang = source.lang,
+                        pkgName = "${ext.pkgName}-${source.id}",
+                        sources = listOf(source),
+                    )
+                },
+                compareNames = ::compareExtensionNames,
+            )
 
             Extensions(updates, installed, available, untrusted)
+        }
+    }
+
+    private companion object {
+        fun Extension.identity(): ExtensionIdentity {
+            return ExtensionIdentity(
+                packageName = pkgName,
+                signatureHash = signatureHash,
+            )
+        }
+
+        fun compareExtensionNames(left: Extension, right: Extension): Int {
+            return String.CASE_INSENSITIVE_ORDER.compare(left.name, right.name)
         }
     }
 }

@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import tachiyomi.domain.extension.service.ExtensionLanguagePolicy
 
 class GetExtensionLanguages(
     private val preferences: SourcePreferences,
@@ -26,18 +27,13 @@ class GetExtensionLanguages(
             preferences.enabledLanguages().changes(),
             extensionManager.availableExtensionsFlow,
         ) { enabledLanguage, availableExtensions ->
-            availableExtensions
-                .flatMap { ext ->
-                    if (ext.sources.isEmpty()) {
-                        listOf(ext.lang)
-                    } else {
-                        ext.sources.map { it.lang }
-                    }
-                }
-                .distinct()
-                .sortedWith(
-                    compareBy<String> { it !in enabledLanguage }.then(LocaleHelper.comparator),
-                )
+            ExtensionLanguagePolicy.selectLanguages(
+                extensions = availableExtensions,
+                enabledLanguages = enabledLanguage,
+                extensionLanguage = { extension -> extension.lang },
+                sourceLanguages = { extension -> extension.sources.map { it.lang } },
+                compareLanguages = LocaleHelper.comparator,
+            )
         }
     }
 

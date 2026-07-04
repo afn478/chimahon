@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.extension.service.ExtensionSearchPolicy
+import tachiyomi.domain.extension.service.ExtensionSearchSource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
@@ -140,32 +142,16 @@ class ExtensionsScreenModel(
     }
 
     fun searchQueryPredicate(query: String): (Extension) -> Boolean {
-        val subqueries = query.split(",")
-            .map { it.trim() }
-            .filterNot { it.isBlank() }
+        val subqueries = ExtensionSearchPolicy.parseSearchQuery(query)
 
         if (subqueries.isEmpty()) return { true }
 
         return { extension ->
-            subqueries.any { subquery ->
-                if (extension.name.contains(subquery, ignoreCase = true)) return@any true
-
-                when (extension) {
-                    is Extension.Installed -> extension.sources.any { source ->
-                        source.name.contains(subquery, ignoreCase = true) ||
-                            (source as? HttpSource)?.baseUrl?.contains(subquery, ignoreCase = true) == true ||
-                            source.id == subquery.toLongOrNull()
-                    }
-
-                    is Extension.Available -> extension.sources.any {
-                        it.name.contains(subquery, ignoreCase = true) ||
-                            it.baseUrl.contains(subquery, ignoreCase = true) ||
-                            it.id == subquery.toLongOrNull()
-                    }
-
-                    else -> false
-                }
-            }
+            ExtensionSearchPolicy.matchesExtension(
+                extensionName = extension.name,
+                sources = extension.searchSources(),
+                subqueries = subqueries,
+            )
         }
     }
 
@@ -275,6 +261,26 @@ class ExtensionsScreenModel(
         // KMK <--
     ) {
         val isEmpty = items.isEmpty()
+    }
+}
+
+private fun Extension.searchSources(): List<ExtensionSearchSource> {
+    return when (this) {
+        is Extension.Installed -> sources.map { source ->
+            ExtensionSearchSource(
+                name = source.name,
+                baseUrl = (source as? HttpSource)?.baseUrl,
+                id = source.id,
+            )
+        }
+        is Extension.Available -> sources.map { source ->
+            ExtensionSearchSource(
+                name = source.name,
+                baseUrl = source.baseUrl,
+                id = source.id,
+            )
+        }
+        else -> emptyList()
     }
 }
 

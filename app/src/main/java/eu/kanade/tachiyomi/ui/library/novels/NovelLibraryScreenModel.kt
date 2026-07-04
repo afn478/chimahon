@@ -12,6 +12,7 @@ import com.canopus.chimareader.data.BookStorage
 import com.canopus.chimareader.data.NovelCategory
 import com.canopus.chimareader.data.NovelCategoryStorage
 import eu.kanade.presentation.library.components.LibraryToolbarTitle
+import eu.kanade.tachiyomi.ui.category.toCheckboxState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -22,8 +23,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.service.MangaCategorySelectionPolicy
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.selection.service.SelectedItemPolicy
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -71,13 +74,13 @@ class NovelLibraryScreenModel(
 
     fun toggleSelection(bookId: String) {
         mutableState.update { state ->
-            val selection = state.selection.toMutableList()
-            if (selection.contains(bookId)) {
-                selection.remove(bookId)
-            } else {
-                selection.add(bookId)
-            }
-            state.copy(selection = selection.toImmutableList())
+            state.copy(
+                selection = SelectedItemPolicy.toggleItem(
+                    selectedItems = state.selection,
+                    item = bookId,
+                    itemId = { it },
+                ).toImmutableList(),
+            )
         }
     }
 
@@ -87,15 +90,24 @@ class NovelLibraryScreenModel(
 
     fun selectAll() {
         mutableState.update { state ->
-            state.copy(selection = state.books.map { it.id }.toImmutableList())
+            state.copy(
+                selection = SelectedItemPolicy.selectVisibleIds(
+                    visibleItems = state.books,
+                    itemId = BookMetadata::id,
+                ).toImmutableList(),
+            )
         }
     }
 
     fun invertSelection() {
         mutableState.update { state ->
-            val allIds = state.books.map { it.id }.toSet()
-            val newSelection = allIds.minus(state.selection).toList().toImmutableList()
-            state.copy(selection = newSelection)
+            state.copy(
+                selection = SelectedItemPolicy.invertVisibleIds(
+                    visibleItems = state.books,
+                    selectedIds = state.selection,
+                    itemId = BookMetadata::id,
+                ).toImmutableList(),
+            )
         }
     }
 
@@ -150,36 +162,19 @@ class NovelLibraryScreenModel(
         val s = mutableState.value
         val selectedBooks = s.books.filter { it.id in s.selection.toSet() }
         val userCategories = s.categories.filterNot { it.isSystemCategory }
-
-        val commonCategoryIds = if (selectedBooks.isEmpty()) {
-            emptySet()
-        } else {
-            selectedBooks.map { it.categoryIds.toSet() }
-                .reduce { set1, set2 -> set1.intersect(set2) }
+        val categoryPairs = userCategories
+            .map { it.id to it.toDomainCategory() }
+        val domainCategories = categoryPairs.map { it.second }
+        val categoriesByNovelId = categoryPairs.toMap()
+        val selectedBookCategories = selectedBooks.map { book ->
+            book.categoryIds
+                .mapNotNull { categoriesByNovelId[it] }
+                .toSet()
         }
-        val commonCategories = userCategories.filter { it.id in commonCategoryIds }
-
-        val mixCategoryIds = if (selectedBooks.isEmpty()) {
-            emptySet()
-        } else {
-            selectedBooks.flatMap { it.categoryIds }.distinct().toSet() - commonCategoryIds
-        }
-        val mixCategories = userCategories.filter { it.id in mixCategoryIds }
-
-        val preselected = userCategories.map { cat ->
-            val mapped = Category(
-                id = cat.id.hashCode().toLong(),
-                name = cat.name,
-                order = cat.order.toLong(),
-                flags = cat.flags,
-                hidden = false,
-            )
-            when (cat) {
-                in commonCategories -> CheckboxState.State.Checked(mapped)
-                in mixCategories -> CheckboxState.TriState.Exclude(mapped)
-                else -> CheckboxState.State.None(mapped)
-            }
-        }.toImmutableList()
+        val preselected = MangaCategorySelectionPolicy
+            .initialSelection(domainCategories, selectedBookCategories)
+            .map { it.toCheckboxState() }
+            .toImmutableList()
 
         mutableState.update {
             it.copy(dialog = Dialog.ChangeCategory(selectedBooks.toImmutableList(), preselected))
@@ -198,11 +193,17 @@ class NovelLibraryScreenModel(
                 val currentIds = book.categoryIds.toSet()
                 val addIds = addCategories.mapNotNull { id ->
                     s.categories.find { it.id.hashCode().toLong() == id }?.id
-                }.toSet()
+                }
                 val removeIds = removeCategories.mapNotNull { id ->
                     s.categories.find { it.id.hashCode().toLong() == id }?.id
-                }.toSet()
-                var newIds = (currentIds - removeIds + addIds)
+                }
+                var newIds = MangaCategorySelectionPolicy
+                    .updatedCategoryIds(
+                        currentCategoryIds = currentIds,
+                        addCategoryIds = addIds,
+                        removeCategoryIds = removeIds,
+                    )
+                    .toSet()
                 newIds = if (newIds.any { it != NovelCategory.UNCATEGORIZED_ID }) {
                     newIds - setOf(NovelCategory.UNCATEGORIZED_ID)
                 } else {
@@ -415,4 +416,14 @@ class NovelLibraryScreenModel(
         val category = s.activeCategory ?: return null
         return s.getBooksForCategory(category).randomOrNull()
     }
+}
+
+private fun NovelCategory.toDomainCategory(): Category {
+    return Category(
+        id = id.hashCode().toLong(),
+        name = name,
+        order = order.toLong(),
+        flags = flags,
+        hidden = false,
+    )
 }

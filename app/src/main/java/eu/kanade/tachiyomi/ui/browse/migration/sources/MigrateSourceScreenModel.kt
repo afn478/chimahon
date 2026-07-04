@@ -25,7 +25,11 @@ import kotlinx.coroutines.flow.update
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.source.model.MigrationSourceSortDirection
+import tachiyomi.domain.source.model.MigrationSourceSortMode
 import tachiyomi.domain.source.model.Source
+import tachiyomi.domain.source.service.SourceListFilterMetadata
+import tachiyomi.domain.source.service.SourceListFilterPolicy
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -47,20 +51,16 @@ class MigrateSourceScreenModel(
                 getSourcesWithFavoriteCount.subscribe(),
                 // KMK -->
             ) { searchQuery, sourceCounts ->
-                val queryFilter: (String?) -> ((Pair<Source, Long>) -> Boolean) = { query ->
-                    filter@{ pair ->
-                        val source = pair.first
-                        if (query.isNullOrBlank()) return@filter true
-                        query.split(",").any {
-                            val input = it.trim()
-                            if (input.isEmpty()) return@any false
-                            source.installedExtension?.name?.contains(input, ignoreCase = true) == true ||
-                                source.name.contains(input, ignoreCase = true) ||
-                                source.id == input.toLongOrNull()
-                        }
-                    }
-                }
-                sourceCounts.filter(queryFilter(searchQuery))
+                SourceListFilterPolicy.filterItems(
+                    items = sourceCounts,
+                    searchQuery = searchQuery,
+                    source = { it.first },
+                    metadata = { (source, _) ->
+                        SourceListFilterMetadata(
+                            extensionName = source.installedExtension?.name,
+                        )
+                    },
+                )
             }
                 // KMK <--
                 .catch {
@@ -89,8 +89,8 @@ class MigrateSourceScreenModel(
     fun toggleSortingMode() {
         with(state.value) {
             val newMode = when (sortingMode) {
-                SetMigrateSorting.Mode.ALPHABETICAL -> SetMigrateSorting.Mode.TOTAL
-                SetMigrateSorting.Mode.TOTAL -> SetMigrateSorting.Mode.ALPHABETICAL
+                MigrationSourceSortMode.ALPHABETICAL -> MigrationSourceSortMode.TOTAL
+                MigrationSourceSortMode.TOTAL -> MigrationSourceSortMode.ALPHABETICAL
             }
 
             setMigrateSorting.await(newMode, sortingDirection)
@@ -100,8 +100,8 @@ class MigrateSourceScreenModel(
     fun toggleSortingDirection() {
         with(state.value) {
             val newDirection = when (sortingDirection) {
-                SetMigrateSorting.Direction.ASCENDING -> SetMigrateSorting.Direction.DESCENDING
-                SetMigrateSorting.Direction.DESCENDING -> SetMigrateSorting.Direction.ASCENDING
+                MigrationSourceSortDirection.ASCENDING -> MigrationSourceSortDirection.DESCENDING
+                MigrationSourceSortDirection.DESCENDING -> MigrationSourceSortDirection.ASCENDING
             }
 
             setMigrateSorting.await(sortingMode, newDirection)
@@ -120,8 +120,8 @@ class MigrateSourceScreenModel(
     data class State(
         val isLoading: Boolean = true,
         val items: ImmutableList<Pair<Source, Long>> = persistentListOf(),
-        val sortingMode: SetMigrateSorting.Mode = SetMigrateSorting.Mode.ALPHABETICAL,
-        val sortingDirection: SetMigrateSorting.Direction = SetMigrateSorting.Direction.ASCENDING,
+        val sortingMode: MigrationSourceSortMode = MigrationSourceSortMode.ALPHABETICAL,
+        val sortingDirection: MigrationSourceSortDirection = MigrationSourceSortDirection.ASCENDING,
         // KMK -->
         val searchQuery: String? = null,
         // KMK <--

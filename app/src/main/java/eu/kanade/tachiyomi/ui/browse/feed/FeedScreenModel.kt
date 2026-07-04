@@ -47,6 +47,7 @@ import tachiyomi.domain.source.interactor.InsertFeedSavedSearch
 import tachiyomi.domain.source.interactor.ReorderFeed
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
+import tachiyomi.domain.source.service.FeedSourceSelectionPolicy
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -190,13 +191,17 @@ open class FeedScreenModel(
         val pinnedSources = sourcePreferences.pinnedSources().get()
         val disabledSources = sourcePreferences.disabledSources().get()
             .mapNotNull { it.toLongOrNull() }
+            .toSet()
 
-        val list = sourceManager.getVisibleCatalogueSources()
-            .filter { it.lang in languages }
-            .filterNot { it.id in disabledSources }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { "(${it.lang}) ${it.name}" })
-
-        return list.sortedBy { it.id.toString() !in pinnedSources }.toImmutableList()
+        return FeedSourceSelectionPolicy.selectEnabledSources(
+            sources = sourceManager.getVisibleCatalogueSources(),
+            enabledLanguages = languages,
+            disabledSourceIds = disabledSources,
+            pinnedSourceIds = pinnedSources,
+            sourceId = CatalogueSource::id,
+            sourceLanguage = CatalogueSource::lang,
+            sourceName = CatalogueSource::name,
+        ).toImmutableList()
     }
 
     private suspend fun getSourceSavedSearches(sourceId: Long): ImmutableList<SavedSearch> {

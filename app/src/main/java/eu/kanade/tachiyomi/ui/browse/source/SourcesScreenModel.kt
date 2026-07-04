@@ -36,11 +36,12 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.source.model.Pin
 import tachiyomi.domain.source.model.Source
+import tachiyomi.domain.source.service.SourceListFilterMetadata
+import tachiyomi.domain.source.service.SourceListFilterPolicy
+import tachiyomi.domain.source.service.SourceListGroupingPolicy
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.TreeMap
 
 class SourcesScreenModel(
     private val getEnabledSources: GetEnabledSources = Injekt.get(),
@@ -105,62 +106,31 @@ class SourcesScreenModel(
         showPin: Boolean,
     ) {
         // KMK -->
-        val searchQuery = filters.first
-        val nsfwOnly = filters.second
-        val queryFilter: (String?) -> ((Source) -> Boolean) = { query ->
-            filter@{ source ->
-                if (query.isNullOrBlank()) return@filter true
-                query.split(",").any {
-                    val input = it.trim()
-                    if (input.isEmpty()) return@any false
-                    source.installedExtension?.name?.contains(input, ignoreCase = true) == true ||
-                        source.name.contains(input, ignoreCase = true) ||
-                        source.id == input.toLongOrNull()
-                }
-            }
-        }
-        val sources = unfilteredSources
-            .filter { !nsfwOnly || it.installedExtension?.isNsfw != false }
-            .filter(queryFilter(searchQuery))
+        val sources = SourceListFilterPolicy.filterSources(
+            sources = unfilteredSources,
+            searchQuery = filters.first,
+            nsfwOnly = filters.second,
+            metadata = { source ->
+                val extension = source.installedExtension
+                SourceListFilterMetadata(
+                    extensionName = extension?.name,
+                    extensionIsNsfw = extension?.isNsfw,
+                )
+            },
+        )
         // KMK <--
+        val sourceGroups = SourceListGroupingPolicy.groupSources(sources)
         mutableState.update { state ->
-            val map = TreeMap<String, MutableList<Source>> { d1, d2 ->
-                // Sources without a lang defined will be placed at the end
-                when {
-                    d1 == LAST_USED_KEY && d2 != LAST_USED_KEY -> -1
-                    d2 == LAST_USED_KEY && d1 != LAST_USED_KEY -> 1
-                    d1 == PINNED_KEY && d2 != PINNED_KEY -> -1
-                    d2 == PINNED_KEY && d1 != PINNED_KEY -> 1
-                    // SY -->
-                    d1.startsWith(CATEGORY_KEY_PREFIX) && !d2.startsWith(CATEGORY_KEY_PREFIX) -> -1
-                    d2.startsWith(CATEGORY_KEY_PREFIX) && !d1.startsWith(CATEGORY_KEY_PREFIX) -> 1
-                    // SY <--
-                    d1 == "" && d2 != "" -> 1
-                    d2 == "" && d1 != "" -> -1
-                    else -> d1.compareTo(d2)
-                }
-            }
-            val byLang = sources.groupByTo(map) {
-                when {
-                    // SY -->
-                    it.category != null -> "$CATEGORY_KEY_PREFIX${it.category}"
-                    // SY <--
-                    it.isUsedLast -> LAST_USED_KEY
-                    Pin.Actual in it.pin -> PINNED_KEY
-                    else -> it.lang
-                }
-            }
-
             state.copy(
                 isLoading = false,
-                items = byLang
-                    .flatMap {
+                items = sourceGroups
+                    .flatMap { group ->
                         listOf(
                             SourceUiModel.Header(
-                                it.key.removePrefix(CATEGORY_KEY_PREFIX),
-                                it.value.firstOrNull()?.category != null,
+                                group.header,
+                                group.isCategory,
                             ),
-                            *it.value.map { source ->
+                            *group.sources.map { source ->
                                 SourceUiModel.Item(source)
                             }.toTypedArray(),
                         )
@@ -168,7 +138,6 @@ class SourcesScreenModel(
                     .toImmutableList(),
                 // SY -->
                 categories = categories
-                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
                     .toImmutableList(),
                 showPin = showPin,
                 showLatest = showLatest,
@@ -249,12 +218,4 @@ class SourcesScreenModel(
         val isEmpty = items.isEmpty()
     }
 
-    companion object {
-        const val PINNED_KEY = "pinned"
-        const val LAST_USED_KEY = "last_used"
-
-        // SY -->
-        const val CATEGORY_KEY_PREFIX = "category-"
-        // SY <--
-    }
 }

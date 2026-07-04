@@ -5,10 +5,9 @@ import exh.source.BlacklistedSources
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import tachiyomi.domain.source.model.Pin
-import tachiyomi.domain.source.model.Pins
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.repository.SourceRepository
+import tachiyomi.domain.source.service.SourceCatalogPolicy
 import tachiyomi.source.local.isLocal
 
 class GetEnabledSources(
@@ -39,44 +38,18 @@ class GetEnabledSources(
                 sources,
             ->
 
-            val sourcesAndCategories = sourcesInCategories.map {
-                it.split('|').let { (source, test) -> source.toLong() to test }
-            }
-            val sourcesInSourceCategories = sourcesAndCategories.map { it.first }
-            sources
-                .filter { it.lang in enabledLanguages || it.isLocal() }
-                .filterNot { it.id.toString() in disabledSources || it.id in BlacklistedSources.HIDDEN_SOURCES }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-                .flatMap {
-                    val flag = if ("${it.id}" in pinnedSourceIds) Pins.pinned else Pins.unpinned
-                    // SY -->
-                    val categories = sourcesAndCategories.filter { (id) -> id == it.id }
-                        .map(Pair<*, String>::second)
-                        .toSet()
-                    // SY <--
-                    val source = it.copy(
-                        pin = flag,
-                        isExcludedFromDataSaver = it.id.toString() in excludedFromDataSaver,
-                        categories = categories,
-                    )
-                    val toFlatten = mutableListOf(source)
-                    if (source.id == lastUsedSource) {
-                        toFlatten.add(source.copy(isUsedLast = true, pin = source.pin - Pin.Actual))
-                    }
-                    // SY -->
-                    categories.forEach { category ->
-                        toFlatten.add(source.copy(category = category, pin = source.pin - Pin.Actual))
-                    }
-                    if (
-                        sourceCategoriesFilter &&
-                        Pin.Actual !in toFlatten[0].pin &&
-                        source.id in sourcesInSourceCategories
-                    ) {
-                        toFlatten.removeAt(0)
-                    }
-                    // SY <--
-                    toFlatten
-                }
+            SourceCatalogPolicy.selectEnabledSources(
+                sources = sources,
+                enabledLanguages = enabledLanguages,
+                disabledSourceIds = disabledSources,
+                hiddenSourceIds = BlacklistedSources.HIDDEN_SOURCES,
+                pinnedSourceIds = pinnedSourceIds,
+                lastUsedSourceId = lastUsedSource,
+                dataSaverExcludedSourceIds = excludedFromDataSaver,
+                sourceCategoryPreferences = sourcesInCategories,
+                sourceCategoriesFilterEnabled = sourceCategoriesFilter,
+                isLocalSource = { it.isLocal() },
+            )
         }
             .distinctUntilChanged()
     }

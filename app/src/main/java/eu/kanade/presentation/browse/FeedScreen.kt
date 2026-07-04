@@ -47,6 +47,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.model.Source
+import tachiyomi.domain.source.service.SourceSearchPolicy
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
@@ -191,15 +192,15 @@ fun FeedAddDialog(
 ) {
     // KMK -->
     var query by remember { mutableStateOf("") }
+    val subqueries = SourceSearchPolicy.parseSearchQuery(query)
     val sourceList = sources
         .filter { source ->
-            if (query.isBlank()) return@filter true
-            query.split(",").any {
-                val input = it.trim()
-                if (input.isEmpty()) return@any false
-                source.name.contains(input, ignoreCase = true) ||
-                    source.id == input.toLongOrNull()
-            }
+            SourceSearchPolicy.matchesSource(
+                sourceName = source.name,
+                sourceId = source.id,
+                extensionName = null,
+                subqueries = subqueries,
+            )
         }
     val composeOptions: List<@Composable () -> Unit> = sourceList
         .map {

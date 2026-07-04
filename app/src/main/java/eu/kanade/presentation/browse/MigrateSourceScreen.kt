@@ -32,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
-import eu.kanade.domain.source.interactor.SetMigrateSorting
 import eu.kanade.domain.source.model.installedExtension
 import eu.kanade.presentation.browse.components.BaseSourceItem
 import eu.kanade.presentation.browse.components.SourceIcon
@@ -44,6 +43,8 @@ import eu.kanade.tachiyomi.util.system.copyToClipboard
 import exh.source.ExhPreferences
 import exh.source.eHentaiSourceIds
 import kotlinx.collections.immutable.ImmutableList
+import tachiyomi.domain.source.model.MigrationSourceSortDirection
+import tachiyomi.domain.source.model.MigrationSourceSortMode
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
@@ -108,9 +109,9 @@ private fun MigrateSourceList(
     contentPadding: PaddingValues,
     onClickItem: (Source) -> Unit,
     onLongClickItem: (Source) -> Unit,
-    sortingMode: SetMigrateSorting.Mode,
+    sortingMode: MigrationSourceSortMode,
     onToggleSortingMode: () -> Unit,
-    sortingDirection: SetMigrateSorting.Direction,
+    sortingDirection: MigrationSourceSortDirection,
     onToggleSortingDirection: () -> Unit,
     // KMK -->
     state: MigrateSourceScreenModel.State,
@@ -154,11 +155,11 @@ private fun MigrateSourceList(
             // KMK <--
             IconButton(onClick = onToggleSortingMode) {
                 when (sortingMode) {
-                    SetMigrateSorting.Mode.ALPHABETICAL -> Icon(
+                    MigrationSourceSortMode.ALPHABETICAL -> Icon(
                         Icons.Outlined.SortByAlpha,
                         contentDescription = stringResource(MR.strings.action_sort_alpha),
                     )
-                    SetMigrateSorting.Mode.TOTAL -> Icon(
+                    MigrationSourceSortMode.TOTAL -> Icon(
                         Icons.Outlined.Numbers,
                         contentDescription = stringResource(MR.strings.action_sort_count),
                     )
@@ -166,11 +167,11 @@ private fun MigrateSourceList(
             }
             IconButton(onClick = onToggleSortingDirection) {
                 when (sortingDirection) {
-                    SetMigrateSorting.Direction.ASCENDING -> Icon(
+                    MigrationSourceSortDirection.ASCENDING -> Icon(
                         Icons.Outlined.ArrowUpward,
                         contentDescription = stringResource(MR.strings.action_asc),
                     )
-                    SetMigrateSorting.Direction.DESCENDING -> Icon(
+                    MigrationSourceSortDirection.DESCENDING -> Icon(
                         Icons.Outlined.ArrowDownward,
                         contentDescription = stringResource(MR.strings.action_desc),
                     )

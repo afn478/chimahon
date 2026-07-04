@@ -3,6 +3,7 @@ package eu.kanade.domain.source.interactor
 import eu.kanade.domain.source.service.SourcePreferences
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.domain.source.model.Source
+import tachiyomi.domain.source.service.SourcePreferencePolicy
 
 class ToggleSource(
     private val preferences: SourcePreferences,
@@ -14,14 +15,21 @@ class ToggleSource(
 
     fun await(sourceId: Long, enable: Boolean = isEnabled(sourceId)) {
         preferences.disabledSources().getAndSet { disabled ->
-            if (enable) disabled.minus("$sourceId") else disabled.plus("$sourceId")
+            SourcePreferencePolicy.setSourceEnabled(
+                disabledSourceIds = disabled,
+                sourceId = sourceId,
+                enabled = enable,
+            )
         }
     }
 
     fun await(sourceIds: List<Long>, enable: Boolean) {
-        val transformedSourceIds = sourceIds.map { it.toString() }
         preferences.disabledSources().getAndSet { disabled ->
-            if (enable) disabled.minus(transformedSourceIds) else disabled.plus(transformedSourceIds)
+            SourcePreferencePolicy.setSourceIdsEnabled(
+                disabledSourceIds = disabled,
+                sourceIds = sourceIds,
+                enabled = enable,
+            )
         }
     }
 
