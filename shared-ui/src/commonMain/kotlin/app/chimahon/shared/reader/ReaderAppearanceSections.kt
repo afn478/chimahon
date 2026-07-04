@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.reader.model.CustomReaderTheme
 import tachiyomi.domain.reader.model.NovelReaderTheme
+import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy.BooleanSegmentedControlState
 import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy.LayoutSectionState
 import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy.MarginsSectionState
 import tachiyomi.domain.reader.service.NovelReaderAppearanceSheetPolicy.ThemeSectionState
@@ -73,6 +75,21 @@ fun ReaderThemeSection(
             )
         }
     }
+}
+
+@Composable
+fun ReaderModeSection(
+    state: BooleanSegmentedControlState,
+    onModeSelected: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ReaderAppearanceBooleanSegmentedControl(
+        state = state,
+        onOptionSelected = onModeSelected,
+        modifier = modifier,
+        labelStyle = MaterialTheme.typography.labelLarge,
+        labelColor = MaterialTheme.colorScheme.primary,
+    )
 }
 
 @Composable
