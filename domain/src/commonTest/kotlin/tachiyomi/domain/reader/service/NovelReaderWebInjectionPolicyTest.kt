@@ -43,6 +43,57 @@ class NovelReaderWebInjectionPolicyTest {
     }
 
     @Test
+    fun readerInjectionActionDefersUntilViewportHasSize() {
+        assertEquals(
+            NovelReaderWebInjectionPolicy.ReaderInjectionAction.Defer,
+            NovelReaderWebInjectionPolicy.readerInjectionAction(
+                width = 0,
+                height = 800,
+                isImageOnly = false,
+                continuousMode = true,
+                readerJs = "window.readerJsLoaded = true;",
+                settings = ReaderSettings(),
+                pendingProgress = 0.5,
+            ),
+        )
+        assertEquals(
+            NovelReaderWebInjectionPolicy.ReaderInjectionAction.Defer,
+            NovelReaderWebInjectionPolicy.readerInjectionAction(
+                width = 480,
+                height = -1,
+                isImageOnly = false,
+                continuousMode = false,
+                readerJs = "window.readerJsLoaded = true;",
+                settings = ReaderSettings(),
+                pendingProgress = 0.5,
+            ),
+        )
+    }
+
+    @Test
+    fun readerInjectionActionBuildsScriptForResolvedMode() {
+        val action = NovelReaderWebInjectionPolicy.readerInjectionAction(
+            width = 480,
+            height = 800,
+            isImageOnly = false,
+            continuousMode = true,
+            readerJs = "window.readerJsLoaded = true;",
+            settings = ReaderSettings(verticalWriting = false),
+            pendingProgress = 0.42,
+        )
+
+        val script = when (action) {
+            is NovelReaderWebInjectionPolicy.ReaderInjectionAction.Inject -> action.script
+            NovelReaderWebInjectionPolicy.ReaderInjectionAction.Defer -> {
+                error("Expected injected reader script.")
+            }
+        }
+        assertTrue(script.contains("window.readerJsLoaded = true;"))
+        assertTrue(script.contains("window.hoshiReader.continuousMode = true;"))
+        assertTrue(script.contains("window.hoshiReader.restoreProgress(0.42, false);"))
+    }
+
+    @Test
     fun imageOnlyInjectionScriptInstallsMinimalReaderApi() {
         val script = NovelReaderWebInjectionPolicy.readerInjectionScript(
             mode = NovelReaderWebInjectionPolicy.ReaderMode.IMAGE_ONLY,

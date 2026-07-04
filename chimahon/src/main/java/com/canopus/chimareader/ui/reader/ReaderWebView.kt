@@ -532,21 +532,24 @@ private class ReaderAndroidWebView(
     fun injectReader() {
         Log.d("ReaderWebView", "injectReader: ${width}x$height continuous=$continuousMode imageOnly=$isImageOnly")
 
-        if (height <= 0 || width <= 0) {
-            post { injectReader() }
-            return
-        }
-
-        val script = NovelReaderWebInjectionPolicy.readerInjectionScript(
-            mode = NovelReaderWebInjectionPolicy.readerMode(
+        when (
+            val action = NovelReaderWebInjectionPolicy.readerInjectionAction(
+                width = width,
+                height = height,
                 isImageOnly = isImageOnly,
                 continuousMode = continuousMode,
-            ),
-            readerJs = readerJs,
-            settings = readerSettings,
-            pendingProgress = pendingProgress,
-        )
-        evaluateJavascript(script, null)
+                readerJs = readerJs,
+                settings = readerSettings,
+                pendingProgress = pendingProgress,
+            )
+        ) {
+            NovelReaderWebInjectionPolicy.ReaderInjectionAction.Defer -> {
+                post { injectReader() }
+            }
+            is NovelReaderWebInjectionPolicy.ReaderInjectionAction.Inject -> {
+                evaluateJavascript(action.script, null)
+            }
+        }
     }
 
     fun applySettings(settings: ReaderSettings) {

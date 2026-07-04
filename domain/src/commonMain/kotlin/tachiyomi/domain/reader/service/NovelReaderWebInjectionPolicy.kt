@@ -9,6 +9,11 @@ object NovelReaderWebInjectionPolicy {
         PAGED,
     }
 
+    sealed interface ReaderInjectionAction {
+        data object Defer : ReaderInjectionAction
+        data class Inject(val script: String) : ReaderInjectionAction
+    }
+
     fun readerMode(
         isImageOnly: Boolean,
         continuousMode: Boolean,
@@ -18,6 +23,30 @@ object NovelReaderWebInjectionPolicy {
             continuousMode -> ReaderMode.CONTINUOUS
             else -> ReaderMode.PAGED
         }
+    }
+
+    fun readerInjectionAction(
+        width: Int,
+        height: Int,
+        isImageOnly: Boolean,
+        continuousMode: Boolean,
+        readerJs: String,
+        settings: ReaderSettings,
+        pendingProgress: Double,
+    ): ReaderInjectionAction {
+        if (width <= 0 || height <= 0) return ReaderInjectionAction.Defer
+
+        return ReaderInjectionAction.Inject(
+            readerInjectionScript(
+                mode = readerMode(
+                    isImageOnly = isImageOnly,
+                    continuousMode = continuousMode,
+                ),
+                readerJs = readerJs,
+                settings = settings,
+                pendingProgress = pendingProgress,
+            ),
+        )
     }
 
     fun readerInjectionScript(
