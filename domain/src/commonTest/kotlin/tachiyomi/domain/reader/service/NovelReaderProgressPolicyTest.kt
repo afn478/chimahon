@@ -108,4 +108,74 @@ class NovelReaderProgressPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun scrollProgressReportActionIgnoresInactiveReaderModes() {
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.Ignore,
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = false,
+                imageOnly = false,
+                nowMillis = 2_500L,
+                lastReportMillis = 1_000L,
+            ),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.Ignore,
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = true,
+                nowMillis = 2_500L,
+                lastReportMillis = 1_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun scrollProgressReportActionReportsOnlyAfterIntervalHasElapsed() {
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.ScheduleDelayed(
+                NovelReaderProgressPolicy.WEB_SCROLL_PROGRESS_REPORT_INTERVAL_MS,
+            ),
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = false,
+                nowMillis = 2_000L,
+                lastReportMillis = 1_000L,
+            ),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.ReportNow(2_001L),
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = false,
+                nowMillis = 2_001L,
+                lastReportMillis = 1_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun scrollProgressReportActionUsesCustomIntervalForAlternateHosts() {
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.ScheduleDelayed(250L),
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = false,
+                nowMillis = 1_200L,
+                lastReportMillis = 1_000L,
+                reportIntervalMillis = 250L,
+            ),
+        )
+        assertEquals(
+            NovelReaderProgressPolicy.ScrollProgressReportAction.ReportNow(1_251L),
+            NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = true,
+                imageOnly = false,
+                nowMillis = 1_251L,
+                lastReportMillis = 1_000L,
+                reportIntervalMillis = 250L,
+            ),
+        )
+    }
 }

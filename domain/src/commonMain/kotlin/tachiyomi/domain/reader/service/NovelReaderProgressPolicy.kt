@@ -4,6 +4,14 @@ import kotlin.math.abs
 import tachiyomi.domain.reader.model.NovelReaderChapterProgress
 
 object NovelReaderProgressPolicy {
+    const val WEB_SCROLL_PROGRESS_REPORT_INTERVAL_MS = 1000L
+
+    sealed interface ScrollProgressReportAction {
+        data object Ignore : ScrollProgressReportAction
+        data class ReportNow(val reportTimeMillis: Long) : ScrollProgressReportAction
+        data class ScheduleDelayed(val delayMillis: Long) : ScrollProgressReportAction
+    }
+
     fun accumulatedCharacterCounts(chapterCharacterCounts: List<Int>): List<Int> {
         val accumulated = mutableListOf<Int>()
         var runningTotal = 0
@@ -72,5 +80,22 @@ object NovelReaderProgressPolicy {
             chapterIndex != lastChapterIndex ||
             characterCount != lastCharacterCount ||
             abs(progress - lastProgress) > progressEpsilon
+    }
+
+    fun scrollProgressReportAction(
+        continuousMode: Boolean,
+        imageOnly: Boolean,
+        nowMillis: Long,
+        lastReportMillis: Long,
+        reportIntervalMillis: Long = WEB_SCROLL_PROGRESS_REPORT_INTERVAL_MS,
+    ): ScrollProgressReportAction {
+        if (!continuousMode || imageOnly) return ScrollProgressReportAction.Ignore
+
+        val intervalMillis = maxOf(0L, reportIntervalMillis)
+        return if (nowMillis - lastReportMillis > intervalMillis) {
+            ScrollProgressReportAction.ReportNow(nowMillis)
+        } else {
+            ScrollProgressReportAction.ScheduleDelayed(intervalMillis)
+        }
     }
 }

@@ -27,6 +27,7 @@ import com.canopus.chimareader.data.Statistics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import tachiyomi.domain.reader.model.ReaderSettings
 import tachiyomi.domain.reader.service.NovelReaderAppearancePolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsDefaults
@@ -193,7 +194,7 @@ fun ReaderScreen(
 
                     LaunchedEffect(isPopupActive) {
                         if (!isPopupActive) {
-                            viewModel.bridge.send(WebViewCommand.ClearSelection)
+                            viewModel.bridge.send(NovelReaderWebCommand.ClearSelection)
                         }
                     }
 

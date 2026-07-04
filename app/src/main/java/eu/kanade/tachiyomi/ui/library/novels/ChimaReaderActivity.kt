@@ -43,6 +43,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -320,7 +321,7 @@ class ChimaReaderActivity : NovelReaderActivity() {
                 val charCount = firstMatched.codePointCount(0, firstMatched.length)
                 withContext(Dispatchers.Main) {
                     pendingShowByRects = true
-                    readerViewModel?.bridge?.send(com.canopus.chimareader.ui.reader.WebViewCommand.GetSelectionRects(charCount, matchOffset))
+                    readerViewModel?.bridge?.send(NovelReaderWebCommand.GetSelectionRects(charCount, matchOffset))
                 }
             } else {
                 withContext(Dispatchers.Main) {

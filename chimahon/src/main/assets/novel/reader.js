@@ -204,12 +204,9 @@ window.hoshiReader = {
             document.body.style.transform = 'translateZ(0)';
             requestAnimationFrame(() => {
                 document.body.style.transform = '';
-                if (window.HoshiAndroid && window.HoshiAndroid.restoreCompleted) {
-                    window.HoshiAndroid.restoreCompleted();
+                if (window.hoshiNative && window.hoshiNative.restoreCompleted) {
+                    window.hoshiNative.restoreCompleted();
                     return;
-                }
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.restoreCompleted) {
-                    window.webkit.messageHandlers.restoreCompleted.postMessage(null);
                 }
             });
         });
@@ -343,16 +340,16 @@ window.hoshiReader = {
         const hit = this.getCharacterAtPoint(clientX, clientY);
         if (!hit) {
             this.clearSelection();
-            if (window.HoshiAndroid && window.HoshiAndroid.onBackgroundTap) {
-                window.HoshiAndroid.onBackgroundTap(clientX, clientY);
+            if (window.hoshiNative && window.hoshiNative.onBackgroundTap) {
+                window.hoshiNative.onBackgroundTap(clientX, clientY);
             }
             return false;
         }
 
         if (this.selectionStartNode === hit.node && this.selectionStartOffset === hit.offset) {
             this.clearSelection();
-            if (window.HoshiAndroid && window.HoshiAndroid.onBackgroundTap) {
-                window.HoshiAndroid.onBackgroundTap(clientX, clientY);
+            if (window.hoshiNative && window.hoshiNative.onBackgroundTap) {
+                window.hoshiNative.onBackgroundTap(clientX, clientY);
             }
             return false;
         }
@@ -412,15 +409,15 @@ window.hoshiReader = {
                 maxY = rect.bottom;
             }
 
-            if (window.HoshiAndroid && window.HoshiAndroid.onTextSelected) {
-                window.HoshiAndroid.onTextSelected(word, sentence, minX, minY, maxX - minX, maxY - minY);
+            if (window.hoshiNative && window.hoshiNative.onTextSelected) {
+                window.hoshiNative.onTextSelected(word, sentence, minX, minY, maxX - minX, maxY - minY);
                 return true;
             }
         }
 
         this.clearSelection();
-        if (window.HoshiAndroid && window.HoshiAndroid.onBackgroundTap) {
-            window.HoshiAndroid.onBackgroundTap(clientX, clientY);
+        if (window.hoshiNative && window.hoshiNative.onBackgroundTap) {
+            window.hoshiNative.onBackgroundTap(clientX, clientY);
         }
         return false;
     },

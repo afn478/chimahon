@@ -5,6 +5,11 @@ import tachiyomi.domain.reader.model.NovelReaderTocEntry
 import tachiyomi.domain.reader.model.NovelReaderTocItem
 
 object NovelReaderNavigationPolicy {
+    sealed interface WebLinkAction {
+        data class SameChapter(val fragment: String?) : WebLinkAction
+        data class NavigateToUrl(val url: String) : WebLinkAction
+    }
+
     fun chapterTitle(
         chapterHref: String?,
         tableOfContents: List<NovelReaderTocEntry>,
@@ -63,6 +68,20 @@ object NovelReaderNavigationPolicy {
             spineIndex = spineIndex,
             fragment = fragmentForHref(url),
         )
+    }
+
+    fun webLinkAction(
+        currentUrl: String?,
+        targetUrl: String,
+    ): WebLinkAction {
+        val currentPath = currentUrl?.let(::normalizedFilePath)
+        val targetPath = normalizedFilePath(targetUrl)
+
+        return if (currentPath != null && currentPath == targetPath) {
+            WebLinkAction.SameChapter(fragment = fragmentForHref(targetUrl))
+        } else {
+            WebLinkAction.NavigateToUrl(url = targetUrl)
+        }
     }
 
     private fun tocLabelForHref(

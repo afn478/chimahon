@@ -32,34 +32,13 @@ import java.util.Locale
 import tachiyomi.domain.reader.model.NovelReaderSettingsSnapshot
 import tachiyomi.domain.reader.model.NovelReaderTocEntry
 import tachiyomi.domain.reader.model.NovelReaderTocItem
+import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import tachiyomi.domain.reader.model.ReaderSettings
 import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
 import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
 import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
 import tachiyomi.domain.reader.service.NovelReaderSettingsPolicy
 import tachiyomi.domain.reader.service.NovelReaderStatisticsPolicy
-
-// ─── Commands ─────────────────────────────────────────────────────────────────
-
-sealed interface WebViewCommand {
-    data class LoadChapter(val url: String, val progress: Double) : WebViewCommand
-    data class JumpToFragment(val fragment: String) : WebViewCommand
-    data class ApplySasayakiCues(val cuesJson: String) : WebViewCommand
-    data class HighlightSasayakiCue(
-        val cueId: String,
-        val reveal: Boolean,
-        val onProgress: ((Double) -> Unit)? = null,
-    ) : WebViewCommand
-    data object ClearSasayakiCue : WebViewCommand
-    data class UpdateTextColor(val hex: String?) : WebViewCommand
-    data class ChangeMode(val continuous: Boolean) : WebViewCommand
-    data class ApplySettings(val settings: ReaderSettings) : WebViewCommand
-    data class ChangeFocusMode(val focusMode: Boolean) : WebViewCommand
-    data class Paginate(val forward: Boolean) : WebViewCommand
-    data object ClearSelection : WebViewCommand
-    data class HighlightSelection(val charCount: Int) : WebViewCommand
-    data class GetSelectionRects(val charCount: Int, val startOffset: Int = 0) : WebViewCommand
-}
 
 // ─── Bridge ───────────────────────────────────────────────────────────────────
 
@@ -70,9 +49,9 @@ class WebViewBridge {
         private set
     var progress: Double by mutableDoubleStateOf(0.0)
         private set
-    val pendingCommands = mutableStateListOf<WebViewCommand>()
+    val pendingCommands = mutableStateListOf<NovelReaderWebCommand>()
 
-    fun send(command: WebViewCommand) {
+    fun send(command: NovelReaderWebCommand) {
         pendingCommands += command
     }
 
@@ -87,15 +66,15 @@ class WebViewBridge {
     }
 
     fun highlightSasayakiCue(id: String, reveal: Boolean) {
-        send(WebViewCommand.HighlightSasayakiCue(id, reveal))
+        send(NovelReaderWebCommand.HighlightSasayakiCue(id, reveal))
     }
 
     fun clearSasayakiCue() {
-        send(WebViewCommand.ClearSasayakiCue)
+        send(NovelReaderWebCommand.ClearSasayakiCue)
     }
 
     fun paginate(forward: Boolean) {
-        send(WebViewCommand.Paginate(forward))
+        send(NovelReaderWebCommand.Paginate(forward))
     }
 }
 
@@ -266,7 +245,7 @@ class ReaderViewModel(
             val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
             bridge.updateState(fileUrl, currentProgress, chapterTitle)
-            bridge.send(WebViewCommand.LoadChapter(fileUrl, currentProgress))
+            bridge.send(NovelReaderWebCommand.LoadChapter(fileUrl, currentProgress))
         }
 
         // Start collecting updates from settings flow in the background
@@ -441,7 +420,7 @@ class ReaderViewModel(
     fun jumpToChapter(spineIndex: Int, fragment: String? = null) {
         loadChapter(spineIndex, 0.0)
         if (!fragment.isNullOrEmpty()) {
-            bridge.send(WebViewCommand.JumpToFragment(fragment))
+            bridge.send(NovelReaderWebCommand.JumpToFragment(fragment))
         }
     }
 
@@ -484,7 +463,7 @@ class ReaderViewModel(
             val fileUrl = NovelReaderFileUrlPolicy.fileUrlForAbsolutePath(file.absolutePath)
             val chapterTitle = getCurrentChapterTitle()
             bridge.updateState(fileUrl, progress, chapterTitle)
-            bridge.send(WebViewCommand.LoadChapter(fileUrl, progress))
+            bridge.send(NovelReaderWebCommand.LoadChapter(fileUrl, progress))
         }
     }
 

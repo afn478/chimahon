@@ -107,6 +107,50 @@ class NovelReaderNavigationPolicyTest {
         )
     }
 
+    @Test
+    fun webLinkActionKeepsSameChapterFragmentInCurrentWebView() {
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkAction.SameChapter(fragment = "paragraph-4"),
+            NovelReaderNavigationPolicy.webLinkAction(
+                currentUrl = "file:///books/Book/Text/Chapter%202.xhtml",
+                targetUrl = "file:///books/Book/Text/Chapter 2.xhtml#paragraph-4",
+            ),
+        )
+    }
+
+    @Test
+    fun webLinkActionKeepsSameChapterWithoutFragmentInCurrentWebView() {
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkAction.SameChapter(fragment = null),
+            NovelReaderNavigationPolicy.webLinkAction(
+                currentUrl = "file:///books/Book/Text/Chapter%202.xhtml",
+                targetUrl = "file:///books/Book/Text/Chapter 2.xhtml",
+            ),
+        )
+    }
+
+    @Test
+    fun webLinkActionNavigatesForDifferentChapterOrMissingCurrentUrl() {
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkAction.NavigateToUrl(
+                url = "file:///books/Book/Text/Chapter%203.xhtml#start",
+            ),
+            NovelReaderNavigationPolicy.webLinkAction(
+                currentUrl = "file:///books/Book/Text/Chapter%202.xhtml",
+                targetUrl = "file:///books/Book/Text/Chapter%203.xhtml#start",
+            ),
+        )
+        assertEquals(
+            NovelReaderNavigationPolicy.WebLinkAction.NavigateToUrl(
+                url = "file:///books/Book/Text/Chapter%202.xhtml#start",
+            ),
+            NovelReaderNavigationPolicy.webLinkAction(
+                currentUrl = null,
+                targetUrl = "file:///books/Book/Text/Chapter%202.xhtml#start",
+            ),
+        )
+    }
+
     private fun tocEntry(
         label: String,
         href: String?,

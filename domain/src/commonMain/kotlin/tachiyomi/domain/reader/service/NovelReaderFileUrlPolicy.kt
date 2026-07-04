@@ -2,6 +2,7 @@ package tachiyomi.domain.reader.service
 
 object NovelReaderFileUrlPolicy {
     const val FILE_URL_PREFIX = "file://"
+    private const val SCHEME_SEPARATOR = "://"
 
     fun fileUrlForAbsolutePath(absolutePath: String): String {
         val normalizedPath = normalizePathSeparators(absolutePath)
@@ -34,6 +35,10 @@ object NovelReaderFileUrlPolicy {
         )
 
         return dropLeadingSlashBeforeWindowsDrive(normalizedPath)
+    }
+
+    fun isLocalFileUrlOrPath(pathOrUrl: String): Boolean {
+        return pathOrUrl.startsWith(FILE_URL_PREFIX) || SCHEME_SEPARATOR !in pathOrUrl
     }
 
     fun hrefPathForComparison(href: String): String {

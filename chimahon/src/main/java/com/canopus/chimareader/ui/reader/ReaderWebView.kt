@@ -24,13 +24,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.common.io.Files.append
 import kotlinx.coroutines.delay
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
+import tachiyomi.domain.reader.model.NovelReaderWebCommand
 import tachiyomi.domain.reader.model.ReaderSettings
-import tachiyomi.domain.reader.service.NovelReaderFileUrlPolicy
-import tachiyomi.domain.reader.service.NovelReaderFontPolicy
+import tachiyomi.domain.reader.service.NovelReaderInputPolicy
+import tachiyomi.domain.reader.service.NovelReaderNavigationPolicy
+import tachiyomi.domain.reader.service.NovelReaderProgressPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebBridgePolicy
+import tachiyomi.domain.reader.service.NovelReaderWebCommandActionPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebCommandPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebGeometryPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebInjectionPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebLoadPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebNavigationPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebResultPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebScriptPolicy
+import tachiyomi.domain.reader.service.NovelReaderWebSettingsPolicy
 
 @Composable
 fun ReaderWebView(
@@ -61,7 +71,7 @@ fun ReaderWebView(
     LaunchedEffect(bridge.chapterUrl) {
         val chapterUrl = bridge.chapterUrl ?: return@LaunchedEffect
         if (pendingCommands.isEmpty()) {
-            bridge.send(WebViewCommand.LoadChapter(chapterUrl, bridge.progress))
+            bridge.send(NovelReaderWebCommand.LoadChapter(chapterUrl, bridge.progress))
         }
     }
 
@@ -72,12 +82,12 @@ fun ReaderWebView(
             return@LaunchedEffect
         }
         bridge.chapterUrl?.let { url ->
-            bridge.send(WebViewCommand.LoadChapter(url, bridge.progress))
+            bridge.send(NovelReaderWebCommand.LoadChapter(url, bridge.progress))
         }
     }
 
     LaunchedEffect(focusMode) {
-        bridge.send(WebViewCommand.ChangeFocusMode(focusMode))
+        bridge.send(NovelReaderWebCommand.ChangeFocusMode(focusMode))
     }
 
     val isFirstComposition = remember { mutableStateOf(true) }
@@ -87,7 +97,7 @@ fun ReaderWebView(
             return@LaunchedEffect
         }
         kotlinx.coroutines.delay(100)
-        bridge.send(WebViewCommand.ApplySettings(readerSettings))
+        bridge.send(NovelReaderWebCommand.ApplySettings(readerSettings))
     }
 
     AndroidView(
@@ -136,45 +146,42 @@ fun ReaderWebView(
                     }
                 }
                 webViewClient = object : WebViewClient() {
+                    private fun handleUrlLoading(url: String): Boolean {
+                        val action = NovelReaderNavigationPolicy.webLinkAction(
+                            currentUrl = currentUrl,
+                            targetUrl = url,
+                        )
+
+                        Log.d("ReaderWebView", "shouldOverrideUrlLoading: url=$url action=$action")
+
+                        when (action) {
+                            is NovelReaderNavigationPolicy.WebLinkAction.SameChapter -> {
+                                action.fragment?.let { fragment ->
+                                    val js = NovelReaderWebScriptPolicy.scrollToFragmentScript(fragment)
+                                    post { evaluateJavascript(js, null) }
+                                }
+                            }
+                            is NovelReaderNavigationPolicy.WebLinkAction.NavigateToUrl -> {
+                                post { onInternalLinkClicked(action.url) }
+                            }
+                        }
+
+                        return true
+                    }
 
                     override fun shouldOverrideUrlLoading(
                         view: WebView?,
                         request: WebResourceRequest?,
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
-                        val currentFile = currentUrl
-                            ?.let(NovelReaderFileUrlPolicy::localPathForFileUrlOrPath)
-                        val targetFile = NovelReaderFileUrlPolicy.localPathForFileUrlOrPath(url)
-                        val fragment = NovelReaderFileUrlPolicy.fragmentForUrl(url).orEmpty()
-
-                        Log.d("ReaderWebView", "shouldOverrideUrlLoading: url=$url currentFile=$currentFile targetFile=$targetFile fragment=$fragment")
-
-                        if (currentFile != null && currentFile == targetFile) {
-                            // Same chapter file – just scroll to the fragment via JS (no reload)
-                            if (fragment.isNotEmpty()) {
-                                val escapedId = fragment.replace("\\", "\\\\").replace("'", "\\'")
-                                val js = """
-                                    (function() {
-                                        var el = document.getElementById('$escapedId')
-                                            || document.querySelector('[name="$escapedId"]');
-                                        if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
-                                    })();
-                                """.trimIndent()
-                                post { evaluateJavascript(js, null) }
-                            }
-                            return true // always intercept – no full reload
-                        }
-
-                        // Different chapter file (or external URL) – hand off to ViewModel
-                        post { onInternalLinkClicked(url) }
-                        return true
+                        return handleUrlLoading(url)
                     }
 
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         Log.d("ReaderWebView", "onPageStarted: url=$url")
                         alpha = 0f
                         visibility = View.VISIBLE
-                        lastLoadedUrl = null
+                        lastLoadedChapterKey = null
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -226,84 +233,62 @@ fun ReaderWebView(
             val commands = pendingCommands.toList()
             pendingCommands.clear()
 
-            val deduped = buildList {
-                var lastLoadChapter: WebViewCommand.LoadChapter? = null
-                for (cmd in commands) {
-                    if (cmd is WebViewCommand.LoadChapter) {
-                        lastLoadChapter = cmd
-                    } else {
-                        lastLoadChapter?.let { add(it) }
-                        lastLoadChapter = null
-                        add(cmd)
-                    }
-                }
-                lastLoadChapter?.let { add(it) }
-            }
+            val deduped = NovelReaderWebCommandPolicy.collapseConsecutiveLoads(commands)
 
             deduped.forEach { command ->
-                when (command) {
-                    is WebViewCommand.LoadChapter -> {
-                        v.pendingProgress = command.progress
-                        v.currentUrl = command.url
-                        v.loadChapter(command.url)
+                when (
+                    val action = NovelReaderWebCommandActionPolicy.commandAction(
+                        command = command,
+                        currentUrl = v.currentUrl,
+                        lastAppliedSettings = v.lastAppliedSettings,
+                    )
+                ) {
+                    is NovelReaderWebCommandActionPolicy.CommandAction.LoadChapter -> {
+                        v.pendingProgress = action.progress
+                        v.currentUrl = action.url
+                        v.loadChapter(action.url)
                     }
-                    is WebViewCommand.ChangeMode -> {
-                        if (v.currentUrl != null) {
-                            v.continuousMode = command.continuous
-                            v.loadChapter(v.currentUrl!!)
-                        }
+                    is NovelReaderWebCommandActionPolicy.CommandAction.ReloadCurrentChapter -> {
+                        v.continuousMode = action.continuousMode
+                        v.loadChapter(action.url)
                     }
-                    is WebViewCommand.ApplySettings -> {
-                        val old = v.lastAppliedSettings
-                        val new = command.settings
+                    is NovelReaderWebCommandActionPolicy.CommandAction.ApplySettings -> {
+                        val new = action.settings
                         v.readerSettings = new
                         v.lastAppliedSettings = new
 
-                        if (old.avoidPageBreak != new.avoidPageBreak ||
-                            old.verticalWriting != new.verticalWriting
-                        ) {
-                            v.injectReader()
-                        } else {
-                            v.applySettings(new)
-                        }
-                    }
-                    is WebViewCommand.ChangeFocusMode -> {
-                        v.focusMode = command.focusMode
-                    }
-                    is WebViewCommand.Paginate -> {
-                        v.paginate(command.forward)
-                    }
-                    is WebViewCommand.JumpToFragment -> {
-                        v.jumpToFragment(command.fragment)
-                    }
-                    is WebViewCommand.ClearSelection -> {
-                        v.evaluateJavascript("if(window.hoshiReader && window.hoshiReader.clearSelection) { window.hoshiReader.clearSelection(); }", null)
-                    }
-                    is WebViewCommand.HighlightSelection -> {
-                        v.evaluateJavascript("if(window.hoshiReader && window.hoshiReader.highlightSelection) { window.hoshiReader.highlightSelection(${command.charCount}); }", null)
-                    }
-                    is WebViewCommand.GetSelectionRects -> {
-                        v.evaluateJavascript("(function() { try { return window.hoshiReader.getSelectionRects(${command.charCount}, ${command.startOffset}); } catch(e) { return []; } })()") { result ->
-                            val json = result ?: "[]"
-                            try {
-                                val loc = IntArray(2)
-                                v.getLocationOnScreen(loc)
-                                val scale = v.scale.coerceAtLeast(0.1f)
-                                val arr = org.json.JSONArray(json)
-                                for (i in 0 until arr.length()) {
-                                    val obj = arr.getJSONObject(i)
-                                    obj.put("x", obj.getDouble("x") * scale + loc[0])
-                                    obj.put("y", obj.getDouble("y") * scale + loc[1])
-                                    obj.put("width", obj.getDouble("width") * scale)
-                                    obj.put("height", obj.getDouble("height") * scale)
-                                }
-                                onSelectionRectsReceived?.invoke(arr.toString())
-                            } catch (_: Exception) {
-                                onSelectionRectsReceived?.invoke(json)
+                        when (action.settingsAction) {
+                            NovelReaderWebSettingsPolicy.SettingsCommandAction.ReinjectReader -> {
+                                v.injectReader()
+                            }
+                            NovelReaderWebSettingsPolicy.SettingsCommandAction.ApplyLiveSettings -> {
+                                v.applySettings(new)
                             }
                         }
                     }
-                    else -> {}
+                    is NovelReaderWebCommandActionPolicy.CommandAction.SetFocusMode -> {
+                        v.focusMode = action.focusMode
+                    }
+                    is NovelReaderWebCommandActionPolicy.CommandAction.Paginate -> {
+                        v.paginate(action.forward)
+                    }
+                    is NovelReaderWebCommandActionPolicy.CommandAction.EvaluateScript -> {
+                        v.evaluateJavascript(action.script, null)
+                    }
+                    is NovelReaderWebCommandActionPolicy.CommandAction.RequestSelectionRects -> {
+                        v.evaluateJavascript(action.script) { result ->
+                            val loc = IntArray(2)
+                            v.getLocationOnScreen(loc)
+                            val json = NovelReaderWebGeometryPolicy.selectionRectsToScreenJson(
+                                json = result,
+                                viewportLeft = loc[0].toDouble(),
+                                viewportTop = loc[1].toDouble(),
+                                scale = v.scale.toDouble(),
+                            )
+                            onSelectionRectsReceived?.invoke(json)
+                        }
+                    }
+                    NovelReaderWebCommandActionPolicy.CommandAction.Ignore -> Unit
                 }
             }
         },
@@ -341,16 +326,13 @@ private class ReaderAndroidWebView(
     var pendingProgress: Double = 0.0
     var lastAppliedSettings: ReaderSettings = readerSettings
 
-    internal var lastLoadedUrl: String? = null
-    internal var lastLoadedWidth: Int = -1
-    internal var lastLoadedHeight: Int = -1
-    internal var lastLoadedVerticalWriting: Boolean? = null
+    internal var lastLoadedChapterKey: NovelReaderWebLoadPolicy.ChapterLoadKey? = null
 
     private var lastProgressReportTime = 0L
     private val reportProgressRunnable = Runnable {
         if (continuousMode && !isImageOnly) {
-            evaluateJavascript("(function() { return window.hoshiReader.calculateProgress(); })()") { p ->
-                p?.trim()?.trim('"')?.toDoubleOrNull()?.let {
+            evaluateJavascript(NovelReaderWebScriptPolicy.calculateProgressScript()) { p ->
+                NovelReaderWebResultPolicy.progressResult(p)?.let {
                     pendingProgress = it
                     onProgressChanged(it)
                 }
@@ -365,15 +347,23 @@ private class ReaderAndroidWebView(
             onDismissPopupRequested()
         }
 
-        if (continuousMode && !isImageOnly) {
-            val now = System.currentTimeMillis()
-            if (now - lastProgressReportTime > 1000L) {
-                lastProgressReportTime = now
+        when (
+            val action = NovelReaderProgressPolicy.scrollProgressReportAction(
+                continuousMode = continuousMode,
+                imageOnly = isImageOnly,
+                nowMillis = System.currentTimeMillis(),
+                lastReportMillis = lastProgressReportTime,
+            )
+        ) {
+            NovelReaderProgressPolicy.ScrollProgressReportAction.Ignore -> Unit
+            is NovelReaderProgressPolicy.ScrollProgressReportAction.ReportNow -> {
+                lastProgressReportTime = action.reportTimeMillis
                 removeCallbacks(reportProgressRunnable)
                 post(reportProgressRunnable)
-            } else {
+            }
+            is NovelReaderProgressPolicy.ScrollProgressReportAction.ScheduleDelayed -> {
                 removeCallbacks(reportProgressRunnable)
-                postDelayed(reportProgressRunnable, 1000L)
+                postDelayed(reportProgressRunnable, action.delayMillis)
             }
         }
     }
@@ -392,24 +382,17 @@ private class ReaderAndroidWebView(
                 val start = e1 ?: return false
                 val deltaX = e2.x - start.x
                 val deltaY = e2.y - start.y
-                val isVerticalSwipe = kotlin.math.abs(deltaY) > kotlin.math.abs(deltaX)
-                val expectsVerticalSwipe = continuousMode && !readerSettings.verticalWriting
-                if (isVerticalSwipe != expectsVerticalSwipe) return false
+                val forward = NovelReaderInputPolicy.swipeForward(
+                    deltaX = deltaX,
+                    deltaY = deltaY,
+                    velocityX = velocityX,
+                    velocityY = velocityY,
+                    swipeThreshold = swipeThreshold.toFloat(),
+                    continuousMode = continuousMode,
+                    verticalWriting = readerSettings.verticalWriting,
+                ) ?: return false
 
-                val primaryDelta = if (isVerticalSwipe) deltaY else deltaX
-                val primaryVelocity = if (isVerticalSwipe) velocityY else velocityX
-                if (kotlin.math.abs(primaryDelta) < swipeThreshold.toFloat()) return false
-                if (kotlin.math.abs(primaryVelocity) < 400f) return false
-
-                return if (expectsVerticalSwipe) {
-                    handleSwipe(forward = deltaY < 0f)
-                } else if (readerSettings.verticalWriting) {
-                    // Vertical RTL: swipe right → forward
-                    handleSwipe(forward = deltaX > 0f)
-                } else {
-                    // Horizontal LTR: swipe left → forward
-                    handleSwipe(forward = deltaX < 0f)
-                }
+                return handleSwipe(forward = forward)
             }
         },
     )
@@ -428,7 +411,23 @@ private class ReaderAndroidWebView(
                 val density = context.resources.displayMetrics.density
                 val loc = IntArray(2)
                 getLocationOnScreen(loc)
-                onTextSelectedCallback(word, sentence, x * density + loc[0], y * density + loc[1], w * density, h * density)
+                val bounds = NovelReaderWebGeometryPolicy.cssBoundsToScreenBounds(
+                    x = x.toDouble(),
+                    y = y.toDouble(),
+                    width = w.toDouble(),
+                    height = h.toDouble(),
+                    viewportLeft = loc[0].toDouble(),
+                    viewportTop = loc[1].toDouble(),
+                    scale = density.toDouble(),
+                )
+                onTextSelectedCallback(
+                    word,
+                    sentence,
+                    bounds.x.toFloat(),
+                    bounds.y.toFloat(),
+                    bounds.width.toFloat(),
+                    bounds.height.toFloat(),
+                )
             }
         },
         onBackgroundTap = { x, y ->
@@ -437,14 +436,26 @@ private class ReaderAndroidWebView(
                     onDismissPopupRequested()
                 } else {
                     val density = context.resources.displayMetrics.density
-                    val eventX = x * density
-                    val eventY = y * density
-                    when {
-                        eventY < tapZonePx || eventY > height - tapZonePx -> onTapTop()
-                        eventX < width * (readerSettings.tapZonePercent / 100f) ->
-                            handleSwipe(forward = readerSettings.verticalWriting)
-                        eventX > width * (1f - readerSettings.tapZonePercent / 100f) ->
-                            handleSwipe(forward = !readerSettings.verticalWriting)
+                    val tapPoint = NovelReaderWebGeometryPolicy.cssPointToViewportPoint(
+                        x = x.toDouble(),
+                        y = y.toDouble(),
+                        scale = density.toDouble(),
+                    )
+                    when (
+                        NovelReaderInputPolicy.backgroundTapAction(
+                            x = tapPoint.x.toFloat(),
+                            y = tapPoint.y.toFloat(),
+                            width = width,
+                            height = height,
+                            tapZonePx = tapZonePx,
+                            tapZonePercent = readerSettings.tapZonePercent,
+                            verticalWriting = readerSettings.verticalWriting,
+                        )
+                    ) {
+                        NovelReaderInputPolicy.TapAction.TOGGLE_OVERLAY -> onTapTop()
+                        NovelReaderInputPolicy.TapAction.FORWARD -> handleSwipe(forward = true)
+                        NovelReaderInputPolicy.TapAction.BACKWARD -> handleSwipe(forward = false)
+                        NovelReaderInputPolicy.TapAction.NONE -> Unit
                     }
                 }
             }
@@ -456,7 +467,7 @@ private class ReaderAndroidWebView(
 
     init {
         setLayerType(LAYER_TYPE_HARDWARE, null)
-        addJavascriptInterface(jsBridge, "HoshiAndroid")
+        addJavascriptInterface(jsBridge, NovelReaderWebBridgePolicy.DEFAULT_NATIVE_BRIDGE_NAME)
         setBackgroundColor(readerSettings.backgroundColor)
     }
 
@@ -469,87 +480,48 @@ private class ReaderAndroidWebView(
         Log.d("ReaderWebView", "loadChapter: url=$url size=${width}x$height")
         currentUrl = url
 
-        if (width <= 0 || height <= 0) {
-            postDelayed({ loadChapter(url) }, 100L)
-            return
-        }
-
-        val vw = readerSettings.verticalWriting
-        if (url == lastLoadedUrl &&
-            width == lastLoadedWidth &&
-            height == lastLoadedHeight &&
-            vw == lastLoadedVerticalWriting
+        when (
+            val action = NovelReaderWebLoadPolicy.chapterLoadAction(
+                url = url,
+                width = width,
+                height = height,
+                verticalWriting = readerSettings.verticalWriting,
+                lastLoadedKey = lastLoadedChapterKey,
+            )
         ) {
-            Log.d("ReaderWebView", "loadChapter skipped: duplicate")
-            return
+            NovelReaderWebLoadPolicy.ChapterLoadAction.Defer -> {
+                postDelayed({ loadChapter(url) }, 100L)
+                return
+            }
+            NovelReaderWebLoadPolicy.ChapterLoadAction.SkipDuplicate -> {
+                Log.d("ReaderWebView", "loadChapter skipped: duplicate")
+                return
+            }
+            is NovelReaderWebLoadPolicy.ChapterLoadAction.Load -> {
+                lastLoadedChapterKey = action.key
+            }
         }
-        lastLoadedUrl = url
-        lastLoadedWidth = width
-        lastLoadedHeight = height
-        lastLoadedVerticalWriting = vw
 
         visibility = View.INVISIBLE
 
         try {
-            if (url.startsWith(NovelReaderFileUrlPolicy.FILE_URL_PREFIX) || !url.contains("://")) {
-                val file = File(NovelReaderFileUrlPolicy.localPathForFileUrlOrPath(url))
-                if (file.exists()) {
-                    loadUrl(url)
-                } else {
-                    Log.e("ReaderWebView", "File not found: $url")
-                    onLoadFailed("File not found: $url")
+            when (val target = NovelReaderWebLoadPolicy.urlLoadTarget(url)) {
+                is NovelReaderWebLoadPolicy.UrlLoadTarget.DirectUrl -> loadUrl(target.url)
+                is NovelReaderWebLoadPolicy.UrlLoadTarget.LocalFile -> {
+                    val file = File(target.localPath)
+                    if (file.exists()) {
+                        loadUrl(target.url)
+                    } else {
+                        Log.e("ReaderWebView", "File not found: ${target.url}")
+                        onLoadFailed("File not found: ${target.url}")
+                    }
                 }
-            } else {
-                loadUrl(url)
             }
         } catch (e: Exception) {
             Log.e("ReaderWebView", "loadChapter error", e)
             onLoadFailed(e.message ?: "Failed to load chapter")
         }
     }
-
-    fun jumpToFragment(fragment: String) {
-        val escapedId = fragment.replace("\\", "\\\\").replace("'", "\\'")
-        val js = """
-            (function() {
-                var el = document.getElementById('$escapedId')
-                    || document.querySelector('[name="$escapedId"]');
-                if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
-            })();
-        """.trimIndent()
-        evaluateJavascript(js, null)
-    }
-
-    private fun buildBaseCSS(): String = buildString {
-        val vw = readerSettings.verticalWriting
-
-        if (vw) {
-            appendLine("html, body { writing-mode: vertical-rl !important; }")
-        } else {
-            appendLine("html, body { writing-mode: horizontal-tb !important; }")
-        }
-
-        appendLine("html, body { margin: 0 !important; padding: 0 !important; }")
-        appendLine("::highlight(hoshi-selection) { background-color: rgba(130, 150, 200, 0.4); color: inherit; }")
-        appendLine("p { margin-block-start: 0 !important; margin-block-end: ${readerSettings.paragraphSpacing}em !important; }")
-        appendLine("body * { font-family: inherit !important; }")
-        appendLine("img.block-img, svg.block-img { position: static !important; }")
-    }
-
-    // Safe fallback for inline / gaiji images — keeps them from overflowing their container
-    // but doesn't fight the per-mode block-img rules injected below.
-    private fun buildImageCSS(): String =
-        "img { max-width: 100% !important; height: auto !important; }"
-
-    private fun paragraphSpacingJS(settings: ReaderSettings): String = """
-        var paragraphStyle = document.getElementById('hoshi-paragraph-spacing-style');
-        if (!paragraphStyle) {
-            paragraphStyle = document.createElement('style');
-            paragraphStyle.id = 'hoshi-paragraph-spacing-style';
-            document.head.appendChild(paragraphStyle);
-        }
-        paragraphStyle.textContent = 'p { margin-block-start: 0 !important; margin-block-end: ${settings.paragraphSpacing}em !important; }';
-    """.trimIndent()
 
     fun injectReader() {
         Log.d("ReaderWebView", "injectReader: ${width}x$height continuous=$continuousMode imageOnly=$isImageOnly")
@@ -559,563 +531,36 @@ private class ReaderAndroidWebView(
             return
         }
 
-        val script = when {
-            isImageOnly -> buildImageOnlyScript()
-            continuousMode -> buildContinuousScript()
-            else -> buildPagedScript()
-        }
+        val script = NovelReaderWebInjectionPolicy.readerInjectionScript(
+            mode = NovelReaderWebInjectionPolicy.readerMode(
+                isImageOnly = isImageOnly,
+                continuousMode = continuousMode,
+            ),
+            readerJs = readerJs,
+            settings = readerSettings,
+            pendingProgress = pendingProgress,
+        )
         evaluateJavascript(script, null)
-    }
-
-    private fun buildImageOnlyScript(): String {
-        val bg = readerSettings.resolvedBgHex()
-        return """
-            (function() {
-                var vp = document.querySelector('meta[name="viewport"]');
-                if (vp) vp.remove();
-                var nvp = document.createElement('meta');
-                nvp.name = 'viewport';
-                nvp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-                document.head.appendChild(nvp);
-
-                window.hoshiReader = {
-                    handleTap: function(clientX, clientY) {
-                        if (window.HoshiAndroid && window.HoshiAndroid.onBackgroundTap)
-                            window.HoshiAndroid.onBackgroundTap(clientX, clientY);
-                        return false;
-                    },
-                    paginate: function(direction) {
-                        return 'limit';
-                    },
-                    calculateProgress: function() {
-                        return 0;
-                    }
-                };
-
-                var w = window.innerWidth;
-                var h = window.innerHeight;
-
-                document.documentElement.style.cssText =
-                    'margin:0!important;padding:0!important;' +
-                    'width:' + w + 'px!important;height:' + h + 'px!important;' +
-                    'overflow:hidden!important;background:$bg!important;';
-
-                if (!document.body) {
-                    if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted();
-                    return;
-                }
-
-                var target = document.querySelector('img, svg');
-                if (!target) {
-                    if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted();
-                    return;
-                }
-
-                Array.from(document.body.children).forEach(function(child) {
-                    if (!child.contains(target)) child.style.display = 'none';
-                });
-
-                document.body.style.cssText =
-                    'margin:0!important;padding:0!important;' +
-                    'width:' + w + 'px!important;height:' + h + 'px!important;' +
-                    'display:flex!important;align-items:center!important;justify-content:center!important;' +
-                    'background:$bg!important;touch-action:none!important;overflow:hidden!important;';
-
-                var curr = target.parentElement;
-                while (curr && curr !== document.body) {
-                    curr.style.cssText =
-                        'display:flex!important;align-items:center!important;justify-content:center!important;' +
-                        'margin:0!important;padding:0!important;border:none!important;' +
-                        'width:' + w + 'px!important;height:' + h + 'px!important;overflow:hidden!important;';
-                    curr = curr.parentElement;
-                }
-
-                var imgStyle =
-                    'width:' + w + 'px!important;height:' + h + 'px!important;' +
-                    'max-width:' + w + 'px!important;max-height:' + h + 'px!important;' +
-                    'object-fit:contain!important;display:block!important;margin:auto!important;padding:0!important;';
-
-                if (target.tagName.toLowerCase() === 'svg') {
-                    target.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-                    target.style.cssText = imgStyle;
-                    if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted();
-                } else {
-                    target.style.cssText = imgStyle;
-                    if (target.complete && target.naturalWidth > 0) {
-                        if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted();
-                    } else {
-                        target.onload  = function() { if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted(); };
-                        target.onerror = function() { if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted(); };
-                    }
-                }
-            })();
-        """.trimIndent()
-    }
-
-    private fun buildContinuousScript(): String {
-        val vw = readerSettings.verticalWriting
-        val css = buildBaseCSS()
-        val bg = readerSettings.resolvedBgHex()
-        val tc = readerSettings.resolvedTextHex()
-
-        return """
-            (function() {
-                window.webkit = window.webkit || {};
-                window.webkit.messageHandlers = window.webkit.messageHandlers || {};
-                window.webkit.messageHandlers.restoreCompleted = {
-                    postMessage: function(_) {
-                        if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted();
-                    }
-                };
-
-                var vp = document.querySelector('meta[name="viewport"]');
-                if (vp) vp.remove();
-                var nvp = document.createElement('meta');
-                nvp.name = 'viewport';
-                nvp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-                document.head.appendChild(nvp);
-
-                var ih = window.innerHeight;
-                var iw = window.innerWidth;
-
-                // Compute padding in px (applied on both sides of wrapper).
-                var hPad = Math.round(iw * ${readerSettings.horizontalPadding} / 100);
-                var vPad = Math.round(ih * ${readerSettings.verticalPadding} / 100);
-
-                // Image max dimensions at 90vw.
-                // Wrapper has no horizontal padding, so margin: auto centers within full viewport.
-                // Height is full viewport (no vertical padding subtracted from images).
-                var imgMaxW = Math.max(1, Math.floor(iw * (100 - ${readerSettings.horizontalPadding}) / 100));
-                var imgMaxH = Math.max(1, ih);
-                document.documentElement.style.setProperty('--reader-image-max-width', imgMaxW + 'px');
-                document.documentElement.style.setProperty('--reader-image-max-height', imgMaxH + 'px');
-
-                var s = document.getElementById('hoshi-style');
-                if (s) s.remove();
-                s = document.createElement('style');
-                s.id = 'hoshi-style';
-                s.textContent = ${jsString(css)};
-                document.head.appendChild(s);
-
-                // Full-page image rules:
-                // .block-img  -> full-page illustrations, centered within wrapper content
-                // everything else -> inline images: stay in text flow, just capped at max-width
-                var contImgStyle = document.getElementById('reader-cont-img-style');
-                if (contImgStyle) contImgStyle.remove();
-                contImgStyle = document.createElement('style');
-                contImgStyle.id = 'reader-cont-img-style';
-                contImgStyle.textContent = [
-                    'img.block-img, svg.block-img {',
-                    '  max-width: var(--reader-image-max-width, 95vw) !important;',
-                    '  max-height: var(--reader-image-max-height, 95vh) !important;',
-                    '  width: auto !important;',
-                    '  height: auto !important;',
-                    '  display: block !important;',
-                    '  margin: auto !important;',
-                    '  object-fit: contain !important;',
-                    '}',
-                    'img:not(.block-img), svg:not(.block-img) {',
-                    '  max-width: min(var(--reader-image-max-width, 95vw), 100%) !important;',
-                    '  width: auto !important;',
-                    '  height: auto !important;',
-                    '  min-width: 1em !important;',
-                    '  vertical-align: middle !important;',
-                    '  display: inline-block !important;',
-                    '}'
-                ].join(' ');
-                document.head.appendChild(contImgStyle);
-
-                $readerJs
-
-                var b = document.body;
-                if (!b) { window.hoshiReader.notifyRestoreComplete(); return; }
-
-                // Ensure content wrapper existence for consistent styling.
-                var wrapper = document.getElementById('hoshi-content-wrapper');
-                if (!wrapper) {
-                    wrapper = document.createElement('div');
-                    wrapper.id = 'hoshi-content-wrapper';
-                    while (b.firstChild) wrapper.appendChild(b.firstChild);
-                    b.appendChild(wrapper);
-                }
-
-                wrapper.style.setProperty('padding', vPad + 'px 0', 'important');
-                wrapper.style.setProperty('-webkit-box-decoration-break', 'clone', 'important');
-                wrapper.style.setProperty('box-decoration-break', 'clone', 'important');
-                b.style.setProperty('padding', '0', 'important');
-                b.style.setProperty('margin', '0', 'important');
-
-                var pPadStyle = document.getElementById('hoshi-p-padding-style');
-                if (!pPadStyle) {
-                    pPadStyle = document.createElement('style');
-                    pPadStyle.id = 'hoshi-p-padding-style';
-                    document.head.appendChild(pPadStyle);
-                }
-                pPadStyle.textContent = '#hoshi-content-wrapper > p { padding-left: ' + hPad + 'px !important; padding-right: ' + hPad + 'px !important; }';
-
-                wrapper.style.setProperty('font-size', '${readerSettings.fontSize}px', 'important');
-                wrapper.style.setProperty('line-height', '${readerSettings.lineHeight}', 'important');
-                ${paragraphSpacingJS(readerSettings)}
-                ${if (readerSettings.layoutAdvanced) {
-            """
-                wrapper.style.setProperty('letter-spacing', '${readerSettings.characterSpacing}em', 'important');
-                """
-        } else {
-            ""
-        }}
-                wrapper.style.setProperty('text-align', ${if (readerSettings.justifyText) "'justify'" else "'left'"}, 'important');
-
-                ${fontJS(readerSettings, "wrapper")}
-                ${themeJS(bg, tc)}
-                ${furiganaJS(readerSettings)}
-
-                var vw = ${if (vw) "true" else "false"};
-                if (vw) {
-                    b.style.setProperty('touch-action', 'pan-x', 'important');
-                    document.documentElement.style.setProperty('overflow-x', 'auto', 'important');
-                    document.documentElement.style.setProperty('overflow-y', 'hidden', 'important');
-                } else {
-                    b.style.setProperty('touch-action', 'pan-y', 'important');
-                    document.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
-                    document.documentElement.style.setProperty('overflow-y', 'auto', 'important');
-                }
-                b.style.setProperty('box-sizing', 'border-box', 'important');
-                b.style.setProperty('width', iw + 'px', 'important');
-                b.style.setProperty('min-height', ih + 'px', 'important');
-                b.style.setProperty('height', 'auto', 'important');
-                document.documentElement.style.setProperty('height', 'auto', 'important');
-
-                window.hoshiReader.registerCopyText();
-                window.hoshiReader.continuousMode = true;
-
-                // Classify large non-gaiji media as block images.
-                // Wait for all images to finish loading before classifying and restoring progress —
-                // late-loading images shift element positions and cause scrollIntoView() to land
-                // at the wrong offset.
-                var allMediaCont = Array.from(document.querySelectorAll('img, svg'));
-                var imagePromises = allMediaCont.map(function(el) {
-                    return new Promise(function(resolve) {
-                        var tag = el.tagName.toLowerCase();
-                        var isGaiji = el.classList.contains('gaiji') || el.classList.contains('gaiji-line');
-                        var classify = function() {
-                            if (!isGaiji) {
-                                var isLarge = false;
-                                if (tag === 'img') {
-                                    isLarge = el.naturalWidth > 256 || el.naturalHeight > 256;
-                                } else if (tag === 'svg') {
-                                    var vb = el.viewBox && el.viewBox.baseVal;
-                                    var w = vb ? vb.width : (el.width ? el.width.baseVal.value : 0);
-                                    var h = vb ? vb.height : (el.height ? el.height.baseVal.value : 0);
-                                    isLarge = w > 256 || h > 256;
-                                }
-                                if (isLarge) {
-                                    el.classList.add('block-img');
-                                }
-                            }
-                            resolve();
-                        };
-                        if (tag === 'img') {
-                            if (el.complete && el.naturalWidth > 0) { classify(); }
-                            else { el.onload = classify; el.onerror = function() { resolve(); }; }
-                        } else {
-                            classify();
-                        }
-                    });
-                });
-                Promise.all(imagePromises)
-                    .then(function() { return new Promise(function(r) { setTimeout(r, 50); }); })
-                    .then(function() {
-                        window.hoshiReader.restoreProgress($pendingProgress, ${if (vw) "true" else "false"});
-                    });
-            })();
-        """.trimIndent()
-    }
-
-    private fun buildPagedScript(): String {
-        val vw = readerSettings.verticalWriting
-        val css = buildBaseCSS()
-        val bg = readerSettings.resolvedBgHex()
-        val tc = readerSettings.resolvedTextHex()
-        // In vertical-rl paged mode the column axis is horizontal (width), so
-        // bottomOverlap reserves one line-height worth of space on the trailing
-        // edge — same as Hoshi's bottomOverlapPx = fontSize in vertical mode.
-        val bottomOverlapPx = if (vw) readerSettings.fontSize else 0
-
-        return """
-            (function() {
-                window.webkit = window.webkit || {};
-                window.webkit.messageHandlers = window.webkit.messageHandlers || {};
-                window.webkit.messageHandlers.restoreCompleted = {
-                    postMessage: function(_) {
-                        if (window.HoshiAndroid) window.HoshiAndroid.restoreCompleted();
-                    }
-                };
-
-                var vp = document.querySelector('meta[name="viewport"]');
-                if (vp) vp.remove();
-                var nvp = document.createElement('meta');
-                nvp.name = 'viewport';
-                nvp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-                document.head.appendChild(nvp);
-
-                var ih = window.innerHeight;
-                var iw = window.innerWidth;
-
-                // Compute padding in px (applied on both sides of wrapper).
-                var hPad = Math.round(iw * ${readerSettings.horizontalPadding} / 100);
-                var vPad = Math.round(ih * ${readerSettings.verticalPadding} / 100);
-
-                // Image max dimensions at 90vw.
-                // Wrapper has no horizontal padding, so margin: auto centers within full viewport.
-                // Height is viewport less bottomOverlap (for vertical-rl column bleed).
-                var imgMaxW = Math.max(1, Math.floor(iw * (100 - ${readerSettings.horizontalPadding}) / 100));
-                var imgMaxH = Math.max(1, ih - $bottomOverlapPx);
-                document.documentElement.style.setProperty('--reader-image-max-width', imgMaxW + 'px');
-                document.documentElement.style.setProperty('--reader-image-max-height', imgMaxH + 'px');
-
-                var s = document.getElementById('hoshi-style');
-                if (s) s.remove();
-                s = document.createElement('style');
-                s.id = 'hoshi-style';
-                s.textContent = ${jsString(css)};
-                document.head.appendChild(s);
-
-                // Large images/SVGs are contained by the CSS below.
-                var blockImgStyle = document.getElementById('reader-block-img-style');
-                if (blockImgStyle) blockImgStyle.remove();
-                blockImgStyle = document.createElement('style');
-                blockImgStyle.id = 'reader-block-img-style';
-                blockImgStyle.textContent = [
-                    'img.block-img, svg.block-img {',
-                    '  max-width: var(--reader-image-max-width, 95vw) !important;',
-                    '  max-height: var(--reader-image-max-height, 95vh) !important;',
-                    '  width: auto !important;',
-                    '  height: auto !important;',
-                    '  display: block !important;',
-                    '  margin: auto !important;',
-                    '  break-inside: avoid !important;',
-                    '  -webkit-column-break-inside: avoid !important;',
-                    '  object-fit: contain !important;',
-                    '}',
-                    'img:not(.block-img), svg:not(.block-img) {',
-                    '  max-width: min(var(--reader-image-max-width, 95vw), 100%) !important;',
-                    '  width: auto !important;',
-                    '  height: auto !important;',
-                    '  min-width: 1em !important;',
-                    '  vertical-align: middle !important;',
-                    '  display: inline-block !important;',
-                    '}'
-                ].join(' ');
-                document.head.appendChild(blockImgStyle);
-
-                $readerJs
-
-                var b = document.body;
-                if (!b) { window.hoshiReader.notifyRestoreComplete(); return; }
-
-                // Ensure content wrapper existence for consistent styling.
-                var wrapper = document.getElementById('hoshi-content-wrapper');
-                if (!wrapper) {
-                    wrapper = document.createElement('div');
-                    wrapper.id = 'hoshi-content-wrapper';
-                    while (b.firstChild) wrapper.appendChild(b.firstChild);
-                    b.appendChild(wrapper);
-                }
-
-                wrapper.style.setProperty('padding', vPad + 'px 0', 'important');
-                wrapper.style.setProperty('-webkit-box-decoration-break', 'clone', 'important');
-                wrapper.style.setProperty('box-decoration-break', 'clone', 'important');
-                b.style.setProperty('padding', '0', 'important');
-                b.style.setProperty('margin', '0', 'important');
-
-                var pPadStyle = document.getElementById('hoshi-p-padding-style');
-                if (!pPadStyle) {
-                    pPadStyle = document.createElement('style');
-                    pPadStyle.id = 'hoshi-p-padding-style';
-                    document.head.appendChild(pPadStyle);
-                }
-                pPadStyle.textContent = '#hoshi-content-wrapper > p { padding-left: ' + hPad + 'px !important; padding-right: ' + hPad + 'px !important; }';
-
-                wrapper.style.setProperty('font-size', '${readerSettings.fontSize}px', 'important');
-                wrapper.style.setProperty('line-height', '${readerSettings.lineHeight}', 'important');
-                ${paragraphSpacingJS(readerSettings)}
-                ${if (readerSettings.layoutAdvanced) {
-            """
-                wrapper.style.setProperty('letter-spacing', '${readerSettings.characterSpacing}em', 'important');
-                """
-        } else {
-            ""
-        }}
-                wrapper.style.setProperty('text-align', ${if (readerSettings.justifyText) "'justify'" else "'left'"}, 'important');
-
-                ${if (readerSettings.avoidPageBreak) {
-            """
-                var abStyle = document.createElement('style');
-                abStyle.textContent = [
-                    'img, svg, figure, table, tr, td, th,',
-                    'p:has(> img:only-child), div:has(> img:only-child), span.img, div.img, p.img {',
-                    '  break-inside: avoid !important;',
-                    '  -webkit-column-break-inside: avoid !important;',
-                    '  page-break-inside: avoid !important;',
-                    '}'
-                ].join(' ');
-                document.head.appendChild(abStyle);
-                """
-        } else {
-            ""
-        }}
-
-                ${fontJS(readerSettings, "wrapper")}
-                ${themeJS(bg, tc)}
-                ${furiganaJS(readerSettings)}
-
-                var overrideStyle = document.getElementById('hoshi-override-style');
-                if (!overrideStyle) {
-                    overrideStyle = document.createElement('style');
-                    overrideStyle.id = 'hoshi-override-style';
-                    document.head.appendChild(overrideStyle);
-                }
-                overrideStyle.textContent = [
-                    '[class*="pt"] { margin-top: 0 !important; }',
-                    '[class*="pb"] { margin-bottom: 0 !important; }',
-                    'span.img.fpage, span.img.fblk { padding-bottom: 0 !important; }',
-                    '@page { margin: 0 !important; }'
-                ].join(' ');
-
-                document.documentElement.style.setProperty('height', ih + 'px', 'important');
-                var vw = ${if (vw) "true" else "false"};
-                if (vw) {
-                    b.style.setProperty('column-width', ih + 'px', 'important');
-                    b.style.setProperty('min-height', ih + 'px', 'important');
-                } else {
-                    b.style.setProperty('column-width', iw + 'px', 'important');
-                    b.style.setProperty('height', ih + 'px', 'important');
-                }
-                b.style.setProperty('box-sizing', 'border-box', 'important');
-                b.style.setProperty('width', iw + 'px', 'important');
-                b.style.setProperty('column-fill', 'auto', 'important');
-                b.style.setProperty('column-gap', '0px', 'important');
-                b.style.setProperty('touch-action', 'none', 'important');
-                document.documentElement.style.setProperty('overflow', 'hidden', 'important');
-
-                window.hoshiReader.registerCopyText();
-
-                // Treat images/SVGs over 256px as block media.
-                // Gaiji inline glyphs are explicitly excluded. Classification happens after images
-                // load so naturalWidth is available. Then a 50ms settle lets column layout stabilise
-                // before restoreProgress() snaps to the correct page.
-                var allMediaPaged = Array.from(document.querySelectorAll('img, svg'));
-                var imagePromises = allMediaPaged.map(function(el) {
-                    return new Promise(function(resolve) {
-                        var tag = el.tagName.toLowerCase();
-                        var isGaiji = el.classList.contains('gaiji') || el.classList.contains('gaiji-line');
-                        var classify = function() {
-                            if (!isGaiji) {
-                                var isLarge = false;
-                                if (tag === 'img') {
-                                    isLarge = el.naturalWidth > 256 || el.naturalHeight > 256;
-                                } else if (tag === 'svg') {
-                                    var vb = el.viewBox && el.viewBox.baseVal;
-                                    var w = vb ? vb.width : (el.width ? el.width.baseVal.value : 0);
-                                    var h = vb ? vb.height : (el.height ? el.height.baseVal.value : 0);
-                                    isLarge = w > 256 || h > 256;
-                                }
-                                if (isLarge) {
-                                    el.classList.add('block-img');
-                                }
-                            }
-                            resolve();
-                        };
-                        if (tag === 'img') {
-                            if (el.complete && el.naturalWidth > 0) { classify(); }
-                            else { el.onload = classify; el.onerror = function() { resolve(); }; }
-                        } else {
-                            classify();
-                        }
-                    });
-                });
-                Promise.all(imagePromises)
-                    .then(function() { return new Promise(function(r) { setTimeout(r, 50); }); })
-                    .then(function() {
-                        window.hoshiReader.restoreProgress($pendingProgress, ${if (vw) "true" else "false"});
-                    });
-            })();
-        """.trimIndent()
     }
 
     fun applySettings(settings: ReaderSettings) {
-        if (settings.continuousMode != continuousMode) {
-            continuousMode = settings.continuousMode
-            currentUrl?.let { url ->
-                evaluateJavascript("window.hoshiReader.calculateProgress()") { p ->
-                    pendingProgress = p?.toDoubleOrNull() ?: 0.0
-                    loadChapter(url)
+        when (NovelReaderWebSettingsPolicy.liveSettingsAction(continuousMode, settings)) {
+            NovelReaderWebSettingsPolicy.LiveSettingsAction.ReloadCurrentChapter -> {
+                continuousMode = settings.continuousMode
+                currentUrl?.let { url ->
+                    evaluateJavascript(NovelReaderWebScriptPolicy.calculateProgressScript()) { p ->
+                        pendingProgress = NovelReaderWebResultPolicy.progressResult(p) ?: 0.0
+                        loadChapter(url)
+                    }
                 }
+                return
             }
-            return
+            NovelReaderWebSettingsPolicy.LiveSettingsAction.ApplyDomUpdates -> Unit
         }
 
         readerSettings = settings
-        val bg = settings.resolvedBgHex()
-        val tc = settings.resolvedTextHex()
         setBackgroundColor(settings.backgroundColor)
-
-        val script = """
-            (function() {
-                var b = document.body;
-                if (!b) return;
-                var wrapper = document.getElementById('hoshi-content-wrapper');
-                if (!wrapper) {
-                    wrapper = document.createElement('div');
-                    wrapper.id = 'hoshi-content-wrapper';
-                    while (b.firstChild) wrapper.appendChild(b.firstChild);
-                    b.appendChild(wrapper);
-                }
-
-                var iw = window.innerWidth;
-                var ih = window.innerHeight;
-                var hPad = Math.round(iw * ${settings.horizontalPadding} / 100);
-                var vPad = Math.round(ih * ${settings.verticalPadding} / 100);
-                wrapper.style.setProperty('padding', vPad + 'px 0', 'important');
-                wrapper.style.setProperty('-webkit-box-decoration-break', 'clone', 'important');
-                wrapper.style.setProperty('box-decoration-break', 'clone', 'important');
-                b.style.setProperty('padding', '0', 'important');
-                b.style.setProperty('margin', '0', 'important');
-
-                var pPadStyle = document.getElementById('hoshi-p-padding-style');
-                if (!pPadStyle) {
-                    pPadStyle = document.createElement('style');
-                    pPadStyle.id = 'hoshi-p-padding-style';
-                    document.head.appendChild(pPadStyle);
-                }
-                pPadStyle.textContent = '#hoshi-content-wrapper > p { padding-left: ' + hPad + 'px !important; padding-right: ' + hPad + 'px !important; }';
-
-                wrapper.style.setProperty('font-size', '${settings.fontSize}px', 'important');
-                b.style.setProperty('font-size', '${settings.fontSize}px', 'important');
-
-                wrapper.style.setProperty('line-height', '${settings.lineHeight}', 'important');
-                ${paragraphSpacingJS(settings)}
-                ${if (settings.layoutAdvanced) {
-            """
-                wrapper.style.setProperty('letter-spacing', '${settings.characterSpacing}em', 'important');
-                """
-        } else {
-            ""
-        }}
-
-                wrapper.style.setProperty('text-align', ${if (settings.justifyText) "'justify'" else "'left'"}, 'important');
-
-                ${fontJS(settings, "wrapper")}
-
-                b.style.setProperty('background-color', '$bg', 'important');
-                wrapper.style.setProperty('color', '$tc', 'important');
-                document.documentElement.style.setProperty('background-color', '$bg', 'important');
-
-                ${furiganaJS(settings)}
-            })();
-        """.trimIndent()
-
-        evaluateJavascript(script, null)
+        evaluateJavascript(NovelReaderWebInjectionPolicy.liveSettingsScript(settings), null)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -1126,16 +571,27 @@ private class ReaderAndroidWebView(
                 totalMovement = 0f
             }
             MotionEvent.ACTION_MOVE -> {
-                totalMovement += kotlin.math.abs(event.x - touchStartX) + kotlin.math.abs(event.y - touchStartY)
+                totalMovement += NovelReaderInputPolicy.pointerMoveDistance(
+                    previousX = touchStartX,
+                    previousY = touchStartY,
+                    currentX = event.x,
+                    currentY = event.y,
+                )
                 touchStartX = event.x
                 touchStartY = event.y
             }
             MotionEvent.ACTION_UP -> {
-                if (totalMovement < 20f) {
-                    val cssX = event.x / resources.displayMetrics.density
-                    val cssY = event.y / resources.displayMetrics.density
+                if (NovelReaderInputPolicy.shouldHandleTap(totalMovement)) {
+                    val cssPoint = NovelReaderWebGeometryPolicy.viewportPointToCssPoint(
+                        x = event.x.toDouble(),
+                        y = event.y.toDouble(),
+                        scale = resources.displayMetrics.density.toDouble(),
+                    )
                     evaluateJavascript(
-                        "if (window.hoshiReader && window.hoshiReader.handleTap) { window.hoshiReader.handleTap($cssX, $cssY); }",
+                        NovelReaderWebScriptPolicy.handleTapScript(
+                            cssPoint.x.toFloat(),
+                            cssPoint.y.toFloat(),
+                        ),
                         null,
                     )
                 }
@@ -1150,28 +606,39 @@ private class ReaderAndroidWebView(
     override fun performClick(): Boolean = super.performClick()
 
     fun paginate(forward: Boolean) {
-        if (forward) {
-            navigate("forward", onNextChapter)
-        } else {
-            navigate("backward", onPreviousChapter)
-        }
+        navigate(
+            direction = NovelReaderWebNavigationPolicy.pageDirection(forward),
+            fallback = chapterFallback(forward),
+        )
     }
 
     private fun handleSwipe(forward: Boolean): Boolean {
-        return when {
-            isImageOnly -> {
-                // Image-only chapter = single page, any swipe changes chapter
-                val changed = if (forward) onNextChapter() else onPreviousChapter()
+        return when (
+            val action = NovelReaderWebNavigationPolicy.swipeAction(
+                isImageOnly = isImageOnly,
+                continuousMode = continuousMode,
+                forward = forward,
+            )
+        ) {
+            is NovelReaderWebNavigationPolicy.SwipeAction.UseChapterFallback -> {
+                val changed = chapterFallback(action.forward).invoke()
                 if (changed) visibility = View.INVISIBLE
                 true
             }
-            continuousMode -> navigateContinuous(forward)
-            else -> if (forward) {
-                navigate("forward", onNextChapter)
-            } else {
-                navigate("backward", onPreviousChapter)
+            is NovelReaderWebNavigationPolicy.SwipeAction.CheckContinuousBoundary -> {
+                navigateContinuous(action.forward)
+            }
+            is NovelReaderWebNavigationPolicy.SwipeAction.Paginate -> {
+                navigate(
+                    direction = action.direction,
+                    fallback = chapterFallback(action.forward),
+                )
             }
         }
+    }
+
+    private fun chapterFallback(forward: Boolean): () -> Boolean {
+        return if (forward) onNextChapter else onPreviousChapter
     }
 
     /**
@@ -1179,68 +646,39 @@ private class ReaderAndroidWebView(
      * If yes, call the chapter callback; if not, let the WebView handle the scroll.
      */
     private fun navigateContinuous(forward: Boolean): Boolean {
-        val script = """
-            (function() {
-                var el = document.scrollingElement || document.documentElement;
-                var ph = window.innerHeight;
-                var pw = window.innerWidth;
-                var vOver = el.scrollHeight - ph > 1;
-                var hOver = el.scrollWidth  - pw > 1;
-                if (vOver) {
-                    var y = Math.round(window.scrollY);
-                    var maxY = el.scrollHeight - ph;
-                    if ('$forward' === 'true')  return y >= maxY - 2 ? 'limit' : 'scrolling';
-                    if ('$forward' === 'false') return y <= 2       ? 'limit' : 'scrolling';
+        evaluateJavascript(NovelReaderWebScriptPolicy.continuousBoundaryScript(forward)) { result ->
+            when (NovelReaderWebResultPolicy.continuousBoundaryAction(result)) {
+                NovelReaderWebResultPolicy.ContinuousBoundaryAction.UseChapterFallback -> {
+                    val changed = if (forward) onNextChapter() else onPreviousChapter()
+                    if (changed) visibility = View.INVISIBLE
                 }
-                if (hOver) {
-                    var x = window.scrollX;
-                    var maxX = el.scrollWidth - pw;
-                    var absX = Math.abs(x);
-                    if ('$forward' === 'true')  return absX >= maxX - 2 ? 'limit' : 'scrolling';
-                    if ('$forward' === 'false') return absX <= 2        ? 'limit' : 'scrolling';
-                }
-                return 'limit';
-            })()
-        """.trimIndent()
-
-        evaluateJavascript(script) { result ->
-            if (result?.trim('"') == "limit") {
-                val changed = if (forward) onNextChapter() else onPreviousChapter()
-                if (changed) visibility = View.INVISIBLE
+                NovelReaderWebResultPolicy.ContinuousBoundaryAction.LetWebViewScroll -> Unit
             }
-            // else: still content to scroll — the WebView's own fling handles it
         }
         return true
     }
 
-    private fun navigate(direction: String, fallback: () -> Boolean): Boolean {
-        val script = """
-            (function() {
-                if (!window.hoshiReader || typeof window.hoshiReader.paginate !== 'function') {
-                    return "limit";
-                }
-                return window.hoshiReader.paginate('$direction');
-            })()
-        """.trimIndent()
-
-        evaluateJavascript(script) { result ->
-            if (result?.trim('"') == "scrolled") {
-                evaluateJavascript(
-                    "(function() { return window.hoshiReader.calculateProgress(); })()",
-                ) { progressResult ->
-                    progressResult
-                        ?.trim()
-                        ?.trim('"')
-                        ?.toDoubleOrNull()
-                        ?.let {
+    private fun navigate(
+        direction: NovelReaderWebScriptPolicy.PageDirection,
+        fallback: () -> Boolean,
+    ): Boolean {
+        evaluateJavascript(NovelReaderWebScriptPolicy.paginateScript(direction)) { result ->
+            when (NovelReaderWebResultPolicy.pagedNavigationAction(result)) {
+                NovelReaderWebResultPolicy.PagedNavigationAction.ReportProgress -> {
+                    evaluateJavascript(
+                        NovelReaderWebScriptPolicy.calculateProgressScript(),
+                    ) { progressResult ->
+                        NovelReaderWebResultPolicy.progressResult(progressResult)?.let {
                             pendingProgress = it
                             onProgressChanged(it)
                         }
+                    }
                 }
-            } else {
-                val chapterChanged = fallback()
-                if (chapterChanged) {
-                    visibility = View.INVISIBLE
+                NovelReaderWebResultPolicy.PagedNavigationAction.UseChapterFallback -> {
+                    val chapterChanged = fallback()
+                    if (chapterChanged) {
+                        visibility = View.INVISIBLE
+                    }
                 }
             }
         }
@@ -1287,83 +725,4 @@ private fun loadAssetText(context: Context, path: String): String {
     return context.assets.open(path).use { input ->
         BufferedReader(input.reader()).readText()
     }
-}
-
-private fun jsString(value: String): String {
-    return buildString {
-        append('\'')
-        value.forEach { char ->
-            when (char) {
-                '\\' -> append("\\\\")
-                '\'' -> append("\\'")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(char)
-            }
-        }
-        append('\'')
-    }
-}
-
-private fun jsEscape(value: String): String = value
-    .replace("\\", "\\\\")
-    .replace("'", "\\'")
-    .replace("\n", "\\n")
-    .replace("\r", "\\r")
-
-private fun fontJS(settings: ReaderSettings, wrapperVar: String): String = buildString {
-    val fontUrl = settings.fontUrl
-    if (!fontUrl.isNullOrBlank()) {
-        appendLine(
-            """
-            var fontFace = document.createElement('style');
-            fontFace.textContent = "@font-face { font-family: 'HoshiCustomFont'; src: url('${jsEscape(fontUrl)}'); }";
-            document.head.appendChild(fontFace);
-            document.fonts.ready.then(function() {
-                $wrapperVar.style.setProperty('font-family', 'HoshiCustomFont', 'important');
-            });
-            """.trimIndent(),
-        )
-    } else {
-        val ff = NovelReaderFontPolicy.cssFontFamily(settings.selectedFont)
-        appendLine("$wrapperVar.style.setProperty('font-family', '${jsEscape(ff)}', 'important');")
-    }
-}
-
-private fun themeJS(bg: String, tc: String): String = """
-    b.style.setProperty('background-color', '$bg', 'important');
-    wrapper.style.setProperty('color', '$tc', 'important');
-    document.documentElement.style.setProperty('background-color', '$bg', 'important');
-""".trimIndent()
-
-private fun furiganaJS(settings: ReaderSettings): String = if (settings.hideFurigana) {
-    """
-    var furiganaStyle = document.getElementById('hoshi-furigana-style');
-    if (!furiganaStyle) {
-        furiganaStyle = document.createElement('style');
-        furiganaStyle.id = 'hoshi-furigana-style';
-        furiganaStyle.textContent = 'rt { display: none !important; }';
-        document.head.appendChild(furiganaStyle);
-    }
-    """.trimIndent()
-} else {
-    """
-    var furiganaStyle = document.getElementById('hoshi-furigana-style');
-    if (furiganaStyle) furiganaStyle.remove();
-    """.trimIndent()
-}
-
-private fun ReaderSettings.resolvedBgHex(): String = when (theme) {
-    "dark" -> "#1a1a1a"
-    "sepia" -> "#f4ecd8"
-    "light" -> "#ffffff"
-    else -> "#${String.format("%06X", 0xFFFFFF and backgroundColor)}"
-}
-
-private fun ReaderSettings.resolvedTextHex(): String = when (theme) {
-    "dark" -> "#ffffff"
-    "sepia" -> "#5b4636"
-    "light" -> "#000000"
-    else -> "#${String.format("%06X", 0xFFFFFF and textColor)}"
 }

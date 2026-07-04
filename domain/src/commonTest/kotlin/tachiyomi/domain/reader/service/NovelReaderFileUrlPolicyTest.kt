@@ -2,6 +2,8 @@ package tachiyomi.domain.reader.service
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class NovelReaderFileUrlPolicyTest {
     @Test
@@ -59,6 +61,22 @@ class NovelReaderFileUrlPolicyTest {
         assertEquals(
             "C:/Books/Chapter.xhtml",
             NovelReaderFileUrlPolicy.localPathForFileUrlOrPath("C:\\Books\\Chapter.xhtml"),
+        )
+    }
+
+    @Test
+    fun isLocalFileUrlOrPathMatchesFileUrlsAndRawPaths() {
+        assertTrue(
+            NovelReaderFileUrlPolicy.isLocalFileUrlOrPath("file:///tmp/book/chapter.xhtml"),
+        )
+        assertTrue(
+            NovelReaderFileUrlPolicy.isLocalFileUrlOrPath("C:\\Books\\Chapter.xhtml"),
+        )
+        assertFalse(
+            NovelReaderFileUrlPolicy.isLocalFileUrlOrPath("https://example.com/chapter.xhtml"),
+        )
+        assertFalse(
+            NovelReaderFileUrlPolicy.isLocalFileUrlOrPath("content://books/chapter.xhtml"),
         )
     }
 

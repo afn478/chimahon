@@ -1,0 +1,95 @@
+package tachiyomi.domain.reader.service
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import tachiyomi.domain.reader.model.NovelReaderWebCommand
+
+class NovelReaderWebCommandPolicyTest {
+    @Test
+    fun collapseConsecutiveLoadsKeepsLastSharedLoadCommandInEachRun() {
+        val commands = listOf(
+            NovelReaderWebCommand.LoadChapter("chapter-1", progress = 0.0),
+            NovelReaderWebCommand.LoadChapter("chapter-2", progress = 0.25),
+            NovelReaderWebCommand.Paginate(forward = true),
+            NovelReaderWebCommand.LoadChapter("chapter-3", progress = 0.5),
+        )
+
+        assertEquals(
+            listOf(
+                NovelReaderWebCommand.LoadChapter("chapter-2", progress = 0.25),
+                NovelReaderWebCommand.Paginate(forward = true),
+                NovelReaderWebCommand.LoadChapter("chapter-3", progress = 0.5),
+            ),
+            NovelReaderWebCommandPolicy.collapseConsecutiveLoads(commands),
+        )
+    }
+
+    @Test
+    fun collapseConsecutiveLoadCommandsKeepsLastLoadInEachRun() {
+        val commands = listOf(
+            loadCommand("chapter-1"),
+            loadCommand("chapter-2"),
+            otherCommand("apply-settings"),
+            loadCommand("chapter-3"),
+            loadCommand("chapter-4"),
+            otherCommand("paginate"),
+            loadCommand("chapter-5"),
+        )
+
+        assertEquals(
+            listOf(
+                loadCommand("chapter-2"),
+                otherCommand("apply-settings"),
+                loadCommand("chapter-4"),
+                otherCommand("paginate"),
+                loadCommand("chapter-5"),
+            ),
+            NovelReaderWebCommandPolicy.collapseConsecutiveLoadCommands(
+                commands = commands,
+                isLoadCommand = Command::loadsChapter,
+            ),
+        )
+    }
+
+    @Test
+    fun collapseConsecutiveLoadCommandsPreservesNonConsecutiveLoads() {
+        val commands = listOf(
+            loadCommand("chapter-1"),
+            otherCommand("apply-settings"),
+            loadCommand("chapter-2"),
+            otherCommand("paginate"),
+        )
+
+        assertEquals(
+            commands,
+            NovelReaderWebCommandPolicy.collapseConsecutiveLoadCommands(
+                commands = commands,
+                isLoadCommand = Command::loadsChapter,
+            ),
+        )
+    }
+
+    @Test
+    fun collapseConsecutiveLoadCommandsHandlesEmptyQueue() {
+        assertEquals(
+            emptyList(),
+            NovelReaderWebCommandPolicy.collapseConsecutiveLoadCommands(
+                commands = emptyList<Command>(),
+                isLoadCommand = Command::loadsChapter,
+            ),
+        )
+    }
+
+    private data class Command(
+        val name: String,
+        val loadsChapter: Boolean,
+    )
+
+    private fun loadCommand(name: String): Command {
+        return Command(name = name, loadsChapter = true)
+    }
+
+    private fun otherCommand(name: String): Command {
+        return Command(name = name, loadsChapter = false)
+    }
+}
